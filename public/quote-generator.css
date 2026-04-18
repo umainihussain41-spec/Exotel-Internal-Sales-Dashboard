@@ -1,0 +1,1872 @@
+/* =====================================================
+   QUOTE GENERATOR - Premium CSS
+   Exotel Internal Sales Dashboard
+   ===================================================== */
+
+/* ── Layout ── */
+.quote-layout {
+    display: flex;
+    gap: 0;
+    height: calc(100vh - 180px);
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.quote-form-panel {
+    flex: 1 1 38%;
+    min-width: 0;
+    height: 100%;
+    padding: 28px 32px;
+    overflow-y: auto;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.quote-preview-panel {
+    flex: 0 0 62%;
+    min-width: 380px;
+    height: 100%;
+    overflow-y: auto;
+    background: #f1f5f9;
+    /* Changed to grey to simulate workspace */
+    border-left: 1px solid #bae6fd;
+    box-shadow: -4px 0 20px rgba(2, 132, 199, 0.07);
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Sub-navigation tabs ── */
+/* ── Sub-navigation Segmented Control (Pill Style) ── */
+.quote-tabs {
+    display: inline-flex;
+    align-items: center;
+    background: #f1f5f9;
+    /* Soft grey background for the container */
+    padding: 6px;
+    border-radius: 12px;
+    gap: 4px;
+    margin-bottom: 0;
+    /* Margin handled by container padding */
+    border-bottom: none;
+    /* Removed the old underline border */
+    border: 1px solid #0284c7;
+    /* Added the blue outline as requested */
+    user-select: none;
+}
+
+.quote-tab {
+    background: none;
+    border: none;
+    padding: 8px 18px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.quote-tab:hover:not(.active) {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.quote-tab.active {
+    background: #0284c7;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+.quote-tab-badge {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 1px 7px;
+    min-width: 18px;
+    text-align: center;
+    border: 1px solid #dbeafe;
+    transition: all 0.2s;
+}
+
+.quote-tab.active .quote-tab-badge {
+    background: #ffffff;
+    color: #0284c7;
+    border-color: #ffffff;
+}
+
+.quote-tab.active .admin-badge {
+    background: #ffffff;
+    color: #4f46e5;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.quote-tab-content {
+    display: none;
+}
+
+.quote-tab-content.active {
+    display: block;
+}
+
+/* ── Section Cards ── */
+.q-card {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 12px rgba(2, 132, 199, 0.06);
+    transition: box-shadow 0.2s;
+}
+
+.q-card:hover {
+    box-shadow: 0 4px 20px rgba(2, 132, 199, 0.1);
+}
+
+.q-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.q-card-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.q-card-title svg {
+    color: #0284c7;
+    flex-shrink: 0;
+}
+
+/* ── Locked-field system ── */
+.q-field-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.q-field-row:last-child {
+    margin-bottom: 0;
+}
+
+.q-field-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #64748b;
+    min-width: 0;
+    flex: 1 1 40%;
+}
+
+.q-field-label span.required {
+    color: #ef4444;
+    margin-left: 2px;
+}
+
+.q-field-value {
+    flex: 1 1 60%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.q-input-wrapper {
+    position: relative;
+    flex: 1;
+}
+
+.q-input {
+    width: 100%;
+    padding: 8px 36px 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #0f172a;
+    background: #f8fafc;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+.q-input:disabled,
+.q-input[readonly] {
+    background: #f1f5f9;
+    color: #64748b;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+}
+
+.q-input:not(:disabled):not([readonly]) {
+    background: #ffffff;
+    border-color: #7dd3fc;
+}
+
+.q-input:not(:disabled):not([readonly]):focus {
+    outline: none;
+    border-color: #0284c7;
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+/* Stop-lock violation */
+.q-input.stop-lock-violation {
+    border-color: #ef4444 !important;
+    background: #fff5f5 !important;
+    animation: shakeField 0.4s ease;
+}
+
+@keyframes shakeField {
+
+    0%,
+    100% {
+        transform: translateX(0);
+    }
+
+    20% {
+        transform: translateX(-5px);
+    }
+
+    40% {
+        transform: translateX(5px);
+    }
+
+    60% {
+        transform: translateX(-4px);
+    }
+
+    80% {
+        transform: translateX(4px);
+    }
+}
+
+.q-lock-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.q-lock-btn:hover {
+    color: #0284c7;
+}
+
+.q-lock-btn.unlocked {
+    color: #0284c7;
+}
+
+.q-field-note {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.q-waived {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #dcfce7;
+    color: #16a34a;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.q-non-editable {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+/* ── SKU Selector ── */
+.sku-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.sku-option {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    text-align: left;
+}
+
+.sku-option:hover {
+    border-color: #7dd3fc;
+    background: #f0f9ff;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.1);
+}
+
+.sku-option.selected {
+    border-color: #0284c7;
+    background: #e0f2fe;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.2);
+}
+
+.sku-option-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 2rem;
+}
+
+.sku-exotel .sku-option-icon {
+    background: #e0f2fe;
+}
+
+.sku-veeno .sku-option-icon {
+    background: #fce7f3;
+}
+
+.sku-option-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0f172a;
+    margin-bottom: 3px;
+}
+
+.sku-option-sub {
+    font-size: 0.75rem;
+    color: #64748b;
+}
+
+.sku-entity-tag {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+.sku-entity-tag.exotel {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.sku-entity-tag.veeno {
+    background: #fce7f3;
+    color: #be185d;
+}
+
+/* ── Tier Selector ── */
+.tier-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.tier-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #64748b;
+}
+
+.tier-btn:hover {
+    border-color: #7dd3fc;
+    color: #0284c7;
+}
+
+.tier-btn.active {
+    border-color: #0284c7;
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+/* ── Stop-lock badge ── */
+.stop-lock-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: #fff7ed;
+    color: #ea580c;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    border: 1px solid #fed7aa;
+    cursor: help;
+}
+
+/* ── Action Buttons Row ── */
+.q-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+    padding: 20px 28px;
+    border-top: 1px solid #e0f2fe;
+    background: rgba(255, 255, 255, 0.9);
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+}
+
+.q-actions .btn {
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+@keyframes borderFlow {
+    0% { background-position: 0% 0%, 0% 0%; }
+    100% { background-position: 0% 0%, 200% 0%; }
+}
+
+.btn-generate {
+    background: linear-gradient(#ffffff, #ffffff) padding-box,
+                linear-gradient(90deg, #f0f9ff, #7dd3fc, #e0f2fe, #f0f9ff) border-box;
+    background-size: 100% 100%, 200% 100%;
+    color: #0284c7;
+    border: 3px solid transparent;
+    transition: all 0.2s;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    animation: borderFlow 3s linear infinite;
+}
+
+.btn-generate:hover {
+    background: linear-gradient(#e0f2fe, #e0f2fe) padding-box,
+                linear-gradient(90deg, #e0f2fe, #38bdf8, #bae6fd, #e0f2fe) border-box;
+    background-size: 100% 100%, 200% 100%;
+    color: #0369a1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(2, 132, 199, 0.2);
+}
+
+.btn-draft {
+    background: #ffffff;
+    color: #0284c7;
+    border: 2px solid #7dd3fc;
+    box-shadow: none;
+    transition: all 0.2s;
+    font-weight: 600;
+}
+
+.btn-draft:hover {
+    background: #e0f2fe;
+    color: #0369a1;
+    border-color: #38bdf8;
+}
+
+.btn-reset {
+    background: #fff;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.btn-reset:hover {
+    background: #f1f5f9;
+    color: #ef4444;
+    border-color: #fca5a5;
+}
+
+/* ── Quote Preview Panel ── */
+.preview-header {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+    color: #fff;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.preview-header-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0.9;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.preview-print-btn {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.2s;
+}
+
+.preview-print-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+/* The actual quote document */
+#quote-document {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 32px auto;
+    background: #fff;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.85rem;
+    color: #1e293b;
+    padding: 40px 48px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+    /* A4 Paper shadow */
+    border: 1px solid #e2e8f0;
+    flex-shrink: 0;
+    /* Ensures the tall document doesn't get collapsed by its flex parent */
+}
+
+.quote-doc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 2px solid #e0f2fe;
+}
+
+.quote-doc-logo {
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+}
+
+.quote-doc-logo.exotel-logo {
+    width: 180px;
+    max-height: 90px;
+}
+
+.quote-doc-logo.veeno-logo {
+    width: 360px;
+    max-height: 180px;
+}
+
+.quote-doc-logo-base {
+    object-position: left center;
+    display: block;
+    mix-blend-mode: multiply;
+}
+
+.quote-doc-meta {
+    text-align: right;
+    font-size: 0.82rem;
+    color: #475569;
+}
+
+.quote-doc-meta .quote-number-badge {
+    display: inline-block;
+    background: #e0f2fe;
+    color: #0284c7;
+    font-weight: 700;
+    font-size: 0.88rem;
+    padding: 4px 12px;
+    border-radius: 6px;
+    margin-bottom: 4px;
+}
+
+.quote-doc-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 4px;
+}
+
+.quote-doc-section {
+    margin-bottom: 16px;
+}
+
+.quote-doc-section-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #0284c7;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.quote-doc-section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e0f2fe;
+}
+
+.quote-intro-text {
+    font-size: 0.82rem;
+    color: #475569;
+    line-height: 1.6;
+    background: #f8fafc;
+    border-left: 3px solid #0284c7;
+    padding: 10px 14px;
+    border-radius: 0 6px 6px 0;
+}
+
+.quote-participant-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.quote-participant-box {
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.quote-participant-box .label {
+    font-size: 0.72rem;
+    color: #94a3b8;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.quote-participant-box .value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #0f172a;
+}
+
+.quote-participant-box .sub {
+    font-size: 0.78rem;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+/* SKU table in preview */
+.quote-sku-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 6px;
+    font-size: 0.82rem;
+}
+
+.quote-sku-table th {
+    background: #f0f9ff;
+    color: #0369a1;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 6px 8px;
+    border-bottom: 2px solid #bae6fd;
+    text-align: left;
+}
+
+.quote-sku-table td {
+    padding: 6px 8px;
+    border-bottom: 1px solid #e0f2fe;
+    color: #1e293b;
+    vertical-align: top;
+}
+
+.quote-sku-table tr:last-child td {
+    border-bottom: none;
+}
+
+.quote-sku-table .sku-row-name {
+    font-weight: 600;
+}
+
+.quote-sku-table .waived-text {
+    color: #16a34a;
+    font-weight: 600;
+    font-size: 0.78rem;
+}
+
+.quote-sku-table .addon-row td {
+    background: #fafbfc;
+    color: #64748b;
+    font-style: italic;
+}
+
+/* Section header rows in commercial table */
+.quote-sku-table .section-header-row td {
+    background: linear-gradient(90deg, #e0f2fe, #f0f9ff);
+    color: #0369a1;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 5px 8px;
+    border-bottom: 1px solid #bae6fd;
+    border-top: 2px solid #bae6fd;
+}
+
+/* Sub-row indentation (e.g. Extra User Cost under Free Users) */
+.quote-sku-table .sub-row td {
+    padding-left: 24px;
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.79rem;
+    border-bottom: 1px solid #e0f2fe;
+}
+
+.quote-sku-table .sub-row td:first-child::before {
+    content: '└ ';
+    color: #94a3b8;
+    font-size: 0.75rem;
+}
+
+/* Totals */
+.quote-totals {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 2px solid #e0f2fe;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.quote-total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+.quote-total-row.subtotal {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.quote-total-row.gst {
+    color: #64748b;
+}
+
+.quote-total-row.grand-total {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #0284c7;
+    border-top: 1px solid #bae6fd;
+    padding-top: 8px;
+    margin-top: 4px;
+}
+
+.quote-tnc {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.76rem;
+    color: #64748b;
+    line-height: 1.5;
+}
+
+.quote-tnc ul {
+    margin: 4px 0 0 16px;
+}
+
+.quote-tnc ul li {
+    margin-bottom: 3px;
+}
+
+/* ── Approval Modal ── */
+.q-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    animation: fadeInOverlay 0.2s ease;
+}
+
+@keyframes fadeInOverlay {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.q-modal {
+    background: #fff;
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 440px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    animation: slideUpModal 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideUpModal {
+    from {
+        transform: translateY(30px) scale(0.95);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0) scale(1);
+        opacity: 1;
+    }
+}
+
+.q-modal-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #fff7ed;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    color: #ea580c;
+}
+
+.q-modal-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.q-modal-body {
+    font-size: 0.88rem;
+    color: #64748b;
+    text-align: center;
+    margin-bottom: 20px;
+    line-height: 1.6;
+}
+
+.q-modal-field {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.85rem;
+    color: #ea580c;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.q-modal-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    letter-spacing: 0.1em;
+    text-align: center;
+    transition: border-color 0.2s;
+}
+
+.q-modal-input:focus {
+    outline: none;
+    border-color: #0284c7;
+}
+
+.q-modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.q-modal-actions .btn {
+    flex: 1;
+    padding: 10px;
+    border-radius: 8px;
+    font-weight: 600;
+}
+
+/* ── My Quotes List ── */
+.quote-list-item {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.2s;
+    cursor: default;
+}
+
+.quote-list-item:hover {
+    box-shadow: 0 4px 16px rgba(2, 132, 199, 0.1);
+    border-color: #7dd3fc;
+}
+
+.quote-list-item.deleted-quote {
+    opacity: 0.6;
+    border-style: dashed;
+    background: #f8fafc;
+}
+
+.quote-list-number {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0284c7;
+    min-width: 120px;
+    font-family: monospace;
+}
+
+.quote-list-details {
+    flex: 1;
+}
+
+.quote-list-entity {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-bottom: 3px;
+}
+
+.quote-list-meta {
+    font-size: 0.78rem;
+    color: #94a3b8;
+}
+
+.quote-list-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.quote-list-actions .btn {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+}
+
+/* Drafts list */
+.draft-list-item {
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px dashed #bae6fd;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: all 0.2s;
+}
+
+.draft-list-item:hover {
+    border-color: #0284c7;
+    box-shadow: 0 2px 10px rgba(2, 132, 199, 0.1);
+}
+
+.draft-list-icon {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: #fefce8;
+    color: #ca8a04;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* ── Applet outer wrapper ── */
+#quote-applet {
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+}
+
+#quote-applet .applet-header {
+    padding: 24px 32px 0;
+    margin-bottom: 0;
+    border-bottom: none;
+}
+
+.quote-tabs-bar {
+    padding: 16px 32px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    justify-content: center;
+    /* Horizontally center the pill group */
+    align-items: center;
+    /* Vertically center the pill group */
+    min-height: 72px;
+    /* Consistent height */
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+/* ── Summary totals chip ── */
+.quote-summary-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #e0f2fe;
+    color: #0369a1;
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+/* ── Addon toggles ── */
+.q-addon-section {
+    border-top: 1px dashed #e0f2fe;
+    margin-top: 14px;
+    padding-top: 14px;
+}
+
+.q-addon-title {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.q-addon-check {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.q-addon-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #0284c7;
+}
+
+.q-addon-check label {
+    font-size: 0.88rem;
+    color: #334155;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* ── Client info area ── */
+.q-client-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+/* ── Progress indicator ── */
+.quote-progress {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 20px;
+    padding: 0 2px;
+}
+
+.quote-step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+}
+
+.quote-step::before {
+    content: '';
+    position: absolute;
+    top: 14px;
+    left: calc(-50% + 14px);
+    right: calc(50% + 14px);
+    height: 2px;
+    background: #e2e8f0;
+}
+
+.quote-step:first-child::before {
+    display: none;
+}
+
+.quote-step.done::before {
+    background: #0284c7;
+}
+
+.quote-step.active::before {
+    background: linear-gradient(90deg, #0284c7 50%, #e2e8f0 50%);
+}
+
+.quote-step-dot {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    z-index: 1;
+    transition: all 0.2s;
+}
+
+.quote-step.done .quote-step-dot {
+    background: #0284c7;
+    color: #fff;
+}
+
+.quote-step.active .quote-step-dot {
+    background: #0284c7;
+    color: #fff;
+    box-shadow: 0 0 0 4px rgba(2, 132, 199, 0.2);
+}
+
+.quote-step-label {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    font-weight: 500;
+    margin-top: 5px;
+    text-align: center;
+}
+
+.quote-step.active .quote-step-label {
+    color: #0284c7;
+    font-weight: 600;
+}
+
+.quote-step.done .quote-step-label {
+    color: #475569;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+    .quote-layout {
+        flex-direction: column;
+    }
+
+    .quote-preview-panel {
+        min-width: 0;
+        position: static;
+        height: auto;
+        min-height: 500px;
+        border-left: none;
+        border-top: 1px solid #bae6fd;
+    }
+
+    .quote-form-panel {
+        flex: none;
+    }
+}
+
+@media (max-width: 768px) {
+    .sku-selector {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .q-client-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .quote-form-panel {
+        padding: 18px 16px;
+    }
+
+    .quote-tabs-bar {
+        padding: 0 16px;
+    }
+
+    #quote-applet .applet-header {
+        padding: 18px 16px 0;
+    }
+}
+
+
+
+/* ── Print styles ── */
+@media print {
+    @page {
+        margin: 0;
+        size: A4 portrait;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+        background: #fff;
+    }
+
+    /* Print margins via body padding for clean removal of site data */
+    #quote-document {
+        padding: 0 1.8cm !important;
+        margin: 0 auto !important;
+        width: 100% !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        box-shadow: none !important;
+        border: none !important;
+        height: auto !important;
+        min-height: 0 !important;
+        display: block !important;
+        visibility: visible !important;
+    }
+
+    /* Force proper vector rendering inside the PDF without subsetting artifacts */
+    #quote-document, #quote-document * {
+        -webkit-text-stroke: 0.15px rgba(255,255,255, 0.01) !important;
+        text-rendering: geometricPrecision !important;
+        font-family: Arial, Helvetica, sans-serif !important;
+    }
+
+    /* Hide everything except the quote document */
+    body * {
+        visibility: hidden;
+    }
+
+    /* Force the tab-content wrapper and the document itself to be visible */
+    #qtab-content-new-quote,
+    #quote-document {
+        visibility: visible !important;
+        display: block !important;
+    }
+
+    #quote-document * {
+        visibility: visible !important;
+    }
+
+    /* CRITICAL: Reset layout constraints for all parent containers to prevent clipping */
+    #quote-applet,
+    .quote-layout,
+    .quote-preview-panel,
+    .main-content,
+    .dashboard-layout,
+    #qtab-content-new-quote {
+        visibility: visible !important;
+        display: block !important;
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: visible !important;
+        position: static !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        border: none !important;
+        box-shadow: none !important;
+    }
+
+    .quote-doc-logo {
+        margin-bottom: 20px !important;
+    }
+
+    .quote-doc-logo.exotel-logo {
+        width: 180px !important;
+        max-width: 180px !important;
+        max-height: 90px !important;
+    }
+
+    .quote-doc-logo.veeno-logo {
+        width: 360px !important;
+        max-width: 360px !important;
+        max-height: 180px !important;
+    }
+
+    .quote-doc-header {
+        margin-bottom: 15px !important;
+        padding-bottom: 12px !important;
+    }
+
+    /* Smart Page Breaks: Keep related groups together */
+    tbody {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
+
+    .print-master-table {
+        width: 100%;
+        border-collapse: collapse;
+        border: none;
+    }
+
+    .print-master-header,
+    .print-master-footer {
+        height: 1.5cm;
+        display: block !important;
+        border: none;
+        background: transparent;
+    }
+
+    .print-master-header {
+        margin-bottom: 0px;
+    }
+
+
+    .quote-doc-section {
+        margin-bottom: 15px;
+    }
+
+    .quote-tnc {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    .quote-totals {
+        page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    /* Ensure section-header rows in the table don't orphan at bottom of page */
+    .quote-sku-table .section-header-row {
+        page-break-after: avoid;
+        break-after: avoid;
+    }
+
+    /* Add top margin on pages 2+ so content doesn't start at the very top */
+    .quote-sku-table th {
+        background: #f0f0f0 !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    /* Force table to repeat header on each page */
+    .quote-sku-table thead {
+        display: table-header-group;
+    }
+
+    .preview-header,
+    .q-actions,
+    .quote-tabs-bar,
+    .quote-form-panel,
+    .preview-actions,
+    .applet-header {
+        display: none !important;
+        visibility: hidden !important;
+    }
+}
+
+/* ── Empty state ── */
+.q-empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 24px;
+    color: #94a3b8;
+    text-align: center;
+    gap: 12px;
+}
+
+.q-empty-state svg {
+    opacity: 0.4;
+}
+
+.q-empty-state h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #64748b;
+    margin: 0;
+}
+
+.q-empty-state p {
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+/* ── Admin approval requests ── */
+.approval-req-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    font-size: 0.85rem;
+}
+
+.approval-req-row.cleared {
+    opacity: 0.55;
+    background: #f8fafc;
+}
+
+/* ── Profile setup prompt ── */
+.q-profile-prompt {
+    background: linear-gradient(135deg, #e0f2fe, #f0f9ff);
+    border: 1px solid #7dd3fc;
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.q-profile-prompt-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    background: #0284c7;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* ── Inline select ── */
+.q-select {
+    width: 100%;
+    padding: 8px 32px 8px 12px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #0f172a;
+    background: #f8fafc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%2364748b' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E") no-repeat right 10px center;
+    appearance: none;
+    transition: all 0.2s;
+}
+
+.q-select:disabled {
+    background-color: #f1f5f9;
+    color: #64748b;
+    cursor: not-allowed;
+}
+
+/* Sidebar collapsed state */
+.sidebar.sidebar-collapsed {
+    width: 80px !important;
+}
+
+.sidebar.sidebar-collapsed .exo-logo .exo,
+.sidebar.sidebar-collapsed .exo-logo .tel,
+.sidebar.sidebar-collapsed .nav-item span:not(.admin-badge),
+.sidebar.sidebar-collapsed .user-badge,
+.sidebar.sidebar-collapsed .dropdown-icon,
+.sidebar.sidebar-collapsed .nav-divider+div {
+    display: none !important;
+}
+
+/* Hide the sub-menu entirely in collapsed mode — it can't render cleanly at 80px */
+.sidebar.sidebar-collapsed .nav-sub-menu {
+    display: none !important;
+}
+
+.sidebar.sidebar-collapsed .nav-item {
+    justify-content: center;
+    padding: 12px;
+}
+
+.sidebar.sidebar-collapsed .nav-item svg {
+    margin-right: 0;
+}
+
+.sidebar.sidebar-collapsed .sidebar-header {
+    justify-content: center;
+}
+
+.sidebar.sidebar-collapsed .exo-logo {
+    margin-right: 0;
+}
+
+.sidebar.sidebar-collapsed .sidebar-header img {
+    height: auto !important;
+    max-width: 44px !important;
+}
+
+/* Hide native number input spin buttons to avoid overlap with unlock icon */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+/* =========================================
+   AI Voice Generator Styles
+   ========================================= */
+
+.q-ai-banner {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.q-ai-banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: linear-gradient(180deg, #6366f1, #ec4899);
+}
+
+.q-ai-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.q-ai-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(236, 72, 153, 0.1));
+    color: #8b5cf6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+#ai-listening-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ai-listening-modal {
+    background: #ffffff;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 320px;
+    max-width: 400px;
+}
+
+.ai-ripple-container {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ai-mic-active {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #6366f1, #ec4899);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+}
+
+.ai-ripple {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(99, 102, 241, 0.4);
+    z-index: 1;
+    animation: ripple-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.ai-ripple:nth-child(2) {
+    animation-delay: 1s;
+}
+
+@keyframes ripple-pulse {
+    0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+    100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+}
+
+/* ── Compare Mode ── */
+.compare-mode-grid {
+    display: flex;
+    overflow-x: auto;
+    gap: 20px;
+    padding-bottom: 8px;
+    align-items: flex-start;
+}
+
+.compare-card {
+    flex: 0 0 calc(50% - 10px);
+    min-width: 380px;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid #bae6fd;
+    border-radius: 12px;
+    padding: 20px 24px;
+    box-shadow: 0 2px 12px rgba(2, 132, 199, 0.06);
+    transition: box-shadow 0.2s;
+}
+
+.compare-card:hover {
+    box-shadow: 0 4px 20px rgba(2, 132, 199, 0.1);
+}
+
+.compare-card.tier-card {
+    flex: 0 0 calc(33.333% - 14px);
+    min-width: 340px;
+}
+
+.compare-card .q-card-header {
+    margin-bottom: 12px;
+}
+
+.compare-mode-grid::-webkit-scrollbar {
+    height: 8px;
+}
+
+.compare-mode-grid::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+/* ──────────────────────────────────────────────────────
+   QUOTE GENERATOR — MOBILE RESPONSIVENESS
+   ────────────────────────────────────────────────────── */
+
+/* Preview toggle button — only shown on mobile */
+.preview-toggle-btn {
+    display: none;
+    position: fixed;
+    bottom: 80px;
+    right: 16px;
+    z-index: 50;
+    background: linear-gradient(135deg, #0284c7, #0369a1);
+    color: #fff;
+    border: none;
+    border-radius: 24px;
+    padding: 10px 18px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(2, 132, 199, 0.4);
+    gap: 6px;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+
+    /* ── Quote layout: stack form on top, preview below ── */
+    .quote-layout {
+        flex-direction: column !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* ── Form panel: full width, no fixed height ── */
+    .quote-form-panel {
+        flex: none !important;
+        width: 100% !important;
+        height: auto !important;
+        padding: 16px !important;
+        overflow-y: visible !important;
+    }
+
+    /* ── Preview panel: full width, collapsible ── */
+    .quote-preview-panel {
+        flex: none !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        min-height: 400px;
+        border-left: none !important;
+        border-top: 1px solid #bae6fd;
+        box-shadow: 0 -4px 16px rgba(2, 132, 199, 0.07) !important;
+        overflow-y: visible !important;
+    }
+
+    /* When preview is hidden on mobile, show the toggle button */
+    .quote-preview-panel.mobile-hidden {
+        display: none;
+    }
+    .preview-toggle-btn { display: flex; }
+    .preview-toggle-btn.preview-visible { background: linear-gradient(135deg, #475569, #334155); }
+
+    /* ── Quote document: fit screen width ── */
+    #quote-document {
+        width: 100% !important;
+        min-height: auto !important;
+        margin: 16px auto !important;
+        padding: 24px 20px !important;
+        box-sizing: border-box;
+    }
+
+    /* ── Tabs: horizontal scroll ── */
+    .quote-tabs {
+        display: flex !important;
+        overflow-x: auto !important;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        width: 100%;
+        flex-wrap: nowrap !important;
+    }
+    .quote-tabs::-webkit-scrollbar { display: none; }
+    .quote-tab { flex-shrink: 0; padding: 7px 12px; font-size: 0.8rem; }
+
+    /* ── SKU selector: 2 columns on tablet, 1 on phone ── */
+    .sku-selector,
+    #sku-selector-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+
+    /* ── Compare mode grid: single column ── */
+    .compare-mode-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        overflow-x: visible !important;
+        gap: 16px !important;
+    }
+    .compare-card, .compare-card.tier-card {
+        flex: none !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    /* ── Action buttons: stack and fill width ── */
+    .q-actions {
+        flex-direction: column !important;
+        gap: 8px !important;
+        padding: 16px !important;
+        position: relative !important;
+    }
+    .q-actions .btn {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+
+    /* ── Field rows: ensure label wraps nicely ── */
+    .q-field-row {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .q-field-label { flex: 1 1 100%; min-width: 0; }
+    .q-field-value { flex: 1 1 100%; }
+
+    /* ── Tier selector buttons ── */
+    .tier-selector { gap: 6px; }
+    .tier-btn { padding: 8px 6px; font-size: 0.8rem; }
+
+    /* ── SKU item manager ── */
+    .sku-item-row { flex-wrap: wrap; }
+
+    /* ── Modals: full screen ── */
+    .q-modal,
+    #q-approval-modal .q-modal-inner,
+    [class*="modal-inner"],
+    [class*="modal-card"] {
+        width: 100% !important;
+        max-width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
+    }
+
+    /* ── AI listening overlay ── */
+    #ai-listening-overlay {
+        padding: 24px 16px !important;
+    }
+
+    /* ── Quote participant grid: single column ── */
+    .quote-participant-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* ── Compare table: horizontal scroll ── */
+    .compare-table-wrapper,
+    .quote-sku-table {
+        min-width: auto;
+    }
+    .compare-table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}
+
+@media (max-width: 480px) {
+    .quote-form-panel { padding: 12px !important; }
+    .q-card { padding: 14px 16px; }
+    .sku-selector, #sku-selector-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .quote-tab { padding: 6px 10px; font-size: 0.78rem; }
+    #quote-document { padding: 20px 14px !important; }
+}

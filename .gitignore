@@ -1,0 +1,32 @@
+# ── Dependencies ──────────────────────────────────────
+node_modules/
+
+# ── Environment & Secrets (NEVER commit these) ────────
+.env
+.env.*
+!.env.example
+
+# ── Database files ────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+
+# ── Logs ─────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ── OS files ──────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Editor files ──────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Test / temp files ─────────────────────────────────
+test_*.csv
+*.tmp

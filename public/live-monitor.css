@@ -1,0 +1,264 @@
+/* ── Live Call Monitor (LWB) Styles ────────────────────────────────────────── */
+
+@keyframes lwbPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(1.45); }
+}
+@keyframes lwbFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes lwbSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Banner */
+.lwb-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  font-size: 0.87rem;
+  font-weight: 500;
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+.lwb-banner-warn {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+}
+.lwb-banner svg { flex-shrink: 0; margin-top: 1px; }
+.lwb-banner code {
+  background: rgba(0,0,0,0.08);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.82em;
+}
+
+/* Calls grid */
+.lwb-calls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+
+/* Call card */
+.lwb-call-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: box-shadow 0.2s, transform 0.15s;
+  animation: lwbFadeIn 0.25s ease;
+}
+.lwb-call-card:hover {
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+.lwb-call-card-active {
+  border-color: #86efac;
+  box-shadow: 0 2px 12px rgba(34,197,94,0.15);
+}
+
+.lwb-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: capitalize;
+}
+
+.lwb-ended-badge {
+  padding: 7px 10px;
+  border-radius: 7px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #94a3b8;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.lwb-call-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lwb-dir-badge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.lwb-call-time {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.lwb-call-numbers {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lwb-num-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lwb-num-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  min-width: 60px;
+}
+
+.lwb-num-val {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #0f172a;
+  font-family: monospace;
+  letter-spacing: 0.04em;
+}
+
+.lwb-call-sid {
+  font-size: 0.68rem;
+  color: #cbd5e1;
+  font-family: monospace;
+  word-break: break-all;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 8px;
+}
+
+/* Inline listen form */
+.lwb-listen-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lwb-phone-input {
+  flex: 1;
+  min-width: 140px;
+  padding: 8px 12px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  background: #f8fafc;
+  color: #0f172a;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.lwb-phone-input:focus {
+  outline: none;
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.1);
+  background: #fff;
+}
+.lwb-phone-input::placeholder { color: #cbd5e1; }
+
+/* Listening badge */
+.lwb-listening-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #dc2626;
+  animation: lwbFadeIn 0.3s ease;
+}
+
+/* Input (shared) */
+.lwb-input {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  background: #f8fafc;
+  color: #0f172a;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.lwb-input:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2,132,199,0.12);
+  background: #fff;
+}
+
+/* Buttons */
+.lwb-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: all 0.18s;
+  white-space: nowrap;
+}
+.lwb-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.lwb-btn-listen {
+  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(220,38,38,0.22);
+  padding: 8px 14px;
+  font-size: 0.82rem;
+}
+.lwb-btn-listen:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(220,38,38,0.32);
+}
+
+.lwb-btn-primary {
+  background: linear-gradient(135deg, #0284c7, #0369a1);
+  color: #fff;
+  box-shadow: 0 3px 10px rgba(2,132,199,0.22);
+}
+.lwb-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(2,132,199,0.32);
+}
+
+/* Empty state */
+.lwb-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+.lwb-empty-icon {
+  font-size: 3rem;
+  margin-bottom: 12px;
+  opacity: 0.5;
+}

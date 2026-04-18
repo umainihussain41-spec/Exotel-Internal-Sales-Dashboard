@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exotel Operations</title>
+    <!-- Use Standard Exotel Typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="stylesheet" href="quote-generator.css?v=16">
+    <!-- LIVE MONITOR DISABLED: <link rel="stylesheet" href="live-monitor.css"> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+
+<body class="home-state">
+    <div class="water-bg">
+        <div class="water solid"></div>
+        <div class="water mid"></div>
+        <div class="water foam"></div>
+    </div>
+
+    <!-- Sidebar overlay backdrop (mobile) -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <div class="dashboard-layout" id="dashboard-layout">
+        <!-- Clean White Corporate Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="exo-logo">
+                    <img src="Exotel-Logo-Website-Replacement-for-Exoops.png" alt="Exotel"
+                        style="height:32px; max-width:140px; object-fit:contain; display:block;">
+                </div>
+            </div>
+
+            <div style="padding: 12px 16px;">
+                <div class="user-badge" id="user-badge"
+                    style="display:inline-block; border: 1px solid var(--border-color);">Loading...</div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-target="home" id="nav-home" title="Dashboard">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    <span>Dashboard</span>
+                </button>
+                <div class="nav-divider"></div>
+                <div
+                    style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; padding: 8px 12px; margin-top:8px;">
+                    Tools</div>
+                <div class="nav-item-group">
+                    <button class="nav-item" id="nav-users-toggle" title="Users"
+                        onclick="document.querySelector('.sidebar').classList.contains('sidebar-collapsed') ? openApp('users') : this.nextElementSibling.classList.toggle('hidden')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                        <span style="flex:1; text-align:left;">Users</span>
+                        <svg class="dropdown-icon" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            style="opacity:0.5;">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div class="nav-sub-menu hidden"
+                        style="padding-left: 44px; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; margin-bottom: 8px;">
+                        <button class="nav-item" data-target="users" id="nav-users" title="Add Users"
+                            style="padding: 8px 12px; font-size: 0.9rem; min-height: 36px; background: transparent;">Add
+                            Users</button>
+                        <button class="nav-item" data-target="verify" id="nav-verify" title="Verify Users"
+                            style="padding: 8px 12px; font-size: 0.9rem; min-height: 36px; background: transparent;">Verify
+                            Users</button>
+                    </div>
+                </div>
+                <button class="nav-item" data-target="exophones" id="nav-exophones" title="Exophones">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path
+                            d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
+                        </path>
+                    </svg>
+                    <span>Exophones</span>
+                </button>
+                <button class="nav-item" data-target="quotes" id="nav-quotes" title="Quote Generator">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                    <span>Quote Generator</span>
+                </button>
+                <button class="nav-item" data-target="logs" id="nav-logs" title="Activity Logs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                    <span>Activity Logs</span>
+                </button>
+                <!-- Admin Panel (shown only to admins via JS) -->
+                <button class="nav-item hidden" data-target="admin" id="nav-admin" title="Admin Panel">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    <span>Admin Panel <span class="admin-badge">Admin</span></span>
+                </button>
+                <!-- LIVE MONITOR DISABLED
+                <button class="nav-item hidden" data-target="live-monitor" id="nav-live-monitor" title="Live Call Monitor">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.85 13 19.79 19.79 0 0 1 1.17 4.4 2 2 0 0 1 3.16 2h3a2 2 0 0 1 2 1.72c.12.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.58 2.81.7A2 2 0 0 1 21 16.92z"/>
+                        <circle cx="18" cy="5" r="3" fill="#ef4444" stroke="none"/>
+                    </svg>
+                    <span>Live Monitor <span class="admin-badge" style="background:#dc2626;">Admin</span></span>
+                </button>
+                END LIVE MONITOR DISABLED -->
+                <button class="nav-item hidden" data-target="dev-feedback" id="nav-dev-feedback" title="Dev Feedback">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="4 17 10 11 4 5"></polyline>
+                        <line x1="12" y1="19" x2="20" y2="19"></line>
+                    </svg>
+                    <span>Dev Feedback <span class="admin-badge" style="background:#059669;">Dev</span></span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="nav-item" id="btn-open-api-settings"
+                    style="width:100%; justify-content:flex-start; margin-bottom:4px; background:transparent; border:none; cursor:pointer; padding: 12px 16px;" title="API Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="margin-right:12px;">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"></path>
+                    </svg>
+                    <span>API Settings</span>
+                </button>
+                <button class="nav-item" id="btn-open-feedback"
+                    style="width:100%; justify-content:flex-start; margin-bottom:8px; color:var(--primary); font-weight:600; background:transparent; border:none; cursor:pointer; padding: 12px 16px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="margin-right:12px;">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    <span>Give Feedback</span>
+                </button>
+                <a href="#" onclick="sessionStorage.clear(); window.location.href='/logout'; return false;"
+                    class="logout-btn btn-icon nav-item" title="Logout" style="text-decoration:none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <polyline points="16 17 21 12 16 7"></polyline>
+                        <line x1="21" y1="12" x2="9" y2="12"></line>
+                    </svg>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Workspace Area -->
+        <main class="main-content">
+            <!-- White Top Action Bar -->
+            <div class="top-action-bar">
+                <div id="dynamic-header-area" style="display:flex; align-items:center; gap: 12px;">
+                    <!-- Burger menu (mobile only) -->
+                    <button class="burger-btn" id="burger-btn" title="Open menu" aria-label="Open navigation">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <line x1="3" y1="12" x2="21" y2="12"></line>
+                            <line x1="3" y1="18" x2="21" y2="18"></line>
+                        </svg>
+                    </button>
+                    <button class="home-button hidden" id="btn-back-home" onclick="openApp('home')">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="19" y1="12" x2="5" y2="12"></line>
+                            <polyline points="12 19 5 12 12 5"></polyline>
+                        </svg>
+                        Dashboard
+                    </button>
+                    <!-- Logo visible in nav bar only when Home state is active, otherwise hidden since sidebar has logo -->
+                    <div class="exo-logo" id="topbar-logo" style="margin-right: 16px;">
+                        <img src="Exotel-Logo-Website-Replacement-for-Exoops.png" alt="Exotel"
+                            style="height:24px; object-fit:contain; display:block;">
+                    </div>
+                </div>
+            </div>
+            <!-- Home Applet (Dashboard Grid) -->
+            <section id="home-applet" class="applet active" style="margin-top:0;">
+                <div style="padding: 40px 0 16px 0; border-bottom:1px solid var(--border-color); margin-bottom: 24px;">
+                    <h1 id="time-greeting">Good Morning</h1>
+                    <p>Welcome to Exotel Operations Dashboard. Access your administrative tools below.</p>
+                </div>
+
+                <div class="home-apps-grid">
+                    <!-- Users -->
+                    <div class="app-card app-users" onclick="openApp('users')">
+                        <div class="app-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </div>
+                        <h3>Users Management</h3>
+                        <p>Batch create and sync employee accounts securely.</p>
+                    </div>
+
+                    <!-- Exophones -->
+                    <div class="app-card app-exophones" onclick="openApp('exophones')">
+                        <div class="app-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path
+                                    d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z">
+                                </path>
+                            </svg>
+                        </div>
+                        <h3>Exophones Directory</h3>
+                        <p>Fetch and allocate available virtual numbers.</p>
+                    </div>
+
+                    <!-- Logs -->
+                    <div class="app-card app-logs" onclick="openApp('logs')">
+                        <div class="app-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
+                        <h3>Activity Logs</h3>
+                        <p>System audit logs and execution history monitor.</p>
+                    </div>
+
+                    <!-- Quote Generator -->
+                    <div class="app-card app-quotes" onclick="openApp('quotes')">
+                        <div class="app-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                        </div>
+                        <h3>Quote Generator</h3>
+                        <p>Create and manage professional commercial proposals.</p>
+                    </div>
+
+                    <!-- Admin Panel (hidden until admin check, shown by JS) -->
+                    <div class="app-card app-admin hidden" id="home-card-admin" onclick="openApp('admin')">
+                        <div class="app-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                        </div>
+                        <h3>Admin Panel <span class="admin-badge">Admin</span></h3>
+                        <p>Full audit trail across all users and all actions.</p>
+                    </div>
+
+                    <!-- LIVE MONITOR DISABLED
+                    <div class="app-card app-admin hidden" id="home-card-live-monitor" onclick="openApp('live-monitor')" style="border:1px solid #fecaca;">
+                        <div class="app-icon" style="background:#fef2f2; color:#dc2626; position:relative;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.85 13 19.79 19.79 0 0 1 1.17 4.4 2 2 0 0 1 3.16 2h3a2 2 0 0 1 2 1.72c.12.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L7.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.58 2.81.7A2 2 0 0 1 21 16.92z"/>
+                            </svg>
+                            <span style="position:absolute;top:6px;right:6px;width:9px;height:9px;background:#ef4444;border-radius:50%;animation:lwbPulse 1.4s ease infinite;"></span>
+                        </div>
+                        <h3>Live Call Monitor <span class="admin-badge" style="background:#dc2626;">Admin</span></h3>
+                        <p>Listen, whisper, or barge into any active call in real time.</p>
+                    </div>
+                    END LIVE MONITOR DISABLED -->
+
+                    <!-- Developer Feedback Card (Strictly Restricted) -->
+                    <div class="app-card hidden" id="home-card-dev-feedback" onclick="openApp('dev-feedback')"
+                        style="border: 1px solid #05966933;">
+                        <div class="app-icon" style="background:#ecfdf5; color:#059669;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="4 17 10 11 4 5"></polyline>
+                                <line x1="12" y1="19" x2="20" y2="19"></line>
+                            </svg>
+                        </div>
+                        <h3>Developer Feedback</h3>
+                        <p>Special inbox for lead developer to review system feedback.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Case 6: Developer Feedback Applet -->
+            <section id="dev-feedback-applet" class="applet hidden">
+                <div class="applet-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h1 class="applet-title">Feedback Inbox
+                            <span class="admin-badge"
+                                style="background:#059669; font-size:0.65rem; vertical-align:middle; margin-left:8px;">Dev</span>
+                        </h1>
+                        <p style="margin-top:4px;">Review and manage suggestions submitted by users.</p>
+                    </div>
+                    <button class="btn btn-secondary" id="btn-refresh-dev-feedback">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Refresh Inbox
+                    </button>
+                </div>
+                <!-- Cards container -->
+                <div id="dev-feedback-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
+            </section>
+
+            <!-- Case 1: Users Applet -->
+            <section id="users-applet" class="applet hidden">
+                <div class="applet-header">
+                    <h1 class="applet-title">Add Users</h1>
+                    <p>Upload a CSV file to batch provision API users into Exotel.</p>
+                </div>
+
+                <div class="content-panel">
+                    <!-- Compact CSV Upload Row -->
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <!-- Hidden real file input -->
+                        <input type="file" id="csv-file" accept=".csv" style="display:none;">
+
+                        <div id="csv-upload-area"
+                            style="cursor:pointer; flex:1; display:flex; align-items:center; gap:12px; padding:12px 16px; background:var(--surface); border:1.5px dashed var(--border-color); border-radius:8px; transition: border-color 0.2s, background 0.2s;"
+                            onclick="document.getElementById('csv-file').click()"
+                            ondragover="event.preventDefault(); this.style.borderColor='var(--primary)'; this.style.background='var(--primary-bg)';"
+                            ondragleave="this.style.borderColor='var(--border-color)'; this.style.background='var(--surface)';"
+                            ondrop="event.preventDefault(); this.style.borderColor='var(--border-color)'; this.style.background='var(--surface)'; window.handleDroppedCsv(event.dataTransfer.files[0]);">
+                            <div style="display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; background:var(--primary-bg); color:var(--primary); flex-shrink:0;">
+                                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="17 8 12 3 7 8"></polyline>
+                                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                                </svg>
+                            </div>
+                            <div style="flex:1; min-width:0;">
+                                <div style="font-size:0.9rem; font-weight:600; color:var(--text-primary);">Click to upload or drag &amp; drop</div>
+                                <div id="csv-filename-label" style="font-size:0.8rem; color:var(--primary); font-weight:600; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
+                                <div class="text-muted" style="font-size:0.78rem; margin-top:1px;">CSV with first_name, last_name, email, device_contact_uri</div>
+                            </div>
+                        </div>
+
+                        <button id="download-sample-csv" class="btn btn-outline" style="white-space:nowrap; flex-shrink:0;">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                            Sample CSV
+                        </button>
+                    </div>
+
+                    <div id="users-preview" class="hidden mt-4">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px; padding-top:24px; border-top:1px solid var(--border-light); flex-wrap: wrap; gap: 16px;">
+                            <div>
+                                <h3 style="margin:0; margin-bottom: 8px;">Previewing <span id="preview-count">0</span>
+                                    users</h3>
+                                <button id="btn-process-users" class="btn btn-primary">Sync Selected Users</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:40px;"><input type="checkbox" id="selectAll-users" checked>
+                                        </th>
+                                        <th>First Name</th>
+                                        <th>Last Name</th>
+                                        <th>Email</th>
+                                        <th>Phone</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="users-table-body">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Case 1B: Verify Users Applet -->
+            <section id="verify-applet" class="applet hidden">
+                <div class="applet-header">
+                    <h1 class="applet-title">Verify Users</h1>
+                    <p>Trigger Exotel Number Verification - single lookup or batch via CSV.</p>
+                </div>
+
+                <!-- Single Verification -->
+                <div class="content-panel mb-4">
+                    <h3 style="margin:0 0 16px 0; font-size:1.1rem;">Single Number Verification</h3>
+                    <p class="text-muted" style="margin-bottom: 16px;">Enter a phone number to trigger verification via Exotel.
+                    </p>
+                    <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
+                        <div class="input-group" style="margin:0; flex:1; min-width:200px;">
+                            <label>Phone Number</label>
+                            <input type="text" id="quick-verify-from" placeholder="e.g. 09752828640">
+                        </div>
+                        <button id="btn-quick-verify" class="btn btn-primary" style="height:42px;">Verify
+                            Device</button>
+                    </div>
+                    <div id="quick-verify-result" style="margin-top: 16px; font-weight: 500;"></div>
+                </div>
+
+                <!-- Batch CSV Verification -->
+                <div class="content-panel">
+                    <h3 style="margin:0 0 16px 0; font-size:1.1rem;">Batch Verification via CSV</h3>
+                    <p class="text-muted" style="margin-bottom:16px;">Upload a CSV with a <strong>phone</strong> column to verify multiple numbers at once. You can re-upload at any time.</p>
+
+                    <!-- Hidden real file input -->
+                    <input type="file" id="verify-csv-file" accept=".csv" style="display:none;">
+
+                    <div id="verify-drop-area"
+                        style="cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:28px 24px; text-align:center; background:var(--surface); border:2px dashed var(--border-color); border-radius:12px; margin-bottom:16px; transition: border-color 0.2s, background 0.2s;"
+                        onclick="document.getElementById('verify-csv-file').click()"
+                        ondragover="event.preventDefault(); this.style.borderColor='var(--primary)'; this.style.background='var(--primary-bg)';"
+                        ondragleave="this.style.borderColor='var(--border-color)'; this.style.background='var(--surface)';"
+                        ondrop="event.preventDefault(); this.style.borderColor='var(--border-color)'; this.style.background='var(--surface)'; window.handleVerifyCsvDrop(event.dataTransfer.files[0]);">
+                        <div style="display:flex; align-items:center; justify-content:center; width:48px; height:48px; border-radius:50%; background:var(--primary-bg); color:var(--primary);">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-size:1rem; font-weight:600; color:var(--text-primary);">Click to upload or drag & drop</div>
+                            <div class="text-muted" style="margin-top:4px;">CSV must have a <code>phone</code> column</div>
+                            <div id="verify-csv-filename" style="margin-top:6px; font-size:0.85rem; color:var(--primary); font-weight:600;"></div>
+                        </div>
+                    </div>
+
+                    <div id="verify-batch-preview" class="hidden">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <span style="font-weight:600;">Found <span id="verify-batch-count">0</span> numbers</span>
+                            <button id="btn-verify-batch" class="btn btn-primary">Verify All</button>
+                        </div>
+                        <div class="table-responsive" style="max-height:300px; overflow-y:auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr><th>#</th><th>Phone Number</th><th>Status</th></tr>
+                                </thead>
+                                <tbody id="verify-batch-table-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Case 2: Exophones Applet -->
+            <section id="exophones-applet" class="applet hidden">
+                <div class="applet-header">
+                    <h1 class="applet-title">Virtual Exophones</h1>
+                    <p>Manage, fetch, and allocate ExoPhone inventory instantly.</p>
+                </div>
+
+                <div class="two-col-grid">
+                    <div class="content-panel">
+                        <h3>Available Inventory</h3>
+                        <p class="mb-4 text-muted">Retrieve available numbers using the V2 API matching specific
+                            criteria.</p>
+
+                        <div class="input-grid mb-3">
+                            <div class="input-group">
+                                <label>ISO Country Code</label>
+                                <select id="exo-country" class="form-select">
+                                    <option value="US">US - UNITED STATES</option>
+                                    <option value="IN" selected>IN - INDIA</option>
+                                    <option value="AU">AU - AUSTRALIA</option>
+                                    <option value="GB">GB - UNITED KINGDOM</option>
+                                    <option value="SG">SG - SINGAPORE</option>
+                                    <option value="MY">MY - MALAYSIA</option>
+                                    <option value="ID">ID - INDONESIA</option>
+                                    <option value="PH">PH - PHILIPPINES</option>
+                                    <option value="TH">TH - THAILAND</option>
+                                    <option value="VN">VN - VIETNAM</option>
+                                    <option value="AE">AE - U.A.E</option>
+                                    <option value="SA">SA - SAUDI ARABIA</option>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Number Type</label>
+                                <select id="exo-type" class="form-select">
+                                    <option value="Landline">Landline</option>
+                                    <option value="Mobile">Mobile</option>
+                                    <option value="TollFree">TollFree</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="input-grid mb-4">
+                            <div class="input-group">
+                                <label>Region (Circle - India Only)</label>
+                                <select id="exo-region" class="form-select">
+                                    <option value="">Any Region / N/A (Optional)</option>
+                                    <optgroup label="India (IN)">
+                                        <option value="MH">MH - Maharashtra</option>
+                                        <option value="KA">KA - Karnataka</option>
+                                        <option value="DL">DL - Delhi</option>
+                                        <option value="TN">TN - Tamil Nadu</option>
+                                        <option value="AP">AP - Andhra Pradesh</option>
+                                        <option value="MU">MU - Mumbai</option>
+                                        <option value="WB">WB - West Bengal</option>
+                                        <option value="KL">KL - Kerala</option>
+                                    </optgroup>
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label>Contains Substring</label>
+                                <input type="text" id="exo-contains" placeholder="e.g. 555 (Optional)">
+                            </div>
+                            <div class="input-group" style="display:flex; align-items:flex-end;">
+                                <label
+                                    style="display:flex; align-items:center; gap:8px; cursor:pointer; height:42px; width:100%; border:1px solid var(--border-color); border-radius:4px; padding:0 12px;">
+                                    <input type="checkbox" id="exo-sms" style="width:auto; margin:0;">
+                                    <span
+                                        style="font-weight:500; color:var(--text-primary); font-size:0.95rem;">Requires
+                                        SMS</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <button id="btn-fetch-exo" class="btn btn-secondary w-100">Fetch Available Numbers</button>
+                    </div>
+
+                    <div class="content-panel" style="display:flex; flex-direction:column; justify-content:center;">
+                        <h3>Allocate Exophones</h3>
+                        <p class="mb-4 text-muted">Allocate fetched numbers to your account in batch.</p>
+                        <div class="input-group" style="margin-bottom:16px;">
+                            <label>Allocation Batch Size</label>
+                            <input type="number" id="exo-allocate-count" placeholder="e.g. 5" min="1">
+                        </div>
+                        <button id="btn-allocate-exo" class="btn btn-primary w-100">Allocate Numbers</button>
+                    </div>
+                </div>
+
+                <div id="exo-preview" class="content-panel hidden mt-4">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="margin:0;">Available Exophones (<span id="exo-count">0</span>)</h3>
+                        <button id="btn-download-exo" class="btn btn-secondary">Export to CSV</button>
+                    </div>
+                    <div class="table-responsive"
+                        style="max-height: 400px; padding:0; overflow-y:auto; border:none; background:transparent;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Friendly Name</th>
+                                    <th>Phone Number</th>
+                                    <th>Type</th>
+                                    <th>Region</th>
+                                    <th>SMS</th>
+                                    <th>Voice</th>
+                                    <th>One Time Price</th>
+                                    <th>Rental Price</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="exo-list">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Case 3: Logs Applet -->
+            <section id="logs-applet" class="applet hidden">
+                <div class="applet-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h1 class="applet-title" style="margin:0;">Activity Logs</h1>
+                        <p style="margin-top:4px;">Your actions from today.</p>
+                    </div>
+                    <button id="btn-refresh-logs" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+
+                <!-- Log sub-tabs (Card based) -->
+                <div class="use-case-cards">
+                    <div class="use-case-card active" id="ltab-activity" onclick="switchLogTab('activity')">
+                        <div class="use-case-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                            </svg>
+                        </div>
+                        <div class="use-case-text">
+                            <h4>Today's Activity</h4>
+                            <p>Your actions from today</p>
+                        </div>
+                    </div>
+                    <div class="use-case-card" id="ltab-quotes" onclick="switchLogTab('quotes')">
+                        <div class="use-case-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                        </div>
+                        <div class="use-case-text">
+                            <h4>Quote History</h4>
+                            <p>History of generated proposals</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity timeline -->
+                <div id="log-activity-panel">
+                    <div id="logs-timeline" style="display:flex; flex-direction:column; gap:8px;"></div>
+                </div>
+
+                <!-- Quote logs -->
+                <div id="log-quotes-panel" class="hidden">
+                    <div id="logs-quotes-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+                </div>
+            </section>
+
+
+            <!-- Live Monitor Applet (Admin only) -->
+            <section id="live-monitor-applet" class="applet hidden">
+                <div class="applet-header" style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div>
+                        <h1 class="applet-title" style="margin:0;display:flex;align-items:center;gap:10px;">
+                            <span
+                                style="width:12px;height:12px;background:#ef4444;border-radius:50%;display:inline-block;flex-shrink:0;animation:lwbPulse 1.4s ease infinite;"></span>
+                            Live Call Monitor
+                            <span class="admin-badge" style="background:#dc2626;">Admin</span>
+                        </h1>
+                        <p style="margin-top:4px;">All active calls on your account. Click <strong>🎧 Listen</strong> to
+                            silently monitor any call.</p>
+                    </div>
+                </div>
+
+                <!-- Credentials warning -->
+                <div id="lwb-creds-banner" class="lwb-banner lwb-banner-warn" style="display:none;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="12" y1="8" x2="12" y2="12" />
+                        <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    Exotel credentials not configured. Add <code>EXOTEL_API_KEY</code>, <code>EXOTEL_API_TOKEN</code>,
+                    <code>EXOTEL_ACCOUNT_SID</code> and <code>EXOTEL_SUBDOMAIN</code> to your <code>.env</code> file
+                    then restart the server.
+                </div>
+
+                <!-- Supervisor phone - persisted in localStorage, pre-fills all listen forms -->
+                <div id="lwb-my-phone-bar"></div>
+
+                <!-- Status bar -->
+                <div id="lwb-status-bar"></div>
+
+                <!-- Active calls grid -->
+                <div id="lwb-calls-grid" class="lwb-calls-grid"></div>
+
+                <!-- Toast -->
+                <div id="lwb-toast" style="display:none;"></div>
+            </section>
+
+
+            <!-- Admin Panel Applet -->
+            <section id="admin-applet" class="applet hidden">
+                <div class="applet-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <h1 class="applet-title" style="margin:0;">Admin Panel
+                            <span class="admin-badge">Admin</span>
+                        </h1>
+                        <p style="margin-top:4px;">All user activity logs across the system.</p>
+                    </div>
+                    <button id="btn-refresh-admin-logs" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;">
+                            <polyline points="23 4 23 10 17 10"></polyline>
+                            <polyline points="1 20 1 14 7 14"></polyline>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Reload All Logs
+                    </button>
+                </div>
+
+                <!-- Admin log sub-tabs (Card based) -->
+                <div class="use-case-cards">
+                    <div class="use-case-card active" id="altab-activity" onclick="switchAdminLogTab('activity')">
+                        <div class="use-case-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                        </div>
+                        <div class="use-case-text">
+                            <h4>System Activity</h4>
+                            <p>All user activity logs</p>
+                        </div>
+                    </div>
+                    <div class="use-case-card" id="altab-quotes" onclick="switchAdminLogTab('quotes')">
+                        <div class="use-case-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                        </div>
+                        <div class="use-case-text">
+                            <h4>All Quote Logs</h4>
+                            <p>All quotes tracked system-wide</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Search / filter bar -->
+                <div style="display:flex; gap:10px; margin-bottom:16px; flex-wrap:wrap; align-items:center;">
+                    <input type="text" id="admin-log-search" placeholder="Search by user, action, or details…"
+                        style="flex:1; min-width:180px;">
+                    <select id="admin-log-user-filter" class="form-select" style="width:200px; flex-shrink:0;">
+                        <option value="">All Users</option>
+                    </select>
+                    <select id="admin-log-status-filter" class="form-select" style="width:140px; flex-shrink:0;">
+                        <option value="">All Statuses</option>
+                        <option value="SUCCESS">Success</option>
+                        <option value="ERROR">Error</option>
+                        <option value="FAILED">Failed</option>
+                    </select>
+                    <div
+                        style="display:flex; align-items:center; gap:6px; background:#fafafa; border:1px solid #cbd5e1; border-radius:6px; padding:4px 10px; flex-shrink:0;">
+                        <span
+                            style="font-size:0.72rem; color:#64748b; font-weight:600; text-transform:uppercase;">From</span>
+                        <input type="date" id="admin-log-from"
+                            style="border:none; outline:none; font-size:0.85rem; padding:4px 0; background:transparent;">
+                    </div>
+                    <div
+                        style="display:flex; align-items:center; gap:6px; background:#fafafa; border:1px solid #cbd5e1; border-radius:6px; padding:4px 10px; flex-shrink:0;">
+                        <span
+                            style="font-size:0.72rem; color:#64748b; font-weight:600; text-transform:uppercase;">To</span>
+                        <input type="date" id="admin-log-to"
+                            style="border:none; outline:none; font-size:0.85rem; padding:4px 0; background:transparent;">
+                    </div>
+                </div>
+
+                <!-- Activity timeline -->
+                <div id="admin-log-activity-panel">
+                    <div id="admin-logs-timeline" style="display:flex; flex-direction:column; gap:8px;"></div>
+                </div>
+
+                <!-- Quote logs -->
+                <div id="admin-log-quotes-panel" class="hidden">
+                    <div id="admin-logs-quotes-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+                </div>
+            </section>
+
+            <!-- ==========================================
+                 QUOTE GENERATOR APPLET
+                 ========================================== -->
+            <section id="quotes-applet" class="applet hidden" style="margin:0; padding:0; max-width:100%;">
+                <!-- Header -->
+                <div class="applet-header" style="padding: 24px 32px 0;">
+                    <div
+                        style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+                        <div>
+                            <h1 class="applet-title" style="margin:0;">
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0284c7"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                    style="margin-right:10px;">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                                </svg>
+                                Quote Generator
+                            </h1>
+                            <p style="margin-top:4px;">Create, manage, and track commercial proposals.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabs -->
+                <div class="quote-tabs-bar">
+                    <div class="quote-tabs">
+                        <button class="quote-tab active" data-qtab="new-quote" id="qtab-new">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 20h9"></path>
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                            </svg>
+                            Quote Builder
+                        </button>
+                        <button class="quote-tab" data-qtab="my-quotes" id="qtab-myquotes">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="3" y1="9" x2="21" y2="9"></line>
+                                <line x1="9" y1="21" x2="9" y2="9"></line>
+                            </svg>
+                            My Quotes
+                            <span class="quote-tab-badge" id="my-quotes-count">0</span>
+                        </button>
+                        <button class="quote-tab" data-qtab="drafts" id="qtab-drafts">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                            </svg>
+                            Drafts
+                            <span class="quote-tab-badge" id="drafts-count">0</span>
+                        </button>
+                        <button class="quote-tab hidden" data-qtab="all-quotes" id="qtab-allquotes">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                            All Quotes
+                            <span class="quote-tab-badge" id="all-quotes-count">0</span>
+                            <span class="admin-badge" style="font-size:0.65rem;">Admin</span>
+                        </button>
+                        <button class="quote-tab hidden" data-qtab="approvals" id="qtab-approvals">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                            Approvals
+                            <span class="quote-tab-badge" id="approvals-count">0</span>
+                            <span class="admin-badge" style="font-size:0.65rem;">Admin</span>
+                        </button>
+                        <button class="quote-tab hidden" data-qtab="sku-requests" id="qtab-skurequests">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            Requested SKUs
+                            <span class="quote-tab-badge" id="sku-requests-count">0</span>
+                            <span class="admin-badge" style="font-size:0.65rem;">Admin</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Tab Contents -->
+
+                <!-- NEW QUOTE TAB -->
+                <div class="quote-tab-content active" id="qtab-content-new-quote">
+                    <div class="quote-layout">
+                        <!-- LEFT: Form Panel -->
+                        <div class="quote-form-panel" id="q-form-panel">
+
+                            <!-- AI Voice Quote Banner -->
+                            <div class="q-ai-banner" id="q-ai-banner">
+                                <div class="q-ai-banner-content">
+                                    <div class="q-ai-icon">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                                        </svg>
+                                    </div>
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 700; font-size: 1.05rem; background: linear-gradient(90deg, #6366f1, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Generate with Voice AI</div>
+                                        <div style="font-size: 0.85rem; color: #64748b; margin-top: 2px;">Speak naturally (supports Indian accents) to auto-fill Company, SKUs, and Tiers.</div>
+                                    </div>
+                                    <button class="btn btn-primary" id="btn-ai-voice" style="background: linear-gradient(90deg, #6366f1, #8b5cf6); border: none; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                        </svg>
+                                        Start Dictating
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- AI Listening Overlay -->
+                            <div id="ai-listening-overlay" class="hidden">
+                                <div class="ai-listening-modal">
+                                    <div class="ai-ripple-container">
+                                        <div class="ai-ripple"></div>
+                                        <div class="ai-ripple"></div>
+                                        <div class="ai-mic-active">
+                                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <h3 style="margin-top:24px; color:#1e293b;">Listening...</h3>
+                                    <p id="ai-listening-text" style="color:#64748b; margin-top:8px; font-style:italic; min-height:24px; max-width:80%; text-align:center;">Say something like "Quote for Acme, 5 Dabbler users..."</p>
+                                    <button class="btn btn-outline" id="btn-stop-ai-voice" style="margin-top: 20px;">Stop & Parse</button>
+                                </div>
+                            </div>
+
+                            <!-- Profile Prompt (shown if phone not set) -->
+                            <div class="q-profile-prompt hidden" id="q-profile-prompt">
+                                <div class="q-profile-prompt-icon">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                        <circle cx="12" cy="7" r="4"></circle>
+                                    </svg>
+                                </div>
+                                <div style="flex:1;">
+                                    <div style="font-weight:600; font-size:0.92rem; color:#0f172a; margin-bottom:4px;">
+                                        Complete Your Profile</div>
+                                    <p style="margin:0; font-size:0.83rem; color:#64748b;">Your mobile number is needed
+                                        to appear on quotes.</p>
+                                </div>
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <input type="tel" id="q-profile-phone" placeholder="+91 XXXXXXXXXX"
+                                        style="width:170px; padding:8px 12px; border:1px solid #7dd3fc; border-radius:6px; font-size:0.88rem;">
+                                    <button class="btn btn-primary" id="q-save-profile"
+                                        style="padding:8px 14px; font-size:0.85rem;">Save</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 1: Quote Info -->
+                            <div class="q-card">
+                                <div class="q-card-header">
+                                    <div class="q-card-title">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <circle cx="12" cy="12" r="10"></circle>
+                                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                                        </svg>
+                                        Quote Information
+                                    </div>
+                                    <div id="q-entity-badge"
+                                        style="padding:4px 12px; border-radius:20px; font-size:0.78rem; font-weight:700; background:#e0f2fe; color:#0369a1;">
+                                        Exotel</div>
+                                </div>
+                                <div class="q-field-row">
+                                    <span class="q-field-label">Quote Number</span>
+                                    <div class="q-field-value" style="gap:8px;">
+                                        <span class="q-non-editable" id="q-quote-number">Loading...</span>
+                                    </div>
+                                </div>
+                                <div class="q-field-row">
+                                    <span class="q-field-label">Date</span>
+                                    <div class="q-field-value">
+                                        <span class="q-non-editable" id="q-date">-</span>
+                                    </div>
+                                </div>
+                                <div class="q-field-row">
+                                    <span class="q-field-label">Sales Engineer</span>
+                                    <div class="q-field-value">
+                                        <span class="q-non-editable" id="q-se-name">-</span>
+                                    </div>
+                                </div>
+                                <div class="q-field-row">
+                                    <span class="q-field-label">Email</span>
+                                    <div class="q-field-value">
+                                        <span class="q-non-editable" id="q-se-email">-</span>
+                                    </div>
+                                </div>
+                                <div class="q-field-row">
+                                    <span class="q-field-label">Mobile</span>
+                                    <div class="q-field-value">
+                                        <div class="q-input-wrapper">
+                                            <input type="tel" class="q-input" id="q-se-phone" disabled
+                                                placeholder="+91 XXXXXXXXXX">
+                                            <button class="q-lock-btn" data-target="q-se-phone" title="Edit"><svg
+                                                    width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                                    stroke-linejoin="round">
+                                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                                                </svg></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Client Info -->
+                            <div class="q-card">
+                                <div class="q-card-header">
+                                    <div class="q-card-title">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                            <circle cx="9" cy="7" r="4"></circle>
+                                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                        </svg>
+                                        Client / Prospect Details
+                                    </div>
+                                </div>
+                                <div class="q-client-grid">
+                                    <div>
+                                        <label class="q-field-label">Company Name <span
+                                                class="required">*</span></label>
+                                        <input type="text" class="q-input" id="q-client-company"
+                                            style="margin-top:4px; width:100%;" placeholder="e.g. Acme Pvt. Ltd.">
+                                    </div>
+                                    <div>
+                                        <label class="q-field-label">Contact Person</label>
+                                        <input type="text" class="q-input" id="q-client-contact"
+                                            style="margin-top:4px; width:100%;" placeholder="Name">
+                                    </div>
+                                    <div>
+                                        <label class="q-field-label">Client Email</label>
+                                        <input type="email" class="q-input" id="q-client-email"
+                                            style="margin-top:4px; width:100%;" placeholder="email@company.com">
+                                    </div>
+                                    <div>
+                                        <label class="q-field-label">Client Phone</label>
+                                        <input type="tel" class="q-input" id="q-client-phone"
+                                            style="margin-top:4px; width:100%;" placeholder="+91 XXXXXXXXXX">
+                                    </div>
+                                </div>
+                            </div>
+
+
+                            <!-- Multi-SKU Toggle -->
+                            <div
+                                style="margin-bottom: 12px; display: flex; align-items: center; justify-content: flex-end; gap: 16px;">
+                                <label
+                                    style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; color:#475569; cursor:pointer;">
+                                    <input type="checkbox" id="toggle-compare-mode"
+                                        onchange="window.toggleCompareMode(this.checked)"
+                                        style="accent-color:#0284c7; width:16px; height:16px;">
+                                    Enable Compare Mode
+                                </label>
+                                <label
+                                    style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; color:#475569; cursor:pointer;">
+                                    <input type="checkbox" id="toggle-multi-sku-mode"
+                                        onchange="window.toggleMultiSkuMode(this.checked)"
+                                        style="accent-color:#0284c7; width:16px; height:16px;">
+                                    Enable Multi-SKU Quote
+                                </label>
+                            </div>
+                            
+                            <!-- Compare Tier Selection -->
+                            <div id="compare-tier-selector" style="display:none; margin-bottom: 12px; align-items: center; justify-content: flex-end; gap: 16px; flex-wrap: wrap;">
+                                <span style="font-size:0.85rem; font-weight:600; color:#475569;">Compare Plans:</span>
+                                <label style="display:flex; align-items:center; gap:4px; font-size:0.85rem; cursor:pointer; color:#0f172a;">
+                                    <input type="checkbox" id="ct-dabbler" value="dabbler" checked onchange="window.updateCompareTiers()" style="accent-color:#0284c7;"> Dabbler
+                                </label>
+                                <label style="display:flex; align-items:center; gap:4px; font-size:0.85rem; cursor:pointer; color:#0f172a;">
+                                    <input type="checkbox" id="ct-believer" value="believer" checked onchange="window.updateCompareTiers()" style="accent-color:#0284c7;"> Believer
+                                </label>
+                                <label style="display:flex; align-items:center; gap:4px; font-size:0.85rem; cursor:pointer; color:#0f172a;">
+                                    <input type="checkbox" id="ct-influencer" value="influencer" checked onchange="window.updateCompareTiers()" style="accent-color:#0284c7;"> Influencer
+                                </label>
+                            </div>
+
+                            <!-- Step 3: SKU Item Manager -->
+                            <div class="q-card" id="sku-item-manager" style="display:none;">
+                                <div class="q-card-header"
+                                    style="border-bottom:1px solid #e0f2fe; padding-bottom:12px; margin-bottom:0;">
+                                    <div class="q-card-title">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M9 11l3 3L22 4"></path>
+                                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                                        </svg>
+                                        Quote Items
+                                    </div>
+                                    <button id="btn-add-sku-item" class="btn btn-secondary"
+                                        style="padding:5px 12px;font-size:0.82rem;display:flex;align-items:center;gap:5px;"
+                                        onclick="window.addSkuItem()">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        Add SKU
+                                    </button>
+                                </div>
+                                <div id="sku-item-list"
+                                    style="padding:10px 16px;display:flex;flex-direction:column;gap:6px;">
+                                    <!-- Dynamically populated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Step 3: SKU Selection -->
+                            <div class="q-card">
+                                <div class="q-card-header">
+                                    <div class="q-card-title">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                                        </svg>
+                                        Select SKU Plan
+                                    </div>
+                                    <span id="sku-entity-lock-badge"
+                                        style="display:none; padding:3px 10px; border-radius:20px; font-size:0.73rem; font-weight:700; background:#fef3c7; color:#92400e;">Locked
+                                        to <span id="sku-entity-lock-name"></span></span>
+                                </div>
+                                <p style="font-size:0.83rem; color:#64748b; margin-bottom:14px;" id="sku-selector-hint">
+                                    Choose the product plan for this quote. The logo and entity will switch
+                                    automatically.</p>
+                                <div class="sku-selector" id="sku-selector-grid">
+                                    <!-- Dynamically populated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Step 4: SKU Configuration (dynamically rendered) -->
+                            <div id="sku-config-area">
+                                <!-- Dynamically populated by JS when a SKU is selected -->
+                            </div>
+
+                        </div>
+
+                        <!-- RIGHT: Preview Panel -->
+                        <div class="quote-preview-panel">
+                            <div class="preview-header">
+                                <div class="preview-header-title">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                    Live Preview
+                                </div>
+                                <div class="preview-actions" style="display: flex; gap: 12px; align-items: center;">
+                                    <button class="btn btn-secondary hidden" id="q-btn-sku-request">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        Request New SKU
+                                    </button>
+                                    <button class="btn btn-generate" id="q-btn-generate">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <polyline points="20 6 9 17 4 12"></polyline>
+                                        </svg>
+                                        Generate Quote
+                                    </button>
+                                    <button class="btn btn-draft" id="q-btn-draft">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                        </svg>
+                                        Save as Draft
+                                    </button>
+                                    <button class="btn btn-reset" id="q-btn-reset">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                            stroke-linejoin="round">
+                                            <polyline points="1 4 1 10 7 10"></polyline>
+                                            <path d="M3.51 15a9 9 0 1 0 .49-4.5L1 15"></path>
+                                        </svg>
+                                        Reset All
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="quote-document">
+                                <!-- Dynamically updated by JS -->
+                                <div class="q-empty-state">
+                                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                        <polyline points="14 2 14 8 20 8"></polyline>
+                                    </svg>
+                                    <h3>Preview will appear here</h3>
+                                    <p>Select a SKU and fill in client details to see the live quote preview.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- MY QUOTES TAB -->
+                <div class="quote-tab-content" id="qtab-content-my-quotes">
+                    <div style="padding: 24px 32px;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <h2 style="margin:0;">My Quotes</h2>
+                            <button class="btn btn-secondary" id="q-btn-refresh-quotes">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                    </path>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="my-quotes-list">
+                            <div class="q-empty-state">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                                </svg>
+                                <h3>No quotes yet</h3>
+                                <p>Generated quotes will appear here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- DRAFTS TAB -->
+                <div class="quote-tab-content" id="qtab-content-drafts">
+                    <div style="padding: 24px 32px;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <div>
+                                <h2 style="margin:0;">Saved Drafts</h2>
+                                <p style="margin:4px 0 0; font-size:0.83rem; color:#94a3b8;">Drafts older than 48 hours
+                                    are automatically removed.</p>
+                            </div>
+                            <button class="btn btn-secondary" id="q-btn-refresh-drafts">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                    </path>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="drafts-list">
+                            <div class="q-empty-state">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                </svg>
+                                <h3>No saved drafts</h3>
+                                <p>Drafts auto-save as you work.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ALL QUOTES TAB (admin) -->
+                <div class="quote-tab-content" id="qtab-content-all-quotes">
+                    <div style="padding: 24px 32px;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <h2 style="margin:0;">All Quotes <span class="admin-badge">Admin</span></h2>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <div
+                                    style="display:flex; align-items:center; gap:6px; background:#fafafa; border:1px solid #cbd5e1; border-radius:6px; padding:2px 10px;">
+                                    <span
+                                        style="font-size:0.7rem; color:#64748b; font-weight:700; text-transform:uppercase;">Filter
+                                        Date:</span>
+                                    <input type="date" id="admin-quotes-date"
+                                        style="border:none; outline:none; font-size:0.85rem; padding:6px 0; background:transparent;">
+                                </div>
+                                <input type="text" id="admin-quotes-search"
+                                    placeholder="Search by quote #, user, company..."
+                                    style="width:260px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;">
+                                <button class="btn btn-secondary" id="q-btn-refresh-all-quotes">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <polyline points="1 20 1 14 7 14"></polyline>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                        </path>
+                                    </svg>
+                                    Refresh
+                                </button>
+                            </div>
+                        </div>
+                        <div id="all-quotes-list">
+                            <div class="q-empty-state">
+                                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="3" y1="9" x2="21" y2="9"></line>
+                                    <line x1="9" y1="21" x2="9" y2="9"></line>
+                                </svg>
+                                <h3>No quotes yet</h3>
+                                <p>All user-generated quotes will appear here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- APPROVALS TAB (admin) -->
+                <div class="quote-tab-content" id="qtab-content-approvals">
+                    <div style="padding: 24px 32px;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <div>
+                                <h2 style="margin:0;">Stop-Lock Overrides <span class="admin-badge">Admin</span></h2>
+                                <p style="margin:4px 0 0; font-size:0.83rem; color:#94a3b8;">Track all cases where
+                                    pricing went below thresholds.</p>
+                            </div>
+                            <button class="btn btn-secondary" id="q-btn-refresh-approvals">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                    </path>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="approvals-list"></div>
+                    </div>
+                </div>
+
+                <!-- REQUESTED SKUS TAB (admin) -->
+                <div class="quote-tab-content" id="qtab-content-sku-requests">
+                    <div style="padding: 24px 32px;">
+                        <div
+                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                            <div>
+                                <h2 style="margin:0;">Requested SKUs <span class="admin-badge">Admin</span></h2>
+                                <p style="margin:4px 0 0; font-size:0.83rem; color:#94a3b8;">Review new SKUs requested
+                                    by the sales team.</p>
+                            </div>
+                            <button class="btn btn-secondary" id="q-btn-refresh-sku-requests">
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <polyline points="1 20 1 14 7 14"></polyline>
+                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                    </path>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+                        <div id="sku-requests-list"></div>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+    </div>
+
+    <!-- Stop-Lock Approval Modal (global) -->
+    <div class="q-modal-overlay hidden" id="q-approval-modal">
+        <div class="q-modal">
+            <div class="q-modal-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
+                    </path>
+                    <line x1="12" y1="9" x2="12" y2="13"></line>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+            </div>
+            <div class="q-modal-title">Manager Approval Required</div>
+            <div class="q-modal-body" id="q-modal-body-text">The following values exceed suggested thresholds. Please
+                ensure you have formal approval from your manager to proceed with this commercial setup.</div>
+            <div id="q-modal-violations-list"
+                style="margin-top:16px; margin-bottom:16px; max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; padding:12px; background:#f8fafc; text-align: left;">
+                <!-- List will be injected here -->
+            </div>
+            <div style="font-size:0.75rem; color:#94a3b8; text-align:center; margin-top:14px; margin-bottom: 20px;">💬
+                Clicking confirm acknowledges you have received manager consent.</div>
+            <div class="q-modal-actions">
+                <button class="btn btn-reset" id="q-modal-cancel">Cancel</button>
+                <button class="btn btn-primary" id="q-modal-approve" style="background: #0284c7;">Confirm &
+                    Proceed</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SKU Request Modal -->
+    <div class="q-modal-overlay hidden" id="q-sku-request-modal">
+        <div class="q-modal" style="max-width:440px;">
+            <div class="q-modal-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="17 8 12 3 7 8"></polyline>
+                    <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+            </div>
+            <div class="q-modal-title">Request Missing SKU</div>
+            <div class="q-modal-body">Please provide the name of the SKU you need for your quote. Our team will verify
+                and add it.</div>
+
+            <div style="margin-top: 16px; text-align: left;">
+                <label
+                    style="font-size: 0.82rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">SKU
+                    Name *</label>
+                <input type="text" class="q-modal-input" id="q-sku-request-name"
+                    placeholder="e.g. WhatsApp Platform License">
+
+                <label
+                    style="font-size: 0.82rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px; margin-top: 12px;">Description
+                    (Optional)</label>
+                <textarea class="q-modal-input" id="q-sku-request-desc"
+                    placeholder="Specific pricing, parameters, or details..."
+                    style="min-height: 80px; resize: vertical; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%; padding: 10px; font-family: inherit;"></textarea>
+            </div>
+
+            <div class="q-modal-actions mt-4" style="margin-top: 20px;">
+                <button class="btn btn-secondary" id="q-sku-request-cancel">Cancel</button>
+                <button class="btn btn-primary" id="q-sku-request-submit">Submit Request</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Give Feedback Modal (Global) -->
+    <div id="feedback-modal" class="modal-overlay hidden">
+        <div class="feedback-modal-card">
+            <!-- Header -->
+            <div class="feedback-modal-header">
+                <div class="feedback-modal-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </div>
+                <div style="flex:1;">
+                    <h3 style="margin:0; font-size:1.1rem; font-weight:700; color:#0f172a;">Share Feedback</h3>
+                    <p style="margin:2px 0 0; font-size:0.82rem; color:#64748b;">Your input goes directly to the
+                        developer.</p>
+                </div>
+                <button class="feedback-modal-close" id="btn-close-feedback-modal" title="Close">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="feedback-modal-body">
+                <label style="font-size:0.8rem; font-weight:600; color:#475569; display:block; margin-bottom:8px;">Your
+                    message</label>
+                <textarea id="feedback-message" class="feedback-modal-textarea"
+                    placeholder="Describe your experience, report a bug, or suggest a feature…"></textarea>
+            </div>
+            <!-- Footer -->
+            <div class="feedback-modal-footer">
+                <button class="btn btn-secondary" id="btn-cancel-feedback">Cancel</button>
+                <button class="btn btn-primary" id="btn-submit-feedback"
+                    style="background: linear-gradient(135deg,#0284c7,#0369a1);">Send Feedback</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quote History Modal -->
+    <div id="quote-history-modal" class="modal-overlay hidden">
+        <div class="qh-modal-card">
+            <!-- Header -->
+            <div class="qh-modal-header">
+                <div class="qh-modal-header-icon">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 6 12 12 16 14"></polyline>
+                    </svg>
+                </div>
+                <div class="qh-modal-header-text">
+                    <h3 class="qh-modal-title" id="qh-modal-title">Version History</h3>
+                    <p class="qh-modal-subtitle">Track every change made to this quote</p>
+                </div>
+                <button class="qh-modal-close"
+                    onclick="document.getElementById('quote-history-modal').classList.add('hidden')" title="Close">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <!-- Body -->
+            <div class="qh-modal-body">
+                <div id="qh-version-list" class="qh-version-list">
+                    <!-- Versions will be dynamically injected here -->
+                </div>
+            </div>
+            <!-- Footer -->
+            <div class="qh-modal-footer">
+                <span class="qh-footer-info">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    Previewing a version loads it as read-only.
+                </span>
+            </div>
+        </div>
+    </div>
+    <!-- Quote Preview / Download Modal (Read-Only) -->
+    <div id="quote-preview-modal" class="modal-overlay hidden" style="align-items:flex-start; padding:0;">
+        <div class="qprev-modal-card">
+            <!-- Header -->
+            <div class="qprev-modal-header">
+                <div class="qprev-header-left">
+                    <div class="qprev-header-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                    </div>
+                    <div class="qprev-header-text">
+                        <div class="qprev-ro-badge">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                            Read Only
+                        </div>
+                        <h3 class="qprev-title" id="qprev-title">Quote Preview</h3>
+                        <p class="qprev-subtitle" id="qprev-subtitle">Loading...</p>
+                    </div>
+                </div>
+                <div class="qprev-header-right">
+                    <span id="qprev-entity-badge" class="qprev-entity-badge">Exotel</span>
+                    <button class="qprev-close-btn"
+                        onclick="document.getElementById('quote-preview-modal').classList.add('hidden')" title="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <!-- Loading spinner -->
+            <div id="qprev-loading" class="qprev-loading hidden">
+                <div class="qprev-spinner"></div>
+                <span>Rendering quote...</span>
+            </div>
+            <!-- Body: rendered quote document -->
+            <div class="qprev-modal-body">
+                <div id="qprev-document" class="qprev-document">
+                    <!-- Quote HTML injected by JS -->
+                </div>
+            </div>
+            <!-- Footer: ONLY download button -->
+            <div class="qprev-modal-footer">
+                <span class="qprev-footer-info">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    This is a read-only view. Editing is not available here.
+                </span>
+                <button class="qprev-download-btn" id="qprev-dl-btn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Download PDF
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Terminal / Activity Log Bar -->
+    <div id="terminal-section" class="hidden"
+        style="position:fixed; bottom:0; left:0; right:0; z-index:9000; background:#0f172a; border-top:2px solid #334155; max-height:200px; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 16px; background:#1e293b; border-bottom:1px solid #334155; flex-shrink:0;">
+            <span style="color:#94a3b8; font-size:0.75rem; font-weight:600; letter-spacing:0.05em; text-transform:uppercase;">Activity Log</span>
+            <button id="btn-clear-terminal"
+                style="background:transparent; border:1px solid #475569; color:#94a3b8; font-size:0.7rem; padding:2px 10px; border-radius:4px; cursor:pointer; font-family:monospace;">
+                Clear
+            </button>
+        </div>
+        <div id="terminal-output"
+            style="overflow-y:auto; padding:8px 16px; flex:1; font-family:monospace; font-size:0.78rem; line-height:1.6; color:#cbd5e1;">
+        </div>
+    </div>
+
+
+    <script src="app.js?v=10"></script>
+    <script src="quote-generator.js?v=16"></script>
+    <!-- LIVE MONITOR DISABLED: <script src="live-monitor.js"></script> -->
+    <!-- Small script to hide TOPBAR logo when NOT home state (since sidebar is visible) -->
+    <script>
+        // Extending app.js UI logic directly for the UI presentation layer fix:
+        const originalOpenApp = window.openApp;
+        if (typeof originalOpenApp === 'function') {
+            window.openApp = function (appId) {
+                originalOpenApp(appId);
+                const isHome = appId === 'home';
+                document.getElementById('topbar-logo').style.display = isHome ? 'flex' : 'none';
+
+                // Sidebar auto-collapse for Quote Generator
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar) {
+                    if (appId === 'quotes') {
+                        sidebar.classList.add('sidebar-collapsed');
+                    } else {
+                        sidebar.classList.remove('sidebar-collapsed');
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- ═══════════════════════════════════════════ -->
+    <!-- API Settings Slide-in Drawer               -->
+    <!-- ═══════════════════════════════════════════ -->
+    <div id="api-drawer-backdrop" onclick="window.closeApiSettings()"
+        style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:8000; backdrop-filter:blur(2px); opacity:0; transition:opacity 0.3s ease;"></div>
+
+    <div id="api-drawer"
+        style="position:fixed; top:0; right:0; width:420px; max-width:95vw; height:100vh; background:#ffffff; z-index:8001; box-shadow:-8px 0 40px rgba(0,0,0,0.18); transform:translateX(100%); transition:transform 0.35s cubic-bezier(0.22,1,0.36,1); flex-direction:column; display:none;">
+
+        <!-- Drawer Header -->
+        <div style="padding:24px 24px 20px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg,#f0f9ff 0%,#e0f2fe 100%);">
+            <div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,#0ea5e9,#2563eb); display:flex; align-items:center; justify-content:center;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 style="margin:0; font-size:1.1rem; font-weight:700; color:#0f172a;">API Settings</h2>
+                        <p style="margin:0; font-size:0.78rem; color:#64748b;">Stored for this session only</p>
+                    </div>
+                </div>
+            </div>
+            <button onclick="window.closeApiSettings()" style="background:none; border:none; cursor:pointer; color:#64748b; padding:6px; border-radius:6px; line-height:1;" title="Close">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Drawer Body -->
+        <div style="flex:1; overflow-y:auto; padding:24px;">
+            <div id="api-drawer-banner" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:10px 14px; margin-bottom:20px; font-size:0.83rem; color:#92400e; display:flex; align-items:center; gap:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                <span id="api-drawer-banner-text">API credentials required to proceed.</span>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:18px;">
+                <div>
+                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#374151; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;">Region</label>
+                    <select id="cfg-subdomain" class="form-select" style="width:100%;">
+                        <option value="singapore" selected>Singapore</option>
+                        <option value="mumbai">Mumbai (India)</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#374151; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;">Account SID</label>
+                    <input type="text" id="cfg-sid" placeholder="e.g. your_account_sid" style="width:100%;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#374151; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;">API Key</label>
+                    <input type="password" id="cfg-key" placeholder="Enter API Key" style="width:100%;">
+                </div>
+                <div>
+                    <label style="display:block; font-size:0.8rem; font-weight:600; color:#374151; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.04em;">API Token</label>
+                    <input type="password" id="cfg-token" placeholder="Enter API Token" style="width:100%;">
+                </div>
+                <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px;">
+                    <p style="margin:0; font-size:0.78rem; color:#166534; line-height:1.5;">
+                        <strong>Session only</strong> - credentials are stored in your browser memory and cleared when you close the tab. They are never sent to our servers.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Drawer Footer -->
+        <div style="padding:16px 24px; border-top:1px solid #e2e8f0; display:flex; gap:12px; justify-content:flex-end; background:#f8fafc;">
+            <button onclick="window.closeApiSettings()" class="btn btn-secondary">Cancel</button>
+            <button id="btn-close-config-save" class="btn btn-primary">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right:6px;">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+                Save &amp; Continue
+            </button>
+        </div>
+    </div>
+</body>
+
+</html>
