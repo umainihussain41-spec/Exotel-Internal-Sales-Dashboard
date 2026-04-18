@@ -169,7 +169,8 @@ if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID || 'missing_client_id',
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || 'missing_client_secret',
-    callbackURL: "/auth/google/callback"
+    callbackURL: "/auth/google/callback",
+    proxy: true
 },
     function (accessToken, refreshToken, profile, cb) {
         const exotelEmail = profile.emails.find(email => email.value.endsWith('@exotel.com'));
