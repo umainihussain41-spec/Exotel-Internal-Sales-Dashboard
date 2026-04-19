@@ -63,11 +63,13 @@
         height: calc(100vh - 120px) !important;
     }
     .quote-form-panel {
-        flex: 1 1 36% !important;
+        flex: 1 1 45% !important;
+        min-width: 440px !important;
         overflow-y: auto !important;
     }
     .quote-preview-panel {
-        flex: 0 0 64% !important;
+        flex: 1 1 55% !important;
+        min-width: 380px !important;
         height: 100% !important;
         overflow-y: auto !important;
     }

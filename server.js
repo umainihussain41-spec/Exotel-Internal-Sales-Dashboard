@@ -26,7 +26,8 @@ function isAdmin(email) {
 }
 
 // ─── SQLite Persistent Log Store ────────────────────────────────────────────
-const db = new Database(path.join(__dirname, 'logs.db'));
+const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'logs.db');
+const db = new Database(DB_PATH);
 
 db.exec(`
     CREATE TABLE IF NOT EXISTS logs (
