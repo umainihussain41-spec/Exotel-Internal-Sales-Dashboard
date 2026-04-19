@@ -1854,7 +1854,6 @@ window.printQuote = async function () {
          width: 100% !important;
          min-height: auto !important;
          margin: 0 !important;
-         padding: 0 !important;
          border: none !important;
          box-shadow: none !important;
      }
