@@ -1971,7 +1971,17 @@ async function generateQuote() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ quote_number: QG.quoteNumber, entity: firstSku?.entity, quote_data: quoteData })
     });
-    if (!res.ok) throw new Error(isEdit ? 'Update failed' : 'Save failed');
+    
+    if (res.status === 401) {
+      alert("Your session has expired. Please log in again.");
+      window.location.href = '/login';
+      return;
+    }
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || (isEdit ? 'Update failed' : 'Save failed'));
+    }
 
     await fetch('/api/drafts/key/draft_' + QG.quoteNumber, { method: 'DELETE' }).catch(() => null);
     updateNavCounters();
@@ -2873,13 +2883,17 @@ window.resetAllCounters = async function () {
 async function initQuoteNumber() {
   try {
     const res = await fetch('/api/quotes/next-number', { method: 'POST' });
+    if (!res.ok) throw new Error('Network response not ok');
     const data = await res.json();
+    if (!data.quote_number) throw new Error('Missing quote number');
     QG.quoteNumber = data.quote_number;
     const el = document.getElementById('q-quote-number');
     if (el) el.textContent = data.quote_number;
   } catch (e) {
+    console.error("Failed to fetch quote number:", e);
+    QG.quoteNumber = 'QUO-' + Date.now();
     const el = document.getElementById('q-quote-number');
-    if (el) el.textContent = 'QUO-' + Date.now();
+    if (el) el.textContent = QG.quoteNumber;
   }
 }
 
