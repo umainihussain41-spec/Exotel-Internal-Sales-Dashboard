@@ -1859,7 +1859,12 @@ window.printQuote = async function () {
      }
 
      /* Force flawless geometric vector rendering unconditionally purely for Puppeteer */
-     * { text-rendering: geometricPrecision !important; -webkit-font-smoothing: antialiased !important; }
+     * { 
+         text-rendering: geometricPrecision !important; 
+         -webkit-font-smoothing: antialiased !important; 
+         -webkit-print-color-adjust: exact !important;
+         print-color-adjust: exact !important;
+     }
   </style>
 </head>
 <body>

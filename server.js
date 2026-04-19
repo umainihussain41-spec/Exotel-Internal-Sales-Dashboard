@@ -395,6 +395,9 @@ app.post('/api/export-pdf', ensureAuthenticated, async (req, res) => {
         // Render the exact HTML passed from the frontend containing statically linked stylesheets
         await page.setContent(htmlPayload, { waitUntil: 'networkidle0' });
         
+        // Emulate screen media type so it looks EXACTLY like the live preview (keeps backgrounds, colors, and paddings intact)
+        await page.emulateMediaType('screen');
+
         // Generate a crisp Vector PDF completely ignoring client browser variations
         const pdfBuffer = await page.pdf({
             format: 'A4',
