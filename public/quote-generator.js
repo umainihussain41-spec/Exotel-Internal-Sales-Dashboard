@@ -1865,6 +1865,11 @@ window.printQuote = async function () {
          -webkit-print-color-adjust: exact !important;
          print-color-adjust: exact !important;
      }
+
+     /* Prevent responsive media queries from stacking the grid in PDF */
+     .quote-participant-grid {
+         grid-template-columns: 1fr 1fr !important;
+     }
   </style>
 </head>
 <body>
