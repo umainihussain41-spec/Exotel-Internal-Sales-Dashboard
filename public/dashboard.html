@@ -885,8 +885,8 @@
                                     <div style="flex: 1;">
                                         <div style="font-weight: 700; font-size: 1.05rem; background: linear-gradient(90deg, #6366f1, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Generate with Voice AI</div>
                                     </div>
-                                    <button class="btn btn-primary" id="btn-ai-voice" style="background: linear-gradient(90deg, #6366f1, #8b5cf6); border: none; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); display:flex; align-items:center; gap:8px; letter-spacing:0.02em;">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <button class="btn btn-primary" id="btn-ai-voice" style="background: linear-gradient(90deg, #6366f1, #8b5cf6); border: none; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
                                             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
                                             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                                             <line x1="12" y1="19" x2="12" y2="23"></line>
@@ -896,8 +896,8 @@
                                     </button>
                                 </div>
                             </div>
-
-                            <!-- AI Listening Inline Strip (sticky, not a modal) -->
+                            
+                            <!-- AI Listening Inline Strip -->
                             <div id="ai-listening-overlay" class="hidden">
                                 <div class="ai-listening-modal">
                                     <div class="ai-ripple-container" style="width:40px;height:40px;flex-shrink:0;">
@@ -914,9 +914,8 @@
                                     </div>
                                     <h3>Listening...</h3>
                                     <p id="ai-listening-text">Say something like "Quote for Acme, 5 Dabbler users..."</p>
-                                    <button id="btn-stop-ai-voice">⏹ Stop &amp; Parse</button>
+                                    <button id="btn-stop-ai-voice">&#9209; Stop &amp; Parse</button>
                                 </div>
-                            </div>
                             </div>
 
                             <!-- Profile Prompt (shown if phone not set) -->
