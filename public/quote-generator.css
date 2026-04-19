@@ -567,6 +567,24 @@
     /* Ensures the tall document doesn't get collapsed by its flex parent */
 }
 
+/* Hide the print-table wrapper in the screen preview — it's for PDF pagination only */
+#quote-document .print-master-table {
+    display: contents;
+    border: none;
+    width: auto;
+}
+
+#quote-document .print-master-table > thead,
+#quote-document .print-master-table > tfoot {
+    display: none;
+}
+
+#quote-document .print-master-table > tbody > tr > td {
+    display: contents;
+    padding: 0;
+    border: none;
+}
+
 .quote-doc-header {
     display: flex;
     justify-content: space-between;
