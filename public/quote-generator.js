@@ -1385,7 +1385,7 @@ function updatePreview() {
       <div class="quote-doc-section" style="margin-top:30px;">
         <div class="quote-doc-section-title">Terms &amp; Conditions</div>
         <div class="quote-tnc" style="font-size:0.85rem; color:#475569; line-height:1.5;">
-          ${generateTncHtml(Object.keys(QG.sections), firstSku.entity)}
+          ${generateTncHtml(validItems.map(i => i.sku_key), firstSku.entity)}
         </div>
       </div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e0f2fe;font-size:0.78rem;color:#94a3b8;text-align:center;">
@@ -1867,7 +1867,7 @@ function updatePreview() {
     <div class="quote-doc-section" style="margin-top:30px;">
       <div class="quote-doc-section-title">Terms &amp; Conditions</div>
       <div class="quote-tnc" style="font-size:0.85rem; color:#475569; line-height:1.5;">
-        ${generateTncHtml(Object.keys(QG.sections), firstSku.entity)}
+        ${generateTncHtml(validItems.map(i => i.sku_key), firstSku.entity)}
       </div>
     </div>
 
