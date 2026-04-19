@@ -1144,8 +1144,8 @@ function updatePreview() {
       const n = parseFloat(v); if (isNaN(n)) return String(v);
       return n >= 100 ? '₹' + (n / 100).toFixed(2) + '/msg' : n + 'p/msg';
     };
-    const W = '<span class="waived-text">✓ Waived</span>';
-    const FREE = '<span class="waived-text">✓ Free</span>';
+    const W = '<span class="waived-text">&#10003; Waived</span>';
+    const FREE = '<span class="waived-text">&#10003; Free</span>';
     const perUnit = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
 
     // Build row data per item
@@ -1380,8 +1380,8 @@ function updatePreview() {
       return num + 'p/msg';
     };
 
-    const W = '<span class="waived-text">\u2713 Waived</span>';
-    const FREE = '<span class="waived-text">\u2713 Free</span>';
+    const W = '<span class="waived-text">&#10003; Waived</span>';
+    const FREE = '<span class="waived-text">&#10003; Free</span>';
     let isFirstSec = true;
     const hasHTML = (s) => typeof s === 'string' && /<[a-zA-Z]/.test(s);
     const secRow = (lbl) => {
@@ -1407,7 +1407,8 @@ function updatePreview() {
     if (sk === 'voice_exotel_std') {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Validity', getVal('validity') + ' Months');
-      tableHTML += stdRow('Account Rental', fmtRupee(getSafeNum('rental')));
+      const rentalStd = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('Channels', 'Unlimited');
 
@@ -1490,7 +1491,8 @@ function updatePreview() {
     } else if (sk === 'sip_veeno') {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Validity', getVal('validity') + ' Months');
-      tableHTML += stdRow('Account Rental', fmtRupee(getSafeNum('rental')));
+      const rentalSip = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', rentalSip === 0 ? null : fmtRupee(rentalSip), rentalSip === 0);
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('Channels', 'Unlimited');
 
@@ -1593,7 +1595,8 @@ function updatePreview() {
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('No. of Months', Math.max(1, parseFloat(getVal('num_months') || 0)));
-      tableHTML += stdRow('Account Rental', `${fmtRupee(getSafeNum('rental'))} ${perUnit('/month')}`);
+      const rentalStream = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
       tableHTML += stdRow('Setup Charges', null, true);
 
       tableHTML += secRow('Streaming Channels');
