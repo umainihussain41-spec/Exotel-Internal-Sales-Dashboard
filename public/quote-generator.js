@@ -1885,10 +1885,10 @@ window.printQuote = async function () {
          grid-template-columns: 1fr 1fr !important;
      }
 
-     /* ── PDF-ONLY: Keep 2-column grid but neutralise height/break issues ── */
+     /* ── PDF-ONLY: Keep grid but auto-fit so single SKU takes full width ── */
      .quote-skus-grid {
          display: grid !important;
-         grid-template-columns: repeat(2, 1fr) !important;
+         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
          gap: 14px !important;
          margin-top: 16px !important;
      }
@@ -2979,6 +2979,35 @@ async function saveProfilePhone() {
 }
 
 // -- Main Init ----------------------------------------------
+
+// ── Easter Egg: Voice AI ─────────────────────────────────────
+// Typing "Banglore5253!" anywhere in the Quote Builder reveals the Voice AI banner
+(function setupVoiceAIEasterEgg() {
+  const EASTER_EGG = 'Banglore5253!';
+  let buffer = '';
+  document.addEventListener('keydown', (e) => {
+    // Only track if no input/textarea is focused
+    const tag = document.activeElement ? document.activeElement.tagName : '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+    buffer += e.key;
+    // Keep buffer trimmed to length of secret
+    if (buffer.length > EASTER_EGG.length) buffer = buffer.slice(-EASTER_EGG.length);
+
+    if (buffer === EASTER_EGG) {
+      const banner = document.getElementById('q-ai-banner');
+      if (banner) {
+        banner.classList.remove('hidden');
+        banner.style.animation = 'none';
+        // Quick flash to signal activation
+        banner.style.transition = 'box-shadow 0.3s';
+        banner.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.6)';
+        setTimeout(() => { banner.style.boxShadow = ''; }, 800);
+      }
+      buffer = '';
+    }
+  });
+})();
 
 // ── AI Voice Generation ──────────────────────────────────────
 function setupAIVoice() {
