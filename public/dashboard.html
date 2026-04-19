@@ -884,26 +884,27 @@
                                     </div>
                                     <div style="flex: 1;">
                                         <div style="font-weight: 700; font-size: 1.05rem; background: linear-gradient(90deg, #6366f1, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Generate with Voice AI</div>
-                                        <div style="font-size: 0.85rem; color: #64748b; margin-top: 2px;">Speak naturally (supports Indian accents) to auto-fill Company, SKUs, and Tiers.</div>
                                     </div>
-                                    <button class="btn btn-primary" id="btn-ai-voice" style="background: linear-gradient(90deg, #6366f1, #8b5cf6); border: none; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
-                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
-                                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
-                                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                    <button class="btn btn-primary" id="btn-ai-voice" style="background: linear-gradient(90deg, #6366f1, #8b5cf6); border: none; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); display:flex; align-items:center; gap:8px; letter-spacing:0.02em;">
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                                            <line x1="8" y1="23" x2="16" y2="23"></line>
                                         </svg>
-                                        Start Dictating
+                                        ✦ Activate AI
                                     </button>
                                 </div>
                             </div>
-                            
-                            <!-- AI Listening Overlay -->
+
+                            <!-- AI Listening Inline Strip (sticky, not a modal) -->
                             <div id="ai-listening-overlay" class="hidden">
                                 <div class="ai-listening-modal">
-                                    <div class="ai-ripple-container">
-                                        <div class="ai-ripple"></div>
-                                        <div class="ai-ripple"></div>
-                                        <div class="ai-mic-active">
-                                            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <div class="ai-ripple-container" style="width:40px;height:40px;flex-shrink:0;">
+                                        <div class="ai-ripple" style="width:36px;height:36px;"></div>
+                                        <div class="ai-ripple" style="width:36px;height:36px;"></div>
+                                        <div class="ai-mic-active" style="width:36px;height:36px;">
+                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                                 <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
                                                 <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
                                                 <line x1="12" y1="19" x2="12" y2="23"></line>
@@ -911,10 +912,11 @@
                                             </svg>
                                         </div>
                                     </div>
-                                    <h3 style="margin-top:24px; color:#1e293b;">Listening...</h3>
-                                    <p id="ai-listening-text" style="color:#64748b; margin-top:8px; font-style:italic; min-height:24px; max-width:80%; text-align:center;">Say something like "Quote for Acme, 5 Dabbler users..."</p>
-                                    <button class="btn btn-outline" id="btn-stop-ai-voice" style="margin-top: 20px;">Stop & Parse</button>
+                                    <h3>Listening...</h3>
+                                    <p id="ai-listening-text">Say something like "Quote for Acme, 5 Dabbler users..."</p>
+                                    <button id="btn-stop-ai-voice">⏹ Stop &amp; Parse</button>
                                 </div>
+                            </div>
                             </div>
 
                             <!-- Profile Prompt (shown if phone not set) -->

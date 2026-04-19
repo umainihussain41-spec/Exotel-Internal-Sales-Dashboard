@@ -1599,27 +1599,26 @@ input[type="number"] {
 }
 
 #ai-listening-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(15, 23, 42, 0.8);
-    backdrop-filter: blur(8px);
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: sticky;
+    top: 12px;
+    z-index: 100;
+    display: block;
+    margin: 12px 0;
+    /* no backdrop — it's inline */
 }
 
 .ai-listening-modal {
-    background: #ffffff;
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    text-align: center;
+    background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%);
+    padding: 16px 20px;
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
-    min-width: 320px;
-    max-width: 400px;
+    gap: 16px;
+    width: 100%;
+    min-width: 0;
+    border: 1px solid rgba(139, 92, 246, 0.4);
 }
 
 .ai-ripple-container {
@@ -1659,6 +1658,41 @@ input[type="number"] {
 
 .ai-ripple:nth-child(2) {
     animation-delay: 1s;
+}
+
+.ai-listening-modal h3 {
+    color: #ffffff;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin: 0;
+    flex-shrink: 0;
+}
+
+.ai-listening-modal #ai-listening-text {
+    color: rgba(255,255,255,0.75);
+    font-size: 0.8rem;
+    font-style: italic;
+    flex: 1;
+    margin: 0;
+    text-align: left;
+    min-height: auto;
+    max-width: none;
+}
+
+.ai-listening-modal #btn-stop-ai-voice {
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    padding: 7px 14px;
+    font-size: 0.82rem;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.ai-listening-modal #btn-stop-ai-voice:hover {
+    background: rgba(255,255,255,0.22);
 }
 
 @keyframes ripple-pulse {
