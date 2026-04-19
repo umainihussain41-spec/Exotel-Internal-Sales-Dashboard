@@ -1136,7 +1136,8 @@
                         </div>
 
                         <!-- RIGHT: Preview Panel -->
-                        <div class="quote-preview-panel">
+                        <div class="preview-sheet-backdrop" id="preview-sheet-backdrop"></div>
+                        <div class="quote-preview-panel" id="quote-preview-panel">
                             <div class="preview-header">
                                 <div class="preview-header-title">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -1146,6 +1147,9 @@
                                     </svg>
                                     Live Preview
                                 </div>
+                                <button class="mobile-close-sheet" id="btn-close-preview-sheet" style="display:none;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                </button>
                                 <div class="preview-actions" style="display: flex; gap: 12px; align-items: center;">
                                     <button class="btn btn-secondary hidden" id="q-btn-sku-request">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"

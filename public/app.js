@@ -391,15 +391,30 @@ function setupMobileSidebar() {
     document.body.appendChild(previewBtn);
 
     previewBtn.addEventListener('click', () => {
-        const panel = document.querySelector('.quote-preview-panel');
+        const panel = document.getElementById('quote-preview-panel');
+        const backdrop = document.getElementById('preview-sheet-backdrop');
         if (!panel) return;
-        const isHidden = panel.classList.toggle('mobile-hidden');
-        previewBtn.classList.toggle('preview-visible', !isHidden);
-        previewBtn.innerHTML = isHidden
-            ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg> Preview`
-            : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"></polyline></svg> Hide Preview`;
-        if (!isHidden) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        const isOpening = !panel.classList.contains('sheet-open');
+        panel.classList.toggle('sheet-open', isOpening);
+        if (backdrop) backdrop.classList.toggle('active', isOpening);
+        previewBtn.classList.toggle('sheet-open', isOpening);
     });
+
+    // Close bottom sheet
+    function closePreviewSheet() {
+        const panel = document.getElementById('quote-preview-panel');
+        const backdrop = document.getElementById('preview-sheet-backdrop');
+        if (panel) panel.classList.remove('sheet-open');
+        if (backdrop) backdrop.classList.remove('active');
+        previewBtn.classList.remove('sheet-open');
+    }
+
+    const backdrop = document.getElementById('preview-sheet-backdrop');
+    if (backdrop) backdrop.addEventListener('click', closePreviewSheet);
+
+    const closeBtn = document.getElementById('btn-close-preview-sheet');
+    if (closeBtn) closeBtn.addEventListener('click', closePreviewSheet);
 
     // Only show preview toggle when on quotes tab
     function updatePreviewBtnVisibility() {
