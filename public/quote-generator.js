@@ -2981,9 +2981,9 @@ async function saveProfilePhone() {
 // -- Main Init ----------------------------------------------
 
 // ── Easter Egg: Voice AI ─────────────────────────────────────
-// Typing "Banglore5253!" anywhere in the Quote Builder reveals the Voice AI banner
+// Type "shwarp" while NOT focused on any input to reveal Voice AI banner
 (function setupVoiceAIEasterEgg() {
-  const EASTER_EGG = 'Banglore5253!';
+  const EASTER_EGG = 'shwarp';
   let buffer = '';
   document.addEventListener('keydown', (e) => {
     // Only track if no input/textarea is focused
