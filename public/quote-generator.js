@@ -1837,11 +1837,12 @@ window.printQuote = async function () {
     if(renderBtn) renderBtn.innerHTML = '⚙️ Generating Perfect PDF...';
 
     // Compile robust backend HTML payload leveraging the exact live DOM state
-    const htmlPayload = `
+    let htmlPayload = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
+  <title>${userFilename.replace('.pdf', '')}</title>
   <base href="${window.location.origin}/">
   <link rel="stylesheet" href="${window.location.origin}/style.css">
   <link rel="stylesheet" href="${window.location.origin}/quote-generator.css">
@@ -1877,10 +1878,13 @@ window.printQuote = async function () {
 </body>
 </html>`;
 
+    // Replace unicode characters with HTML entities to prevent mojibake in PDF
+    htmlPayload = htmlPayload.replace(/₹/g, '&#8377;').replace(/✓/g, '&#10003;').replace(/×/g, '&#215;');
+
     try {
         const res = await fetch('/api/export-pdf', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json; charset=utf-8' },
             body: JSON.stringify({ htmlPayload })
         });
         
