@@ -1000,6 +1000,7 @@ COMMON FIELDS (most SKUs):
   "rental / account rental / subscription X"             → key: "rental"
   "months / validity X months / for X months"            → key: "num_months"
   "number of months"                                     → key: "num_months"
+  "remove landline / remove standard numbers / no landlines" → key: "remove_std_numbers" (set value to 1)
 
 VOICE STD FIELDS (voice_exotel_std, voice_veeno_std):
   "single leg / per minute / call rate X paise"          → key: "single_leg"

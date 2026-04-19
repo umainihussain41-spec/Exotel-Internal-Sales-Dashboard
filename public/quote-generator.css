@@ -765,6 +765,38 @@
     font-size: 0.75rem;
 }
 
+/* SKU Grid in Preview */
+.quote-skus-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 24px;
+    margin-top: 24px;
+}
+
+@media (min-width: 1024px) {
+    .quote-skus-grid {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        align-items: start;
+    }
+}
+
+.quote-doc-section.sku-card {
+    margin-top: 0 !important;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    page-break-inside: avoid;
+    break-inside: avoid;
+}
+
+.quote-doc-section.sku-card .quote-sku-table {
+    flex-grow: 1;
+}
+
+.quote-doc-section.sku-card > div:last-child {
+    margin-top: auto !important;
+}
+
 /* Totals */
 .quote-totals {
     margin-top: 12px;

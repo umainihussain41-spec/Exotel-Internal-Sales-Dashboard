@@ -1734,7 +1734,7 @@ function updatePreview() {
       : '';
 
     allSectionsHTML += `
-    <div class="quote-doc-section" style="margin-top:24px;">
+    <div class="quote-doc-section sku-card" style="margin-top:24px;">
       <div class="quote-doc-section-title" style="font-size:1.15rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
         ${sanitize(sku.label)}${sanitize(tierLabel)}
       </div>
@@ -1796,7 +1796,9 @@ function updatePreview() {
       </div>
     </div>
 
-    ${allSectionsHTML}
+    <div class="quote-skus-grid">
+      ${allSectionsHTML}
+    </div>
 
     ${(grandSubtotal > 0 && !QG.compareMode) ? `
     <div class="quote-totals" style="margin-top:24px; border-top:2px solid #0f172a; padding-top:16px;">
