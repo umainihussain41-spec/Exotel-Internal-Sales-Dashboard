@@ -1849,6 +1849,16 @@ window.printQuote = async function () {
      /* Global backend PDF normalizer */
      body { background: white !important; margin: 0 !important; padding: 0 !important; -webkit-print-color-adjust: exact; }
      
+     /* Strip out screen-only paper styling so Puppeteer's native margins apply cleanly */
+     #quote-document {
+         width: 100% !important;
+         min-height: auto !important;
+         margin: 0 !important;
+         padding: 0 !important;
+         border: none !important;
+         box-shadow: none !important;
+     }
+
      /* Force flawless geometric vector rendering unconditionally purely for Puppeteer */
      * { text-rendering: geometricPrecision !important; -webkit-font-smoothing: antialiased !important; }
   </style>
