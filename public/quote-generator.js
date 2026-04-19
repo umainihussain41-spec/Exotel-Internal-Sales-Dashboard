@@ -57,6 +57,69 @@ const TIER_DEFAULTS = {
   influencer: { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 }
 };
 
+// ── Terms & Conditions (Modular) ──────────────────────────────
+const TNC_GENERAL = [
+  "<strong>Payments & Invoicing:</strong> 100% prepaid model; usage is debited against available balance. Unused balance is carried forward. Minimum recharge: ₹500.",
+  "Payment receipt issued on the date of payment. Tax invoices issued monthly for actual usage. Rental invoices raised in the following month.",
+  "<strong>GST & TDS:</strong> All prices are exclusive of 18% GST unless stated otherwise. TDS deduction applicable u/s 194J @2%.",
+  "If GST unregistered, a declaration on company letterhead confirming ineligibility for GST and Input Tax Credit is required.",
+  "<strong>Virtual Number (VN) Policy:</strong> VNs remain the property of the provider and cannot be ported.",
+  "Provider is not responsible if a number is marked as spam (depends on usage). Customers are advised to purchase Truecaller and Airtel Whitelisting Services for credibility.",
+  "Minimum commitment of 6 months is required for any allocated virtual number.",
+  "<strong>KYC Requirements:</strong> Upload via Dashboard: Company PAN Card, Certificate of Incorporation / MSME, Address Proof, and Director's photo.",
+  "<strong>Commercial Validity:</strong> Proposal is valid for 30 days from the date of issue. Rates may change as per TRAI regulations with a 30-day notice."
+];
+
+const TNC_SPECIFIC = {
+  voice: [
+    "<strong>Call Charges:</strong> For outgoing calls (2-leg calls), charges apply separately to each leg. For automated calls, a single leg is consumed. Call attempts (not answered) are also chargeable.",
+    "<strong>Channels:</strong> Unlimited channels offered from a shared pool with ~130% buffer over prior month's usage. No separate PRI line charges.",
+    "<strong>Incoming/Outgoing Numbers:</strong> Customers must use their own customer-facing number for incoming calls. Virtual landline numbers will be displayed for outgoing calls."
+  ],
+  sms: [
+    "<strong>SMS Services:</strong> Charged on submission. DLT registration is mandatory (BSNL DLT not supported).",
+    "Additional operator DLT scrubbing charge of ₹0.025 per SMS applies.",
+    "Calls/SMS to DND numbers restricted by TRAI. Transactional usage requires use case documentation, CRM screenshots, and a signed declaration."
+  ],
+  whatsapp: [
+    "<strong>WhatsApp Pricing:</strong> Utility Template Messages are free if sent within the active 24-hour customer service window. Charged per message if sent outside the window.",
+    "<strong>Customer Service Window:</strong> A 24-hour window opens when the user initiates or replies to a conversation."
+  ],
+  stream: [
+    "<strong>Voice Streaming:</strong> Enables real-time audio streaming during live calls for AI-driven analysis. Supports unidirectional and bidirectional streaming."
+  ]
+};
+
+function generateTncHtml(selectedSkuKeys, entity) {
+  let hasVoice = false;
+  let hasSms = false;
+  let hasWhatsapp = false;
+  let hasStream = false;
+
+  selectedSkuKeys.forEach(key => {
+    if (key.includes('voice') || key.includes('sip') || key.includes('num_')) hasVoice = true;
+    if (key.includes('sms')) hasSms = true;
+    if (key.includes('whatsapp')) hasWhatsapp = true;
+    if (key.includes('stream')) hasStream = true;
+  });
+
+  let html = `<ul style="margin:0; padding-left:20px; text-align:left;">`;
+  
+  // Add Specific Terms first for relevance
+  if (hasVoice) TNC_SPECIFIC.voice.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
+  if (hasSms) TNC_SPECIFIC.sms.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
+  if (hasWhatsapp) TNC_SPECIFIC.whatsapp.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
+  if (hasStream) TNC_SPECIFIC.stream.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
+  
+  // Add General Terms
+  TNC_GENERAL.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
+  
+  html += `<li style="margin-bottom:6px;"><strong>Terms of Service:</strong> Services are subject to ${entity}'s standard Terms of Service and Acceptable Use Policy.</li>`;
+  html += `</ul>`;
+  
+  return html;
+}
+
 // Per-SKU default fields: { id, label, value, locked, stopType, stopVal, note, waived, nonEditable }
 function getSkuFields(skuKey, tier) {
   const t = TIER_DEFAULTS[tier] || TIER_DEFAULTS.dabbler;
@@ -1321,15 +1384,9 @@ function updatePreview() {
 
       <div class="quote-doc-section" style="margin-top:30px;">
         <div class="quote-doc-section-title">Terms &amp; Conditions</div>
-        <div class="quote-tnc"><ul>
-          <li>All prices are exclusive of GST unless stated otherwise. GST @ 18% applicable.</li>
-          <li>This quotation is valid for 30 days from the date of issue.</li>
-          <li>Setup charges are waived as indicated. Waived amounts are non-refundable once service is activated.</li>
-          <li>Call credits are consumed as per usage and are non-transferable.</li>
-          <li>Services are subject to ${firstSku.entity}'s standard Terms of Service and Acceptable Use Policy.</li>
-          <li>Numbers are subject to regulatory availability at time of provisioning.</li>
-          <li>Payment terms: 100% advance unless otherwise agreed in writing.</li>
-        </ul></div>
+        <div class="quote-tnc" style="font-size:0.85rem; color:#475569; line-height:1.5;">
+          ${generateTncHtml(Object.keys(QG.sections), firstSku.entity)}
+        </div>
       </div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e0f2fe;font-size:0.78rem;color:#94a3b8;text-align:center;">
         This is a system-generated commercial proposal. For queries, contact your ${firstSku.entity} account manager.
@@ -1809,16 +1866,8 @@ function updatePreview() {
 
     <div class="quote-doc-section" style="margin-top:30px;">
       <div class="quote-doc-section-title">Terms &amp; Conditions</div>
-      <div class="quote-tnc">
-        <ul>
-          <li>All prices are exclusive of GST unless stated otherwise. GST @ 18% applicable.</li>
-          <li>This quotation is valid for 30 days from the date of issue.</li>
-          <li>Setup charges are waived as indicated. Waived amounts are non-refundable once service is activated.</li>
-          <li>Call credits are consumed as per usage and are non-transferable.</li>
-          <li>Services are subject to ${firstSku.entity}'s standard Terms of Service and Acceptable Use Policy.</li>
-          <li>Numbers are subject to regulatory availability at time of provisioning.</li>
-          <li>Payment terms: 100% advance unless otherwise agreed in writing.</li>
-        </ul>
+      <div class="quote-tnc" style="font-size:0.85rem; color:#475569; line-height:1.5;">
+        ${generateTncHtml(Object.keys(QG.sections), firstSku.entity)}
       </div>
     </div>
 
