@@ -399,6 +399,7 @@ function setupMobileSidebar() {
         panel.classList.toggle('sheet-open', isOpening);
         if (backdrop) backdrop.classList.toggle('active', isOpening);
         previewBtn.classList.toggle('sheet-open', isOpening);
+        document.body.classList.toggle('no-scroll', isOpening);
     });
 
     // Close bottom sheet
@@ -408,6 +409,7 @@ function setupMobileSidebar() {
         if (panel) panel.classList.remove('sheet-open');
         if (backdrop) backdrop.classList.remove('active');
         previewBtn.classList.remove('sheet-open');
+        document.body.classList.remove('no-scroll');
     }
 
     const backdrop = document.getElementById('preview-sheet-backdrop');

@@ -106,6 +106,12 @@
         display: none !important;
     }
 
+    /* Prevent body scroll when modals/sheets are open */
+    body.no-scroll {
+        overflow: hidden !important;
+        height: 100vh !important;
+    }
+
     /* ── Dashboard layout: single column ── */
     .dashboard-layout {
         display: flex !important;
@@ -271,6 +277,7 @@
         flex: 1;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch;
+        overscroll-behavior-y: contain; /* Prevent scrolling body behind */
         width: 100% !important;
         margin: 0 !important;
         padding: 20px 16px 100px !important; /* extra bottom padding for safety */
@@ -371,13 +378,33 @@
         gap: 6px;
         margin-bottom: 10px;
     }
-    .q-field-label { flex: 1 1 100%; min-width: 0; font-size: 0.8rem; }
+    .q-field-label { flex: 1 1 100%; min-width: 0; font-size: 0.85rem; padding-bottom: 4px; }
     .q-field-value { flex: 1 1 100%; }
-    .q-input { font-size: 0.9rem; }
+    
+    /* Touch target polish and iOS zoom prevention */
+    .q-input, input, select, textarea { 
+        font-size: 16px !important; 
+        min-height: 44px; /* iOS min touch target size */
+    }
+    .btn {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
 
     /* Tier selector */
-    .tier-selector { gap: 6px; flex-wrap: wrap; }
-    .tier-btn { flex: 1 1 calc(33% - 6px); padding: 8px 6px; font-size: 0.78rem; }
+    .tier-selector { gap: 8px; flex-wrap: wrap; }
+    .tier-btn { 
+        flex: 1 1 calc(33% - 8px); 
+        padding: 8px 4px; 
+        font-size: 0.8rem; 
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+    }
 
     /* Action buttons: stack and full-width */
     .q-actions {
