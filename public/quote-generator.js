@@ -57,66 +57,848 @@ const TIER_DEFAULTS = {
   influencer: { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 }
 };
 
-// ── Terms & Conditions (Modular) ──────────────────────────────
-const TNC_GENERAL = [
-  "<strong>Payments & Invoicing:</strong> 100% prepaid model; usage is debited against available balance. Unused balance is carried forward. Minimum recharge: ₹500.",
-  "Payment receipt issued on the date of payment. Tax invoices issued monthly for actual usage. Rental invoices raised in the following month.",
-  "<strong>GST & TDS:</strong> All prices are exclusive of 18% GST unless stated otherwise. TDS deduction applicable u/s 194J @2%.",
-  "If GST unregistered, a declaration on company letterhead confirming ineligibility for GST and Input Tax Credit is required.",
-  "<strong>Virtual Number (VN) Policy:</strong> VNs remain the property of the provider and cannot be ported.",
-  "Provider is not responsible if a number is marked as spam (depends on usage). Customers are advised to purchase Truecaller and Airtel Whitelisting Services for credibility.",
-  "Minimum commitment of 6 months is required for any allocated virtual number.",
-  "<strong>KYC Requirements:</strong> Upload via Dashboard: Company PAN Card, Certificate of Incorporation / MSME, Address Proof, and Director's photo.",
-  "<strong>Commercial Validity:</strong> Proposal is valid for 30 days from the date of issue. Rates may change as per TRAI regulations with a 30-day notice."
-];
+// ── Terms & Conditions (Full SKU Definitions) ──────────────────────────────
+function getSkuTncHtml(item) {
+  const fields = getSkuFields(item.sku_key, item.tier);
+  const getVal = (id) => item.values[id] ?? fields.find(x => x.id === id)?.value ?? 0;
 
-const TNC_SPECIFIC = {
-  voice: [
-    "<strong>Call Charges:</strong> For outgoing calls (2-leg calls), charges apply separately to each leg. For automated calls, a single leg is consumed. Call attempts (not answered) are also chargeable.",
-    "<strong>Channels:</strong> Unlimited channels offered from a shared pool with ~130% buffer over prior month's usage. No separate PRI line charges.",
-    "<strong>Incoming/Outgoing Numbers:</strong> Customers must use their own customer-facing number for incoming calls. Virtual landline numbers will be displayed for outgoing calls."
-  ],
-  sms: [
-    "<strong>SMS Services:</strong> Charged on submission. DLT registration is mandatory (BSNL DLT not supported).",
-    "Additional operator DLT scrubbing charge of ₹0.025 per SMS applies.",
-    "Calls/SMS to DND numbers restricted by TRAI. Transactional usage requires use case documentation, CRM screenshots, and a signed declaration."
-  ],
-  whatsapp: [
-    "<strong>WhatsApp Pricing:</strong> Utility Template Messages are free if sent within the active 24-hour customer service window. Charged per message if sent outside the window.",
-    "<strong>Customer Service Window:</strong> A 24-hour window opens when the user initiates or replies to a conversation."
-  ],
-  stream: [
-    "<strong>Voice Streaming:</strong> Enables real-time audio streaming during live calls for AI-driven analysis. Supports unidirectional and bidirectional streaming."
-  ]
-};
+  if (item.sku_key === 'voice_exotel_std') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Call Charges</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>For outgoing calls (2-leg calls), charges apply separately to each leg (local/STD split).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Rentals for 5/11 months include: User logins, Virtual numbers, Call recordings, Analytics</li>
+            <li>Agreement validity: 1 year from the start date.</li>
+            <li>Rates may change as per TRAI regulations with a 30-day notice.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Channels</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Unlimited channels offered from a shared pool with ~130% buffer over prior month’s usage.</li>
+            <li>No separate PRI line charges.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments & Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid model; usage is debited against available balance.</li>
+            <li>Unused balance is carried forward. Minimum recharge: ₹500.</li>
+            <li>Payment receipt issued on the date of payment.</li>
+            <li>Tax invoices issued monthly for actual usage.</li>
+            <li>Rental invoices raised in the following month.</li>
+            <li>Details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs. Payment Receipt</a></li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST & TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>If GST unregistered, submit a declaration on company letterhead:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+            <li>TDS deduction: u/s 194J @2% (if applicable).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Incoming and Outgoing Numbers</strong>
+          <div style="margin:4px 0 2px 0;"><strong>Incoming Calls:</strong></div>
+          <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Customers must use their own customer-facing number (Airtel or Jio SIMs preferred).</li>
+            <li>Calls can be forwarded to Exotel virtual landline numbers available in the following circles: Delhi, Gujarat, Mumbai, Maharashtra, Karnataka, Tamil Nadu, Andhra Pradesh, West Bengal, Rajasthan, Madhya Pradesh, Kerala.</li>
+            <li>Displaying Exotel virtual landline numbers as customer-facing numbers is not advisable (no ownership provided).</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Outgoing Calls:</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Customers cannot use their own numbers for outbound calls.</li>
+            <li>Outgoing calls will display Exotel virtual landline numbers from the above circles.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Custom Integrations</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>API documentation: developer.exotel.com/api</li>
+            <li>FAQs: Voice & Phone Calls</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Proposal is valid for 30 days from the date of issue.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>SMS Services</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>SMS charged on submission (DLT registration mandatory).</li>
+            <li>BSNL DLT not supported currently.</li>
+            <li>Additional DLT scrubbing charge: ₹0.025 per SMS (effective 1st Sept 2020).</li>
+            <li>Calls to DND numbers restricted by TRAI.</li>
+            <li>Transactional calling usage (enabling DND calling) requires:<br>
+              1. Use case documentation<br>
+              2. Screenshot of lead record in CRM (name, email, URL, number visible)<br>
+              3. Signed and stamped letterhead declaration:<br><em>“&lt;Company name&gt;; known as &lt;Tenant ID&gt;; is using Exotel to make transactional calls to its registered users only. In case of any violation, (Company Name) would be able to provide the opt-in proof within 24 working hours. If the (Company Name) is not able to provide the proof within 24 working hours, Exotel reserves the right to disconnect the connections immediately with prior notice. (Company Name) agrees to the terms of service mentioned here - https://exotel.com/privacy-policy/”</em>
+            </li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following via the Exotel Dashboard:</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN Card</li>
+            <li>Certificate of Incorporation / Owner’s Passport</li>
+            <li>Company Address Proof (recent postpaid bill, rental agreement, or bank statement)</li>
+            <li>Director’s passport-size photo</li>
+            <li>Accepted formats: PNG, GIF, JPEG, PDF</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Virtual Number (VN) Policy</strong>
+          <ul style="margin:2px 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local landline VNs available for: Delhi/NCR, Mumbai, Maharashtra, Bengaluru, Hyderabad, Kolkata, Chennai, Ahmedabad, Rajasthan, MP, Kerala.</li>
+            <li>VNs remain Exotel’s property; ownership cannot be transferred.</li>
+            <li>If discontinued by the provider, Exotel will replace it with an alternate VN.</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Virtual Number Spam & Whitelisting Policy:</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>A new virtual number is assigned during onboarding.</li>
+            <li>Exotel is not responsible if the number is marked as spam (depends on customer usage).</li>
+            <li>Customers are advised to purchase Truecaller and Airtel Whitelisting Services for credibility.</li>
+            <li>Minimum commitment: 6 months for any number allocated.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential and proprietary information of Exotel Techcom Private Limited. It is intended solely for the recipient. Any unauthorized sharing, use, or reproduction is strictly prohibited.
+      </div>
+    `;
+  }
 
-function generateTncHtml(selectedSkuKeys, entity) {
-  let hasVoice = false;
-  let hasSms = false;
-  let hasWhatsapp = false;
-  let hasStream = false;
+  if (item.sku_key === 'voice_exotel_user') {
+    const uc = getVal('user_charge');
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Pricing & Billing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>₹${uc} + 18% GST per agent/month (deducted as ${uc} credits).</li>
+            <li>1 credit = ₹1.</li>
+            <li>Billing cycle: Monthly, from the 1st. Ensure the wallet is topped up by the 29th.</li>
+            <li>Pro-rata billing applicable only in the first month.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Agent Management</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Charges apply to all created agent profiles (verified/unverified, active/inactive).</li>
+            <li>Adding an agent deducts ₹${uc}.</li>
+            <li>Updating an agent’s details (i.e. changing the registered phone number) will not be treated as deleting and re-adding the agent. No credits will be deducted from your wallet for such modifications.</li>
+            <li>However, deleting an agent profile and adding a new one mid-month will deduct the full monthly rental as credits again. To avoid unnecessary charges, it is recommended to perform deletions at the end of the month and add new agents at the beginning of the month.</li>
+            <li>Recommendation: Delete unused agents before month-end to avoid extra billing.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Agent Creation Policy</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>All agents must be added under Coworkers and Groups on the Exotel dashboard.</li>
+            <li>Exotel may auto-create agent profiles from outgoing call logs if API calls are made without corresponding agent profiles on the dashboard.</li>
+            <li>Outgoing API calls without dashboard profiles are not permitted.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Calls Included vs. Excluded</strong>
+          <div style="margin:4px 0 2px 0;"><strong>Included:</strong></div>
+          <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local calls within India via Exotel VNs.</li>
+            <li>Dashboard-originated calls, CRM-based C2C API calls, inbound routed calls (no programmable connect via URL).</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Excluded (charged separately):</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Campaign/bulk calls via dashboard or API.</li>
+            <li>Non-agent initiated verification calls.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Fair Usage Policy</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Violations may move account to minute-based billing.</li>
+            <li>Exotel will notify and attempt resolution before imposing additional charges.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Plan Flexibility</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>No fixed validity.</li>
+            <li>Credit consumption depends on the number of agents added/removed.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Virtual Number (VN) Policy</strong>
+          <ul style="margin:2px 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local landline VNs provided for Delhi/NCR, Mumbai, Maharashtra, Bengaluru, Hyderabad, Kolkata, Chennai, Ahmedabad, Rajasthan, MP, Kerala.</li>
+            <li>VNs remain Exotel’s property and cannot be ported (Ownership of the number can’t be transferred).</li>
+            <li>If discontinued by the provider, Exotel will replace it with an alternate VN.</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Virtual Number Spam & Whitelisting Policy:</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Exotel provides a new virtual number during onboarding.</li>
+            <li>If the number is marked as spam, Exotel will not be responsible, as spam tagging depends on customer usage and behavior.</li>
+            <li>Customers are advised to purchase Truecaller and Airtel Whitelisting Services to get their number whitelisted and maintain credibility.</li>
+            <li>Exotel requires a minimum commitment of 6 months for any number allocated to a customer account.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payment Terms</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid wallet-based model.</li>
+            <li>Minimum top-up: ₹500.</li>
+            <li>Unused credits carry forward.</li>
+            <li>Call recordings available for 6 months.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Taxes & TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>All prices exclusive of 18% GST.</li>
+            <li>TDS (if applicable): 2% u/s 194J.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Integrations</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>CRM/ERP integrations via Exotel API.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Offer Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Proposal valid for 30 days from date of issuance.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments & Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Payment receipt on the day of payment.</li>
+            <li>Tax invoice issued monthly based on credits consumed.</li>
+            <li>Rental invoice raised in the following month.</li>
+            <li>More details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs Payment Receipt</a></li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST & TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>If GST unregistered, declaration required:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+            <li>TDS deductible @2% under Section 194J (if applicable).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Incoming & Outgoing Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Incoming:</strong> Customers must use their own number (Airtel/Jio preferred), which can be forwarded to Exotel VNs in supported circles.</li>
+            <li><strong>Outgoing:</strong> Customer numbers cannot be used. Outgoing calls will always display Exotel VNs.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>SMS Services</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>SMS charged on submission; DLT registration mandatory.</li>
+            <li>BSNL DLT not supported.</li>
+            <li>Operator DLT scrubbing charge: ₹0.025/SMS.</li>
+            <li>Calls/SMS to DND numbers restricted by TRAI.</li>
+            <li>Transactional usage requires:<br>
+              1. Use case documentation<br>
+              2. CRM lead screenshot (name, URL, number)<br>
+              3. Signed/stamped declaration:<br>
+              <em>“[Company Name], known as [Account SID], is using Exotel to make transactional calls to its registered users only. In case of any violation, [Company Name] will provide opt-in proof within 24 hours. We agree to the terms of service: Exotel TOS.”</em>
+            </li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload via Exotel dashboard:</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>PAN card (Company/Owner)</li>
+            <li>Certificate of Incorporation / Passport copy of owner</li>
+            <li>Address proof (recent post-paid bill, rental agreement, or bank statement)</li>
+            <li>Director’s passport-size photo</li>
+            <li>Accepted formats: png, gif, jpeg, pdf</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential, proprietary information of Exotel Techcom Pvt. Ltd. Unauthorized disclosure, use, or reproduction is strictly prohibited.
+      </div>
+    `;
+  }
 
-  selectedSkuKeys.forEach(key => {
-    if (key.includes('voice') || key.includes('sip') || key.includes('num_')) hasVoice = true;
-    if (key.includes('sms')) hasSms = true;
-    if (key.includes('whatsapp')) hasWhatsapp = true;
-    if (key.includes('stream')) hasStream = true;
+  if (item.sku_key === 'voice_exotel_tfn') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Important Terms</strong>
+          <div style="margin:4px 0 2px 0;">The proposed solution will enable the client to:</div>
+          <ul style="margin:0 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Receive domestic incoming calls on mobile/landline numbers.</li>
+            <li>Intelligently route calls with API integrations.</li>
+            <li>Access detailed call logs and call statuses.</li>
+            <li>Record all calls.</li>
+            <li>Configure multi-level IVR systems.</li>
+            <li>Integrate with CRM platforms via APIs.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Outgoing Calls & Virtual Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>For outgoing (two-leg) calls, a Virtual Landline Number can be procured at ₹499 per number per month.</li>
+            <li>Outbound calls will be charged for both legs (customer and agent) based on local/STD usage.</li>
+            <li>Exotel provides Virtual Landline Numbers (VNs) in the following circles: Delhi/NCR, Gujarat, Mumbai, Maharashtra, Karnataka, Tamil Nadu, Andhra Pradesh, West Bengal, Rajasthan, Madhya Pradesh, and Kerala.</li>
+            <li>VNs remain the property of Exotel, are non-transferable, and cannot be ported. If discontinued by a provider, Exotel will replace the number with an alternate VN.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Spam & Whitelisting</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>A fresh VN is allocated during onboarding.</li>
+            <li>If the number is flagged as spam, Exotel will not be responsible, as this depends on customer usage.</li>
+            <li>Customers are advised to purchase Truecaller and Airtel Whitelisting services to prevent spam tagging.</li>
+            <li>A minimum 6-month commitment is required for any allocated VN.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Pricing & Rental</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Rental charges (5/11 months, as applicable) cover: User logins, Virtual Number(s), Call recordings, Analytics.</li>
+            <li>Unlimited channels are shared across clients, with ~130% buffer over average usage. No separate PRI line costs are charged.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Billing & Payments</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Prepaid model: Balance is deducted for usage. Minimum recharge: ₹500. Unused balance carries forward.</li>
+            <li>Invoices:<br>
+              ○ Payment receipt issued on the date of payment.<br>
+              ○ Tax invoices issued on the 1st of each month for usage in the previous month.<br>
+              ○ Software rental invoices are raised in the following month.<br>
+              ○ More details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs Payment Receipt</a>.
+            </li>
+            <li>No extra charges for call recordings or analytics.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST & TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>All prices are exclusive of 18% GST.</li>
+            <li>If GST-unregistered, a declaration on company letterhead is required:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+            <li>TDS: Deductible u/s 194J @2% (as per GoI Ministry of Finance press release, 13 May 2020).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Incoming Customer Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>For customer-facing mobile numbers, procure a Jio/Airtel SIM from supported circles and set up call forwarding to the Exotel VN.</li>
+            <li>Displaying Exotel’s VN directly as the customer-facing number is not recommended, since Exotel does not provide ownership.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>SMS Services</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>SMS is charged per submission.</li>
+            <li>DLT registration is mandatory (BSNL DLT not supported).</li>
+            <li>Additional operator DLT scrubbing charge: ₹0.025 per SMS (effective 1 Sept 2020).</li>
+            <li>This is for Outgoing calls: TRAI restricts calls to DND numbers. For transactional usage, the following are required:<br>
+              ○ Use-case documentation.<br>
+              ○ CRM lead screenshot (showing name, URL, number).<br>
+              ○ Signed/stamped company letterhead with the declaration:<br>
+              <em>“[Company Name], known as [Account SID], is using Exotel to make transactional calls to its registered users only. In case of violation, [Company Name] will provide opt-in proof within 24 hours. We agree to the terms of service: Exotel TOS.”</em>
+            </li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Documents to be uploaded via the Exotel dashboard (formats: png, gif, jpeg, pdf):</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN card (or Owner’s PAN).</li>
+            <li>Certificate of Incorporation / Owner’s Passport / GST / MSME / Trade license.</li>
+            <li>Company address proof (latest post-paid bill, rental agreement).</li>
+            <li>Passport-size photo of one Director.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Custom Integrations</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>CRM/ERP integration available via API. Documentation: developer.exotel.com/api.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>This commercial proposal is valid for 30 days from the date of issuance.</li>
+            <li>Rates are subject to TRAI regulations with at least one month’s prior notice for changes.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential, proprietary, and unpublished material belonging exclusively to Exotel Techcom Private Limited. It is shared with the recipient in strict confidence. Unauthorized disclosure, duplication, or use of this document, in whole or in part, is strictly prohibited.
+      </div>
+    `;
+  }
+
+  if (item.sku_key === 'sms_exotel') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Chain Binding & DLT Compliance</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>“Chain binding” refers to binding your Principal Entity (PE) with Telemarketer (TM) partners and telecom operators. This ensures compliance with TRAI guidelines and verifies the message source.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Voice Services</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Support: For voice services or add-ons, contact hello@exotel.com or your account manager.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Billing & Payments</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Model: 100% prepaid. Balance is deducted for call and SMS usage.</li>
+            <li>Carry Forward: Unused balance is carried forward. Minimum recharge: ₹500.</li>
+            <li>Invoices:<br>
+              ○ Payment receipt on date of payment.<br>
+              ○ Tax invoice issued on the 1st of each month, based on usage (e.g., 2,000 credits = invoice for ₹2,000 + GST).<br>
+              ○ Software rental invoices raised in the following month.<br>
+              ○ Details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs Payment Receipt</a>.
+            </li>
+            <li>No extra charges for analytics.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Taxes & Compliance</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Prices are exclusive of taxes. 18% GST applies.</li>
+            <li>TDS deduction: 2% u/s 194J (as per GoI press release dated 13 May 2020).</li>
+            <li>If GST-unregistered, a declaration is required on company letterhead:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following documents via the Exotel dashboard (formats: png, gif, jpeg, pdf):</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN card (or Owner’s PAN card).</li>
+            <li>Certificate of Incorporation / GST / MSME / Trade license.</li>
+            <li>Company address proof (latest post-paid bill, rental agreement, or bank statement).</li>
+            <li>Passport-size photo of one Director.</li>
+            <li>Detailed KYC Guidelines.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>This commercial offer is valid for 30 days from the date of issuance.</li>
+            <li>Rates are subject to change as per TRAI regulations, with one month’s prior notice.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>References</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Terms of Service: Exotel TOS.</li>
+            <li>API Documentation: developer.exotel.com/api.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential, proprietary, and unpublished material owned exclusively by Exotel Techcom Private Limited. It is shared in strict confidence with the recipient. Unauthorized use, disclosure, or reproduction, in whole or part, is strictly prohibited.
+      </div>
+    `;
+  }
+
+  if (item.sku_key === 'whatsapp_exotel') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Per-Message Pricing Policy</strong>
+          <div style="margin:4px 0 2px 0;"><strong>Applicable Message Categories:</strong></div>
+          <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Marketing Template Messages: Charged per delivered message.</li>
+            <li>Authentication Template Messages: Charged per delivered message.</li>
+            <li>Utility Template Messages:<br>
+              ○ Free if sent within the active 24-hour customer service window.<br>
+              ○ Charged per message if sent outside the customer service window.
+            </li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Customer Service Window:</strong></div>
+          <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>A 24-hour window opens when the user initiates or replies to a conversation.</li>
+            <li>Any utility messages sent during this window are free of charge.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Example Scenarios</strong>
+          <div style="margin:4px 0 2px 0;"><strong>Case 1 – User Replies After All Template Messages Are Sent</strong></div>
+          <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Message Flow:</strong><br>
+              12:00 PM – Marketing template message sent<br>
+              2:00 PM – Utility template message sent<br>
+              8:00 PM – Utility template message sent<br>
+              9:00 PM – User replies (after all messages)
+            </li>
+            <li><strong>Total Charges:</strong> 3 messages (1 Marketing + 2 Utility)<br>
+              ✅ Both Utility messages are chargeable as they were sent outside the service window.
+            </li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Case 2 – User Replies Before Utility Messages Are Sent</strong></div>
+          <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Message Flow:</strong><br>
+              12:00 PM – Marketing template message sent<br>
+              1:00 PM – User replies (service window opens)<br>
+              2:00 PM – Utility template message sent<br>
+              8:00 PM – Utility template message sent
+            </li>
+            <li><strong>Total Charges:</strong> 1 message (Only the Marketing message)<br>
+              ✅ Both Utility messages are free, as they were sent within the open customer service window.
+            </li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Platform vs WhatsApp Charges Scenarios:</strong></div>
+          <ul style="margin:0 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Scenario 1:</strong> A business sent 4 utility messages, all of them were delivered, out of which 2 were in a customer service window.<br>
+              <em>WhatsApp Rate charges:</em> 2 x 0.115 (since the other 2 messages are within a customer service window)<br>
+              <em>Platform/API fee charges:</em> 4 x API Fee
+            </li>
+            <li><strong>Scenario 2:</strong> A business sent 4 utility messages, but only 2 were delivered to the handset, all of them outside customer service window.<br>
+              <em>WhatsApp Rate charges:</em> 2 x 0.115 (since only 2 messages were delivered)<br>
+              <em>Platform/API fee charges:</em> 4 x API Fee (as messages were successfully sent via our platform)
+            </li>
+            <li><strong>Scenario 3:</strong> A business sent 4 marketing messages, out of which 3 got delivered.<br>
+              <em>WhatsApp Rate charges:</em> 3 x 0.7846 (since only 3 messages were delivered)<br>
+              <em>Platform/API fee charges:</em> 4 x API Fee (as messages were successfully sent via our platform)
+            </li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments & Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid model; usage charges (calls/SMS/messages) are automatically debited from your wallet.</li>
+            <li>Minimum recharge: ₹500. Unused balance carries forward to the next month.</li>
+            <li>No additional charges for accessing call recordings or analytics.</li>
+            <li>Invoicing:<br>
+              ○ Payment receipt is issued immediately upon payment.<br>
+              ○ Monthly tax invoice is generated on the 1st of every month based on actual usage (Example: If 2000 credits are consumed, an invoice for ₹2000 + GST will be issued).<br>
+              ○ Software rental invoices are raised in the following month.<br>
+              ○ 🔗 More details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs. Payment Receipt</a>
+            </li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST & TDS Requirements</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>If GST Unregistered: Provide a declaration on company letterhead:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+            <li>TDS Applicability: Deduct TDS @2% under Section 194J (if applicable).<br>
+              As per the Press Release dated 13 May 2020, Page 2, Serial No. 16, issued by the Ministry of Finance, TDS @2% under 194J applies for FTS transactions.
+            </li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following via the Exotel dashboard (Accepted formats: PNG, GIF, JPEG, PDF):</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN card</li>
+            <li>Certificate of Incorporation / Owner’s passport / MSME / Udyam certificate</li>
+            <li>Company address proof (recent post-paid bill, rental agreement, or bank statement)</li>
+            <li>Director’s passport-size photo</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Virtual Number (VN) Policy</strong>
+          <ul style="margin:2px 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local landline VNs provided for Delhi/NCR, Mumbai, Maharashtra, Bengaluru, Hyderabad, Kolkata, Chennai, Ahmedabad, Rajasthan, MP, Kerala.</li>
+            <li>VNs remain Exotel’s property and cannot be ported (Ownership of the number can’t be transferred).</li>
+            <li>If discontinued by the provider, Exotel will replace it with an alternate VN.</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Virtual Number Spam & Whitelisting Policy:</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Exotel provides a new virtual number during onboarding.</li>
+            <li>If the number is marked as spam, Exotel will not be responsible, as spam tagging depends on customer usage and behavior.</li>
+            <li>Customers are advised to purchase Truecaller and Airtel Whitelisting Services to get their number whitelisted and maintain credibility.</li>
+            <li>Exotel requires a minimum commitment of 6 months for any number allocated to a customer account.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>This commercial proposal is valid for 30 days from the date of issuance.</li>
+            <li>Rates are subject to TRAI regulations with at least one month’s prior notice for changes.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential and proprietary information of Exotel Techcom Pvt. Ltd. Unauthorized sharing, distribution, or reproduction is strictly prohibited.
+      </div>
+    `;
+  }
+
+  if (item.sku_key === 'rcs_exotel') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Voice Services</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Support: For voice services or add-ons, contact hello@exotel.com or your account manager.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Billing & Payments</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Model: 100% prepaid. Balance is deducted for call and RCS usage.</li>
+            <li>Carry Forward: Unused balance is carried forward. Minimum recharge: ₹500.</li>
+            <li>Invoices:<br>
+              ○ Payment receipt on date of payment.<br>
+              ○ Tax invoice issued on the 1st of each month, based on usage (e.g., 2,000 credits = invoice for ₹2,000 + GST).<br>
+              ○ Software rental invoices raised in the following month.<br>
+              ○ Details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs Payment Receipt</a>.
+            </li>
+            <li>No extra charges for analytics.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Taxes & Compliance</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Prices are exclusive of taxes. 18% GST applies.</li>
+            <li>TDS deduction: 2% u/s 194J (as per GoI press release dated 13 May 2020).</li>
+            <li>If GST-unregistered, a declaration is required on company letterhead:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following documents via the Exotel dashboard (formats: png, gif, jpeg, pdf):</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN card (or Owner’s PAN card).</li>
+            <li>Certificate of Incorporation / GST / MSME / Trade license.</li>
+            <li>Company address proof (latest post-paid bill, rental agreement, or bank statement).</li>
+            <li>Passport-size photo of one Director.</li>
+            <li>Detailed KYC Guidelines.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>This commercial offer is valid for 30 days from the date of issuance.</li>
+            <li>Rates are subject to change as per TRAI regulations, with one month’s prior notice.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>References</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Terms of Service: Exotel TOS.</li>
+            <li>API Documentation: developer.exotel.com/api.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential, proprietary, and unpublished material owned exclusively by Exotel Techcom Private Limited. It is shared in strict confidence with the recipient. Unauthorized use, disclosure, or reproduction, in whole or part, is strictly prohibited.
+      </div>
+    `;
+  }
+
+  if (item.sku_key === 'voice_veeno_std' || item.sku_key === 'voice_veeno_user') {
+    const uc = getVal('user_charge');
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Pricing & Billing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>₹${uc} + 18% GST per agent/month (deducted as ${uc} credits).</li>
+            <li>1 credit = ₹1.</li>
+            <li>The call charges will be applicable.</li>
+            <li>Billing cycle: Monthly, from the 1st. Ensure the wallet is topped up by the 29th.</li>
+            <li>Pro-rata billing applicable only in the first month.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Agent Management</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Charges apply to all created agent profiles (verified/unverified, active/inactive).</li>
+            <li>Adding an agent deducts ₹${uc}.</li>
+            <li>Updating an agent’s details (i.e. changing the registered phone number) will not be treated as deleting and re-adding the agent. No credits will be deducted from your wallet for such modifications.</li>
+            <li>However, deleting an agent profile and adding a new one mid-month will deduct the full monthly rental as credits again. To avoid unnecessary charges, it is recommended to perform deletions at the end of the month and add new agents at the beginning of the month.</li>
+            <li>Recommendation: Delete unused agents before month-end to avoid extra billing.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Agent Creation Policy</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>All agents must be added under Coworkers and Groups on the Exotel dashboard.</li>
+            <li>Exotel may auto-create agent profiles from outgoing call logs if API calls are made without corresponding agent profiles on the dashboard.</li>
+            <li>Outgoing API calls without dashboard profiles are not permitted.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Calls Included vs. Excluded</strong>
+          <div style="margin:4px 0 2px 0;"><strong>Included:</strong></div>
+          <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local calls within India via Exotel VNs.</li>
+            <li>Dashboard-originated calls, CRM-based C2C API calls, inbound routed calls (no programmable connect via URL).</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Excluded (charged separately):</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Campaign/bulk calls via dashboard or API.</li>
+            <li>Non-agent initiated verification calls.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Fair Usage Policy</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Violations may move accounts to minute-based billing.</li>
+            <li>Exotel will notify and attempt resolution before imposing additional charges.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Plan Flexibility</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>No fixed validity.</li>
+            <li>Credit consumption depends on the number of agents added/removed.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Virtual Number (VN) Policy</strong>
+          <ul style="margin:2px 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local landline VNs provided for Delhi, Mumbai, Bengaluru, Hyderabad, Kolkata and Ahmedabad.</li>
+            <li>Mobile DIDs available for selected states, please contact your account manager or Exotel support.</li>
+            <li>VNs remain Exotel’s property and cannot be ported (Ownership of the number can’t be transferred).</li>
+            <li>If discontinued by the provider, Exotel will replace it with an alternate VN.</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Virtual Number Spam & Whitelisting Policy:</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Exotel provides a new virtual number during onboarding.</li>
+            <li>If the number is marked as spam, Exotel will not be responsible, as spam tagging depends on customer usage and behavior.</li>
+            <li>Customers are advised to purchase Truecaller and Airtel Whitelisting Services to get their number whitelisted and maintain credibility.</li>
+            <li>Exotel requires a minimum commitment of 6 months for any number allocated to a customer account.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payment Terms</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid wallet-based model.</li>
+            <li>Minimum top-up: ₹500.</li>
+            <li>Unused credits carry forward.</li>
+            <li>Call recordings available for 6 months.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Taxes & TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>All prices exclusive of 18% GST.</li>
+            <li>TDS (if applicable): 2% u/s 194J.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Integrations</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>CRM/ERP integrations via Exotel API.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Offer Validity & Agreement</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Proposal valid for 30 days from date of issuance.</li>
+            <li>Agreement Validity: One (1) year from the start date (Go Live Date).</li>
+            <li>Rates may change in line with TRAI regulations with a minimum 1-month notice.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments & Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Payment receipt on the day of payment.</li>
+            <li>Tax invoice issued monthly based on credits consumed.</li>
+            <li>Rental invoice raised in the following month.</li>
+            <li>More details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs Payment Receipt</a></li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST & TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>If GST unregistered, declaration required:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+            <li>TDS deductible @2% under Section 194J (if applicable).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Incoming & Outgoing Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Incoming:</strong> Customers must use their own number (Airtel/Jio preferred), which can be forwarded to Exotel VNs in supported circles.</li>
+            <li><strong>Outgoing:</strong> Customer numbers cannot be used. Outgoing calls will always display Exotel VNs.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>SMS Services</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Exotel provides SMS services; however, SMS is not supported for this particular account. Please reach out to Exotel support or your account manager for further assistance.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following via the Exotel dashboard:</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Please note that to procure SIP lines from Exotel, the company must be registered in Karnataka, Mumbai, Delhi, West Bengal, Gujarat, or Andhra Pradesh, and KYC is mandatory even for trial accounts; after creating a trial account, visit the KYC document section, select your registered city, download the CAF form, complete, sign, and seal it, and submit it along with the Aadhaar card to your Exotel account manager for KYC approval.</li>
+            <li>Company PAN card</li>
+            <li>Certificate of Incorporation / Owner’s passport / MSME / Udyog aadhar</li>
+            <li>Company address proof (recent post-paid bill, rental agreement, or bank statement)</li>
+            <li>Director’s passport-size photo</li>
+            <li>Accepted formats: png, gif, jpeg, pdf</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential, proprietary information of Exotel Techcom Pvt. Ltd. Unauthorized disclosure, use, or reproduction is strictly prohibited.
+      </div>
+    `;
+  }
+
+  if (item.sku_key === 'sip_veeno') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Important Terms</strong>
+          <div style="margin:4px 0 2px 0;"><strong>Call Charges</strong></div>
+          <ul style="margin:0 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>For automated calls, a single leg will be consumed.</li>
+            <li>For human-initiated outgoing calls (2-leg calls), charges apply separately to each leg (local/STD split).</li>
+            <li>Call attempts (not answered calls) are also chargeable.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Rentals for 5/11 months include user logins, virtual numbers, call recordings, and analytics.</li>
+            <li>Agreement is valid for 1 year from start date.</li>
+            <li>Rates may change as per TRAI regulations with 30 days’ notice.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Channels</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Unlimited channels offered from a shared pool with ~130% buffer over prior month’s usage.</li>
+            <li>No separate PRI line charges.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments & Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid model; usage debited against balance.</li>
+            <li>Unused balance is carried forward. Minimum recharge: ₹500.</li>
+            <li>Payment receipt issued on payment date. Tax invoices issued monthly for actual usage.</li>
+            <li>Rental invoices raised in the following month.</li>
+            <li>Details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs. Payment Receipt</a></li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST & TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>If GST unregistered, a declaration on company letterhead is required:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
+            <li>TDS: Deduction u/s 194J @2% (if applicable).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Incoming and outgoing Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Incoming Calls:</strong> Customers must use their own customer-facing number (Airtel or Jio SIMs are preferred). These calls can be forwarded to Exotel virtual landline numbers where available in circles such as Delhi, Gujarat, Mumbai, Maharashtra, Karnataka, Tamil Nadu, Andhra Pradesh, West Bengal, Rajasthan, Madhya Pradesh, and Kerala.<br>Displaying Exotel virtual landline numbers as customer-facing numbers is not advisable since Exotel does not provide ownership of these numbers.</li>
+            <li><strong>Outgoing Calls:</strong> Customers cannot use their own numbers for outbound calls. Outgoing calls will always display Exotel virtual landline numbers from the above circles.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Custom Integrations</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>API documentation: developer.exotel.com/api.</li>
+            <li>FAQs - Voice & Phone Calls</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Proposal valid for 30 days from issue date.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>SMS Services</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Exotel provides SMS services; however, SMS is not supported for this particular account. Please reach out to Exotel support or your account manager for further assistance.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following via the Exotel dashboard:</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Please note that to procure SIP lines from Exotel, the company must be registered in Karnataka, Mumbai, Delhi, West Bengal, Gujarat, or Andhra Pradesh, and KYC is mandatory even for trial accounts; after creating a trial account, visit the KYC document section, select your registered city, download the CAF form, complete, sign, and seal it, and submit it along with the Aadhaar card to your Exotel account manager for KYC approval</li>
+            <li>Company PAN card</li>
+            <li>Certificate of Incorporation / Owner’s passport / MSME / Udyog aadhar</li>
+            <li>Company address proof (recent post-paid bill, rental agreement, or bank statement)</li>
+            <li>Director’s passport-size photo</li>
+            <li>Accepted formats: png, gif, jpeg, pdf</li>
+            <li>Guidelines: KYC Documentation</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Virtual Number (VN) Policy</strong>
+          <ul style="margin:2px 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local landline VNs provided for Delhi, Mumbai, Bengaluru, Hyderabad, Kolkata and Ahmedabad</li>
+            <li>Mobile DIDs available for selected states, please contact your account manager or Exotel support.</li>
+            <li>VNs remain Exotel’s property and cannot be ported (Ownership of the number can’t be transferred).</li>
+            <li>If discontinued by the provider, Exotel will replace it with an alternate VN.</li>
+          </ul>
+          <div style="margin:0 0 2px 0;"><strong>Virtual Number Spam & Whitelisting Policy:</strong></div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Exotel provides a new virtual number during onboarding.</li>
+            <li>If the number is marked as spam, Exotel will not be responsible, as spam tagging depends on customer usage and behavior.</li>
+            <li>Customers are advised to purchase Truecaller and Airtel Whitelisting Services to get their number whitelisted and maintain credibility.</li>
+            <li>Exotel requires a minimum commitment of 6 months for any number allocated to a customer account.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential and proprietary information of Exotel Techcom Private Limited. It is intended solely for the recipient. Any unauthorized sharing, use, or reproduction is strictly prohibited.
+      </div>
+    `;
+  }
+
+  return null;
+}
+
+function generateTncHtml(validItems, entity) {
+  let html = '';
+  validItems.forEach(item => {
+    const skuHtml = getSkuTncHtml(item);
+    if (skuHtml) html += skuHtml;
   });
 
-  let html = `<ul style="margin:0; padding-left:20px; text-align:left;">`;
-  
-  // Add Specific Terms first for relevance
-  if (hasVoice) TNC_SPECIFIC.voice.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
-  if (hasSms) TNC_SPECIFIC.sms.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
-  if (hasWhatsapp) TNC_SPECIFIC.whatsapp.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
-  if (hasStream) TNC_SPECIFIC.stream.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
-  
-  // Add General Terms
-  TNC_GENERAL.forEach(t => html += `<li style="margin-bottom:6px;">${t}</li>`);
-  
-  html += `<li style="margin-bottom:6px;"><strong>Terms of Service:</strong> Services are subject to ${entity}'s standard Terms of Service and Acceptable Use Policy.</li>`;
-  html += `</ul>`;
-  
+  // Fallback if no specific T&Cs are defined yet
+  if (!html) {
+    html = `<ul style="margin:0; padding-left:20px; text-align:left;">
+      <li style="margin-bottom:6px;">All prices are exclusive of GST unless stated otherwise. GST @ 18% applicable.</li>
+      <li style="margin-bottom:6px;">This quotation is valid for 30 days from the date of issue.</li>
+      <li style="margin-bottom:6px;">Setup charges are waived as indicated. Waived amounts are non-refundable once service is activated.</li>
+      <li style="margin-bottom:6px;">Call credits are consumed as per usage and are non-transferable.</li>
+      <li style="margin-bottom:6px;">Services are subject to ${entity}'s standard Terms of Service and Acceptable Use Policy.</li>
+      <li style="margin-bottom:6px;">Payment terms: 100% advance unless otherwise agreed in writing.</li>
+    </ul>`;
+  }
+
   return html;
 }
 
@@ -1385,7 +2167,7 @@ function updatePreview() {
       <div class="quote-doc-section" style="margin-top:30px;">
         <div class="quote-doc-section-title">Terms &amp; Conditions</div>
         <div class="quote-tnc" style="font-size:0.85rem; color:#475569; line-height:1.5;">
-          ${generateTncHtml(validItems.map(i => i.sku_key), firstSku.entity)}
+          ${generateTncHtml(validItems, firstSku.entity)}
         </div>
       </div>
       <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e0f2fe;font-size:0.78rem;color:#94a3b8;text-align:center;">
@@ -1867,7 +2649,7 @@ function updatePreview() {
     <div class="quote-doc-section" style="margin-top:30px;">
       <div class="quote-doc-section-title">Terms &amp; Conditions</div>
       <div class="quote-tnc" style="font-size:0.85rem; color:#475569; line-height:1.5;">
-        ${generateTncHtml(validItems.map(i => i.sku_key), firstSku.entity)}
+        ${generateTncHtml(validItems, firstSku.entity)}
       </div>
     </div>
 
