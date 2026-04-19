@@ -3185,27 +3185,30 @@ function applyAIParsedQuote(data) {
         let qty = aiSku.users || aiSku.quantity;
         if (!qty) return;
 
-        // Briefly switch active item to fill it
-        const originalActive = QG.activeItemId;
-        window.switchActiveItem(item.id);
-        
-        const hasFreeUsers = document.getElementById('qf_free_users');
-        const hasNumUsers = document.getElementById('qf_num_users');
-        const hasChannels = document.getElementById('qf_num_channels');
-        
-        if (hasFreeUsers && !hasFreeUsers.disabled) {
-            hasFreeUsers.value = qty;
-            window.updateFormValue('free_users', qty);
-        } else if (hasNumUsers && !hasNumUsers.disabled) {
-            hasNumUsers.value = qty;
-            window.updateFormValue('num_users', qty);
-        } else if (hasChannels && !hasChannels.disabled) {
-            hasChannels.value = qty;
-            window.updateFormValue('num_channels', qty);
+        // Set the value directly in the item state (applies to all SKUs based on primary quantity fields)
+        if (qty) {
+            const fields = getSkuFields(item.sku_key, item.tier);
+            const primaryKeys = ['num_users', 'free_users', 'num_channels', 'num_numbers'];
+            for (const key of primaryKeys) {
+                if (fields.some(f => f.id === key)) {
+                    item.values[key] = qty;
+                    break; // Apply to the first matched primary field and stop
+                }
+            }
         }
-        
-        window.switchActiveItem(originalActive); // switch back
     });
+    
+    // Re-render the form with the newly populated values
+    const cfgArea = document.getElementById('sku-config-area');
+    const skuDef = SKUS.find(s => s.key === QG.currentSku);
+    if (!isCompare) {
+        if (skuDef?.hasTiers && !QG.compareMode) {
+            renderTierSelector();
+        } else {
+            if (cfgArea) cfgArea.innerHTML = '';
+            renderSkuForm(QG.currentSku, QG.currentTier);
+        }
+    }
     
     updatePreview();
     alert('Quote Auto-Generated Successfully from Voice AI! Check the right preview panel.');
