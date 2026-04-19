@@ -2997,12 +2997,13 @@ async function saveProfilePhone() {
     if (buffer === EASTER_EGG) {
       const banner = document.getElementById('q-ai-banner');
       if (banner) {
-        banner.classList.remove('hidden');
-        banner.style.animation = 'none';
-        // Quick flash to signal activation
-        banner.style.transition = 'box-shadow 0.3s';
-        banner.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.6)';
-        setTimeout(() => { banner.style.boxShadow = ''; }, 800);
+        const isHidden = banner.classList.toggle('hidden');
+        if (!isHidden) {
+          // Glow flash when revealed
+          banner.style.transition = 'box-shadow 0.3s';
+          banner.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.6)';
+          setTimeout(() => { banner.style.boxShadow = ''; }, 800);
+        }
       }
       buffer = '';
     }
