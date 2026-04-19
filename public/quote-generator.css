@@ -553,7 +553,7 @@
 /* The actual quote document */
 #quote-document {
     width: 210mm;
-    min-height: 297mm;
+    /* No min-height here — letting content drive height prevents blank page gaps */
     margin: 32px auto;
     background: #fff;
     font-family: 'Inter', sans-serif;
@@ -561,28 +561,18 @@
     color: #1e293b;
     padding: 40px 48px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-    /* A4 Paper shadow */
     border: 1px solid #e2e8f0;
     flex-shrink: 0;
-    /* Ensures the tall document doesn't get collapsed by its flex parent */
 }
 
-/* Hide the print-table wrapper in the screen preview — it's for PDF pagination only */
-#quote-document .print-master-table {
-    display: contents;
-    border: none;
-    width: auto;
-}
-
-#quote-document .print-master-table > thead,
-#quote-document .print-master-table > tfoot {
-    display: none;
-}
-
-#quote-document .print-master-table > tbody > tr > td {
-    display: contents;
-    padding: 0;
-    border: none;
+/* Hide the print-table header/footer spacers in the browser preview ONLY.
+   Puppeteer uses screen media — we remove only the thead/tfoot height,
+   but keep the table structure intact so content flows correctly. */
+#quote-document .print-master-table > thead .print-master-header,
+#quote-document .print-master-table > tfoot .print-master-footer {
+    height: 0 !important;
+    display: block !important;
+    overflow: hidden !important;
 }
 
 .quote-doc-header {
