@@ -1012,7 +1012,7 @@ function renderFieldRow(f, item) {
 
   if (f.nonEditable) {
     const display = f.waived
-      ? `<span class="q-waived">✓ Waived</span>`
+      ? `<span class="q-waived"><svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:2px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg> Waived</span>`
       : `<span class="q-non-editable">${v}</span>`;
     return `
       <div class="q-field-row" data-addon="${f.note || ''}">
@@ -1144,8 +1144,9 @@ function updatePreview() {
       const n = parseFloat(v); if (isNaN(n)) return String(v);
       return n >= 100 ? '₹' + (n / 100).toFixed(2) + '/msg' : n + 'p/msg';
     };
-    const W = '<span class="waived-text">&#10003; Waived</span>';
-    const FREE = '<span class="waived-text">&#10003; Free</span>';
+    const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+    const W = `<span class="waived-text">${TICK} Waived</span>`;
+    const FREE = `<span class="waived-text">${TICK} Free</span>`;
     const perUnit = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
 
     // Build row data per item
@@ -1380,8 +1381,9 @@ function updatePreview() {
       return num + 'p/msg';
     };
 
-    const W = '<span class="waived-text">&#10003; Waived</span>';
-    const FREE = '<span class="waived-text">&#10003; Free</span>';
+    const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+    const W = `<span class="waived-text">${TICK} Waived</span>`;
+    const FREE = `<span class="waived-text">${TICK} Free</span>`;
     let isFirstSec = true;
     const hasHTML = (s) => typeof s === 'string' && /<[a-zA-Z]/.test(s);
     const secRow = (lbl) => {
