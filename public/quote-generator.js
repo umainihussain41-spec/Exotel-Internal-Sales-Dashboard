@@ -1884,6 +1884,30 @@ window.printQuote = async function () {
      .quote-participant-grid {
          grid-template-columns: 1fr 1fr !important;
      }
+
+     /* ── PDF-ONLY: Disable SKU grid to prevent blank page gaps ── */
+     /* The grid with break-inside:avoid causes Puppeteer to push the
+        entire block to the next page. Use simple block layout instead. */
+     .quote-skus-grid {
+         display: block !important;
+         margin-top: 16px !important;
+     }
+     .quote-doc-section.sku-card {
+         display: block !important;
+         height: auto !important;
+         margin-top: 20px !important;
+         page-break-inside: avoid;
+         break-inside: avoid;
+     }
+     .quote-doc-section.sku-card .quote-sku-table {
+         flex-grow: unset !important;
+     }
+     /* Collapse print-master header/footer so no blank rows appear */
+     .print-master-header,
+     .print-master-footer {
+         height: 0 !important;
+         overflow: hidden !important;
+     }
   </style>
 </head>
 <body>
