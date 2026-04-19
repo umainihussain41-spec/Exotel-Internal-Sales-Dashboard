@@ -797,6 +797,18 @@
     margin-top: auto !important;
 }
 
+@media print {
+    .quote-skus-grid {
+        display: block !important;
+        margin-top: 0 !important;
+    }
+    .quote-doc-section.sku-card {
+        height: auto !important;
+        display: block !important;
+        margin-top: 24px !important;
+    }
+}
+
 /* Totals */
 .quote-totals {
     margin-top: 12px;
