@@ -222,6 +222,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, nonEditable: true },
         // DID option
         { id: 'did_numbers', label: 'DID Numbers (optional)', value: 0, locked: false, note: '₹1,500/DID/month' },
+        { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: t2.credits, locked: true, stopType: 'lower', stopVal: t2.credits },
         { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
@@ -1504,13 +1505,17 @@ function updatePreview() {
       tableHTML += indRow('Extra User Cost', `${fmtRupee(199)} ${perUnit('/user/month')}`);
 
       tableHTML += secRow('Number Plan');
-      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
-      tableHTML += indRow('Extra Number Cost', `${fmtRupee(499)} ${perUnit('/number/month')}`);
-      const paidNumsS = getSafeNum('num_paid_numbers') || 0;
+      const removStdSip = getSafeNum('remove_std_numbers') || 0;
       const vMonthsS = parseFloat(getVal('validity')) || 0;
-      if (paidNumsS > 0) {
-        tableHTML += stdRow('Extra Numbers', `${paidNumsS} Number(s)`);
-        tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${vMonthsS} months × ${fmtRupee(499)} = <strong>${fmtRupee(paidNumsS * vMonthsS * 499)}</strong>`);
+
+      if (!removStdSip) {
+        tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+        tableHTML += indRow('Extra Number Cost', `${fmtRupee(499)} ${perUnit('/number/month')}`);
+        const paidNumsS = getSafeNum('num_paid_numbers') || 0;
+        if (paidNumsS > 0) {
+          tableHTML += stdRow('Extra Numbers', `${paidNumsS} Number(s)`);
+          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${vMonthsS} months × ${fmtRupee(499)} = <strong>${fmtRupee(paidNumsS * vMonthsS * 499)}</strong>`);
+        }
       }
       const didNums2 = getSafeNum('did_numbers') || 0;
       if (didNums2 > 0) {
@@ -3018,7 +3023,7 @@ function setupAIVoice() {
           reader.onloadend = async () => {
              const base64data = reader.result.split(',')[1];
              
-             const availableSkus = SKUS.map(s => ({ key: s.key, name: s.name }));
+             const availableSkus = SKUS.map(s => ({ key: s.key, name: s.label }));
              
              const res = await fetch('/api/ai-quote-parse', {
                 method: 'POST',

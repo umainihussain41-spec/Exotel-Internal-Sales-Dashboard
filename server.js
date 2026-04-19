@@ -891,6 +891,7 @@ app.put('/api/lwb/calls/:callSid/legs/:legSid', ensureAuthenticated, ensureAdmin
 });
 
 // ─── AI Quote Parser (Gemini) ────────────────────────────────────────────────
+let currentGeminiKeyIndex = 0;
 app.post('/api/ai-quote-parse', ensureAuthenticated, async (req, res) => {
     const { audioBase64, mimeType, availableSkus } = req.body;
     
@@ -899,15 +900,22 @@ app.post('/api/ai-quote-parse', ensureAuthenticated, async (req, res) => {
     }
 
     const email = req.user?.emails?.[0]?.value || 'unknown';
-    const apiKey = process.env.GEMINI_API_KEY;
+    
+    const fallbackKeys = [
+        'AIzaSyAxM1nG9fnwAx3pGT7i4PwGbqI5cC09AwQ',
+        'AIzaSyAMTxuUeDhjh9a9PI4g3fJI_n5A70L5ekI'
+    ];
+    
+    const allKeys = [];
+    if (process.env.GEMINI_API_KEY) allKeys.push(process.env.GEMINI_API_KEY);
+    allKeys.push(...fallbackKeys);
+    const uniqueKeys = [...new Set(allKeys)];
 
-    if (!apiKey) {
-        return res.status(503).json({ error: 'Gemini API key is not configured in .env' });
+    if (uniqueKeys.length === 0) {
+        return res.status(503).json({ error: 'Gemini API key is not configured' });
     }
 
     try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-
         // ── System instruction: baked-in domain context (cached, not charged per-call) ──
         const systemInstruction = `You are an AI assistant inside the Exotel Internal Sales Dashboard.
 Your job: listen to a sales rep's voice and extract quote details into structured JSON.
@@ -918,7 +926,7 @@ Exotel is a CPaaS (cloud communications) company serving businesses in India and
 Two brands:
   1. Exotel — primary brand: cloud telephony, SMS, WhatsApp, RCS.
   2. Veeno  — sister brand for SMBs: cloud telephony, SIP lines.
-If the user does NOT mention "Veeno", always default to Exotel products.
+If the user asks for a general calling plan and does NOT mention "Veeno", default to Exotel voice products. However, if they specifically ask for "SIP lines", "web calling", "web calls", "1400 series", or "1600 series", ALWAYS assign the respective Veeno SKUs even if they don't say the word "Veeno". For "web calling" or "web calls", map to voice_veeno_std by default, but if they mention a "user charge" of more than 1000, map it to voice_veeno_user.
 
 === SKU CATALOG & INTENT MAPPING ===
 Pick the best-matching skuKey using reasoning. Use ONLY these exact keys:
@@ -952,14 +960,16 @@ Pick the best-matching skuKey using reasoning. Use ONLY these exact keys:
                         "Rich Communication".
 
   voice_veeno_std    → Veeno standard calling, charged per minute.
-                        USE FOR: "Veeno voice", "Veeno standard", "Veeno calling", "Veeno STD".
+                        USE FOR: "Veeno voice", "Veeno standard", "Veeno calling", "Veeno STD",
+                        "web calling", "web calls" (default if no user charge > 1000 is mentioned).
 
   voice_veeno_user   → Veeno calling charged per user.
-                        USE FOR: "Veeno per user", "Veeno per seat", "Veeno user-based".
+                        USE FOR: "Veeno per user", "Veeno per seat", "Veeno user-based",
+                        "web calling" or "web calls" IF a user charge of > 1000 is mentioned.
 
   sip_veeno          → Veeno SIP/WebRTC lines for browser-based calling.
                         USE FOR: "SIP", "SIP lines", "WebRTC", "browser calling",
-                        "call from laptop", "web calls", "Veeno SIP".
+                        "call from laptop", "Veeno SIP".
 
   num_1400           → Veeno 1400-series virtual number.
                         USE FOR: "1400 number", "1400 series".
@@ -1079,11 +1089,6 @@ Do NOT set compareMode=true for two different products.
 - companyName: extract client/company name if mentioned, else leave empty.
 - Only add configurationOverrides when user explicitly gives a number to change.`;
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
-            systemInstruction: systemInstruction
-        });
-
         const schema = {
             type: SchemaType.OBJECT,
             properties: {
@@ -1137,22 +1142,52 @@ Do NOT set compareMode=true for two different products.
         };
 
         // Lean per-call prompt — heavy domain context lives in systemInstruction above
-        const skuKeyList = availableSkus.map(s => s.key).join(', ');
+        const skuKeyList = availableSkus.map(s => `${s.key} (${s.name})`).join(', ');
         const promptText = `Parse the attached audio clip and extract the quote details into JSON.\nValid SKU keys (use ONLY these): ${skuKeyList}`;
 
-        const result = await model.generateContent({
-            contents: [{ 
-                role: "user", 
-                parts: [
-                    { text: promptText },
-                    { inlineData: { data: audioBase64, mimeType: mimeType } }
-                ] 
-            }],
-            generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: schema
+        let result = null;
+        let lastError = null;
+
+        for (let attempt = 0; attempt < uniqueKeys.length; attempt++) {
+            const activeKey = uniqueKeys[currentGeminiKeyIndex];
+            try {
+                const genAI = new GoogleGenerativeAI(activeKey);
+                const model = genAI.getGenerativeModel({
+                    model: "gemini-2.5-flash",
+                    systemInstruction: systemInstruction
+                });
+
+                result = await model.generateContent({
+                    contents: [{ 
+                        role: "user", 
+                        parts: [
+                            { text: promptText },
+                            { inlineData: { data: audioBase64, mimeType: mimeType } }
+                        ] 
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: schema
+                    }
+                });
+                
+                // Success, break out of retry loop
+                break;
+            } catch (err) {
+                lastError = err;
+                console.error(`Gemini API error with key index ${currentGeminiKeyIndex}:`, err.message);
+                if (err.status === 429 || err.message.includes('429') || err.message.includes('quota') || err.message.includes('rate limit')) {
+                    currentGeminiKeyIndex = (currentGeminiKeyIndex + 1) % uniqueKeys.length;
+                    console.log(`Switching to next Gemini API key (index ${currentGeminiKeyIndex})`);
+                } else {
+                    throw err;
+                }
             }
-        });
+        }
+
+        if (!result) {
+            throw lastError || new Error("All API keys exhausted or failed.");
+        }
 
         const responseText = result.response.text();
         const parsedJson = JSON.parse(responseText);

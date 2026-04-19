@@ -538,7 +538,6 @@
         z-index: 500;
         align-items: stretch;
         padding: 0;
-        safe-area-inset-bottom: env(safe-area-inset-bottom);
         padding-bottom: env(safe-area-inset-bottom);
     }
 
