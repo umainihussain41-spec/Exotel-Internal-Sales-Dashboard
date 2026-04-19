@@ -1,0 +1,523 @@
+/*
+ * ===================================================================
+ *  EXOTEL SALES DASHBOARD — RESPONSIVE STYLESHEET
+ *  Covers:
+ *    - Desktop fluid scaling  (1024px → 2560px+)
+ *    - Tablet                 (769px – 1023px)
+ *    - Mobile large           (≤ 768px)  — iPhone Plus, Pixel XL
+ *    - Mobile standard        (≤ 430px)  — iPhone 14, Pixel 7
+ *    - Mobile small           (≤ 375px)  — iPhone SE, small Android
+ *    - Mobile tiny            (≤ 320px)  — very old / small devices
+ *
+ *  Desktop/tablet styles are NOT changed — this file only ADDS
+ *  rules for viewports the existing CSS doesn't handle well.
+ * ===================================================================
+ */
+
+/* ════════════════════════════════════════════════
+   §1  DESKTOP FLUID SCALING
+   Ensures the layout looks great on:
+   • MacBook 13"   (1280px)
+   • MacBook 15"   (1440px)
+   • iMac 24"      (2048px / HiDPI)
+   • iMac 27" / 4K (2560px+)
+   ════════════════════════════════════════════════ */
+
+/* Medium desktop — tighten applet max-width so content isn't
+   uncomfortably wide on 1280-1440 screens */
+@media (min-width: 1024px) and (max-width: 1280px) {
+    .applet { max-width: 1040px; padding: 0 24px; }
+    .home-apps-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+    .sidebar { width: 230px; }
+}
+
+/* Standard MacBook / 1440p — comfortable reading width */
+@media (min-width: 1281px) and (max-width: 1600px) {
+    .applet { max-width: 1200px; padding: 0 32px; }
+    .home-apps-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+}
+
+/* Large monitors & iMac — scale up type and spacing */
+@media (min-width: 1601px) and (max-width: 2048px) {
+    :root { font-size: 16.5px; }
+    .applet { max-width: 1400px; padding: 0 40px; }
+    .sidebar { width: 270px; }
+    .home-apps-grid { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+    .top-action-bar { height: 76px; }
+}
+
+/* 4K / iMac 27" / Retina — larger comfortable layout */
+@media (min-width: 2049px) {
+    :root { font-size: 18px; }
+    .applet { max-width: 1680px; padding: 0 48px; }
+    .sidebar { width: 290px; }
+    .home-apps-grid { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+    .top-action-bar { height: 80px; padding: 0 48px; }
+    h1 { font-size: 2.4rem; }
+}
+
+/* Quote generator: keep the side-by-side layout on large monitors */
+@media (min-width: 1200px) {
+    .quote-layout {
+        flex-direction: row !important;
+        height: calc(100vh - 120px) !important;
+    }
+    .quote-form-panel {
+        flex: 1 1 36% !important;
+        overflow-y: auto !important;
+    }
+    .quote-preview-panel {
+        flex: 0 0 64% !important;
+        height: 100% !important;
+        overflow-y: auto !important;
+    }
+}
+
+/* Tablet breakpoint — side-by-side becomes stacked but still spacious */
+@media (min-width: 769px) and (max-width: 1199px) {
+    .quote-layout {
+        flex-direction: column !important;
+        height: auto !important;
+    }
+    .quote-preview-panel {
+        min-width: 0 !important;
+        height: auto !important;
+        min-height: 500px !important;
+        border-left: none !important;
+        border-top: 1px solid #bae6fd !important;
+    }
+    .quote-form-panel { flex: none !important; }
+    #quote-document { width: 100% !important; margin: 24px auto !important; }
+}
+
+/* ════════════════════════════════════════════════
+   §2  MOBILE BASE (≤ 768px)
+   Applies to all phone sizes and small tablets.
+   ════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+    /* ── Remove the burger-btn — we use bottom nav instead ── */
+    .burger-btn { display: none !important; }
+
+    /* ── Hide desktop sidebar entirely on mobile ── */
+    .sidebar,
+    body.home-state .sidebar,
+    body.app-state .sidebar {
+        display: none !important;
+    }
+
+    /* ── Dashboard layout: single column ── */
+    .dashboard-layout {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    /* ── Main content: full width, add bottom padding for nav bar ── */
+    .main-content {
+        width: 100% !important;
+        margin-left: 0 !important;
+        padding-bottom: 72px; /* space for the bottom nav */
+    }
+
+    /* ── Top action bar ── */
+    .top-action-bar {
+        height: 56px !important;
+        padding: 0 16px !important;
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        background: #ffffff;
+    }
+
+    /* ── Hide back button & greeting in top bar (nav is at the bottom) ── */
+    #btn-back-home { display: none !important; }
+
+    /* ── Applets: full-width, comfortable padding ── */
+    .applet {
+        max-width: 100% !important;
+        margin: 16px auto !important;
+        padding: 0 16px !important;
+    }
+
+    /* ── Home greeting ── */
+    #home-applet > div:first-child {
+        padding: 20px 0 12px 0;
+    }
+    h1 { font-size: 1.4rem; }
+    .applet-title { font-size: 1.15rem; }
+    .applet-header { margin-bottom: 14px; padding-bottom: 12px; }
+
+    /* ── Home apps grid: 2 column on mobile, readable ── */
+    .home-apps-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-top: 16px;
+    }
+    .app-card { padding: 16px 14px; }
+    .app-icon { width: 40px; height: 40px; margin-bottom: 12px; }
+    .app-card h3 { font-size: 0.95rem; margin-bottom: 4px; }
+    .app-card p { font-size: 0.8rem; }
+
+    /* ── Content panels ── */
+    .glass-panel, .content-panel { padding: 14px 16px; }
+
+    /* ── Grids ── */
+    .two-col-grid { grid-template-columns: 1fr !important; }
+    .input-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+
+    /* ── Tables: horizontal scroll ── */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 8px;
+    }
+    .data-table { min-width: 520px; }
+
+    /* ── Buttons ── */
+    .btn { font-size: 0.85rem; padding: 9px 14px; }
+
+    /* ── Log use-case cards: horizontal scroll ── */
+    .use-case-cards {
+        display: flex !important;
+        overflow-x: auto !important;
+        gap: 10px !important;
+        padding-bottom: 8px !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+    .use-case-cards::-webkit-scrollbar { display: none; }
+    .use-case-card { flex-shrink: 0 !important; min-width: 150px !important; }
+
+    /* ── Admin / log search ── */
+    #admin-log-search { min-width: 100% !important; }
+
+    /* ── Modals ── */
+    .modal-content {
+        max-width: 100% !important;
+        width: calc(100vw - 24px) !important;
+        border-radius: 16px !important;
+        margin: 0 12px !important;
+    }
+
+    /* ── ──────────────────────────────────── ── */
+    /* ── QUOTE GENERATOR MOBILE LAYOUT        ── */
+    /* ── ──────────────────────────────────── ── */
+
+    /* Stack form on top; preview becomes a bottom sheet (see Phase 2) */
+    .quote-layout {
+        flex-direction: column !important;
+        height: auto !important;
+        overflow: visible !important;
+    }
+
+    /* Form panel: full width */
+    .quote-form-panel {
+        flex: none !important;
+        width: 100% !important;
+        height: auto !important;
+        padding: 14px 14px !important;
+        overflow-y: visible !important;
+        border-right: none !important;
+    }
+
+    /* Preview panel: full width below form */
+    .quote-preview-panel {
+        flex: none !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        height: auto !important;
+        border-left: none !important;
+        border-top: 1px solid #bae6fd !important;
+        box-shadow: 0 -4px 16px rgba(2,132,199,0.07) !important;
+        overflow-y: visible !important;
+    }
+
+    /* Quote document: screen-width */
+    #quote-document {
+        width: 100% !important;
+        min-height: auto !important;
+        margin: 16px auto !important;
+        padding: 20px 16px !important;
+        box-sizing: border-box;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+
+    /* Tabs bar: scrollable row */
+    .quote-tabs {
+        display: flex !important;
+        overflow-x: auto !important;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        width: 100%;
+        flex-wrap: nowrap !important;
+        padding: 0 2px !important;
+    }
+    .quote-tabs::-webkit-scrollbar { display: none; }
+    .quote-tab { flex-shrink: 0; padding: 7px 12px; font-size: 0.8rem; }
+
+    /* SKU selector: 2 columns */
+    .sku-selector,
+    #sku-selector-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+    }
+    .sku-option-label { font-size: 0.8rem; }
+    .sku-option-sub   { font-size: 0.7rem; }
+
+    /* Field rows: label above value */
+    .q-field-row {
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 10px;
+    }
+    .q-field-label { flex: 1 1 100%; min-width: 0; font-size: 0.8rem; }
+    .q-field-value { flex: 1 1 100%; }
+    .q-input { font-size: 0.9rem; }
+
+    /* Tier selector */
+    .tier-selector { gap: 6px; flex-wrap: wrap; }
+    .tier-btn { flex: 1 1 calc(33% - 6px); padding: 8px 6px; font-size: 0.78rem; }
+
+    /* Action buttons: stack and full-width */
+    .q-actions {
+        flex-direction: column !important;
+        gap: 8px !important;
+        padding: 12px 14px !important;
+        position: sticky !important;
+        bottom: 72px !important; /* sit above bottom nav */
+        z-index: 20;
+    }
+    .q-actions .btn {
+        width: 100% !important;
+        justify-content: center !important;
+        font-size: 0.88rem;
+    }
+
+    /* Compare mode: single column */
+    .compare-mode-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    .compare-card, .compare-card.tier-card {
+        flex: none !important;
+        min-width: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Compare table: horizontal scroll */
+    .compare-table-wrapper {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* Participant grid: single column */
+    .quote-participant-grid {
+        grid-template-columns: 1fr !important;
+    }
+
+    /* AI overlay */
+    #ai-listening-overlay { padding: 24px 16px !important; }
+
+    /* SKU item row */
+    .sku-item-row { flex-wrap: wrap; gap: 8px; }
+
+    /* Approval / quote modals: full screen */
+    .q-modal,
+    #q-approval-modal .q-modal-inner {
+        width: 100% !important;
+        max-width: 100% !important;
+        border-radius: 20px 20px 0 0 !important;
+        margin: 0 !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        top: auto !important;
+    }
+}
+
+/* ════════════════════════════════════════════════
+   §3  MOBILE STANDARD (≤ 430px)
+   iPhone 14 Pro Max, Pixel 7 Pro, Galaxy S22 Ultra
+   ════════════════════════════════════════════════ */
+@media (max-width: 430px) {
+    .applet { padding: 0 14px !important; }
+    .glass-panel, .content-panel { padding: 12px 14px; }
+    .home-apps-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+    h1 { font-size: 1.3rem; }
+    .q-card { padding: 12px 14px; }
+    .quote-form-panel { padding: 12px !important; }
+    #quote-document { padding: 16px 12px !important; }
+    .q-actions { padding: 10px 12px !important; bottom: 70px !important; }
+}
+
+/* ════════════════════════════════════════════════
+   §4  MOBILE COMPACT (≤ 375px)
+   iPhone SE, iPhone 12 mini, small Android
+   ════════════════════════════════════════════════ */
+@media (max-width: 375px) {
+    .applet { padding: 0 12px !important; }
+    .home-apps-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .app-card { padding: 12px 10px; }
+    .app-card h3 { font-size: 0.85rem; }
+    h1 { font-size: 1.2rem; }
+    .quote-tab { padding: 6px 10px; font-size: 0.76rem; }
+    .sku-selector, #sku-selector-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .data-table { min-width: 400px; }
+    .tier-btn { font-size: 0.74rem; padding: 7px 4px; }
+    #quote-document { padding: 14px 10px !important; }
+}
+
+/* ════════════════════════════════════════════════
+   §5  MOBILE TINY (≤ 320px)
+   Very small / old devices
+   ════════════════════════════════════════════════ */
+@media (max-width: 320px) {
+    .home-apps-grid { grid-template-columns: 1fr; gap: 8px; }
+    .applet { padding: 0 10px !important; }
+    .btn { font-size: 0.8rem; padding: 8px 10px; }
+    h1 { font-size: 1.1rem; }
+    .quote-tab { padding: 5px 8px; font-size: 0.72rem; }
+}
+
+/* ════════════════════════════════════════════════
+   §6  BOTTOM NAVIGATION BAR
+   Replaces sidebar on mobile. Hidden on desktop.
+   ════════════════════════════════════════════════ */
+
+/* Hide on desktop */
+#mobile-bottom-nav { display: none; }
+
+@media (max-width: 768px) {
+    #mobile-bottom-nav {
+        display: flex !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 64px;
+        background: #ffffff;
+        border-top: 1px solid #e0f2fe;
+        box-shadow: 0 -4px 20px rgba(2, 132, 199, 0.1);
+        z-index: 500;
+        align-items: stretch;
+        padding: 0;
+        safe-area-inset-bottom: env(safe-area-inset-bottom);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .mbn-item {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        padding: 8px 4px;
+        color: #94a3b8;
+        font-size: 0.62rem;
+        font-weight: 600;
+        font-family: var(--font-stack);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        transition: color 0.18s ease, background 0.18s ease;
+        position: relative;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .mbn-item:active {
+        background: #f0f9ff;
+    }
+
+    .mbn-item.active {
+        color: #0284c7;
+    }
+
+    /* Active indicator pill above icon */
+    .mbn-item.active::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 20%;
+        right: 20%;
+        height: 3px;
+        border-radius: 0 0 3px 3px;
+        background: #0284c7;
+    }
+
+    .mbn-item svg {
+        width: 22px;
+        height: 22px;
+        flex-shrink: 0;
+        transition: transform 0.18s ease;
+    }
+
+    .mbn-item.active svg {
+        transform: translateY(-1px);
+    }
+
+    .mbn-label {
+        font-size: 0.6rem;
+        line-height: 1;
+    }
+
+    /* Hide admin nav item by default (shown via JS same as sidebar) */
+    #mbn-admin { display: none; }
+    #mbn-admin.visible { display: flex; }
+}
+
+/* ════════════════════════════════════════════════
+   §7  MOBILE TOPBAR REFINEMENTS
+   ════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    /* Topbar logo alignment */
+    #topbar-logo img { height: 22px; }
+
+    /* User badge: show email shortened */
+    #user-badge {
+        font-size: 0.7rem;
+        max-width: 160px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Greeting in topbar: smaller */
+    #time-greeting { font-size: 1.1rem !important; }
+}
+
+@media (max-width: 375px) {
+    #user-badge { max-width: 120px; font-size: 0.65rem; }
+    #topbar-logo img { height: 20px; }
+}
+
+/* ════════════════════════════════════════════════
+   §8  SAFE AREA SUPPORT (Notch / Dynamic Island)
+   ════════════════════════════════════════════════ */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    @media (max-width: 768px) {
+        #mobile-bottom-nav {
+            height: calc(64px + env(safe-area-inset-bottom));
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        .main-content {
+            padding-bottom: calc(72px + env(safe-area-inset-bottom));
+        }
+        .q-actions {
+            bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+        }
+    }
+}

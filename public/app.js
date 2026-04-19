@@ -130,6 +130,9 @@ async function checkAdminStatus() {
                 if (navAdmin) navAdmin.classList.remove('hidden');
                 const cardAdmin = document.getElementById('home-card-admin');
                 if (cardAdmin) cardAdmin.classList.remove('hidden');
+                // Show admin in mobile bottom nav
+                const mbnAdmin = document.getElementById('mbn-admin');
+                if (mbnAdmin) mbnAdmin.style.removeProperty('display');
                 // Live Monitor (admin only)
                 document.getElementById('nav-live-monitor')?.classList.remove('hidden');
                 document.getElementById('home-card-live-monitor')?.classList.remove('hidden');
@@ -290,6 +293,11 @@ window.openApp = function (target) {
         } else {
             app.classList.add('hidden');
         }
+    });
+
+    // Sync mobile bottom nav active state
+    document.querySelectorAll('.mbn-item[data-target]').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-target') === target);
     });
 
     // Auto refresh logs if tab changed to logs
