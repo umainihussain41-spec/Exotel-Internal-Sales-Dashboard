@@ -1163,7 +1163,7 @@ function renderSkuItemManager() {
 window.addSkuItem = function () {
   const activeItem = getActiveItem();
   if (!activeItem.sku_key) {
-    alert('Please select a SKU for the current item before adding another.');
+    showAlert('Please select a SKU for the current item before adding another.', { type: 'warning', title: 'SKU Required' });
     return;
   }
   const newId = 'item_' + Date.now();
@@ -1381,7 +1381,7 @@ function renderSkuItemManager() {
 window.addSkuItem = function () {
   const activeItem = getActiveItem();
   if (!activeItem.sku_key) {
-    alert('Please select a SKU for the current item before adding another.');
+    showAlert('Please select a SKU for the current item before adding another.', { type: 'warning', title: 'SKU Required' });
     return;
   }
   const newId = 'item_' + Date.now();
@@ -1494,7 +1494,7 @@ function selectSku(key) {
 
   // Entity lock enforcement
   if (QG.multiSkuMode && QG.lockedEntity && sku.entity !== QG.lockedEntity) {
-    alert(`This quote is locked to ${QG.lockedEntity} plans. Remove all items to start a new quote with a different entity.`);
+    showAlert(`This quote is locked to ${QG.lockedEntity} plans. Remove all items to start a new quote with a different entity.`, { type: 'warning', title: 'Entity Lock' });
     return;
   }
 
@@ -2670,7 +2670,7 @@ window.printQuote = async function () {
     const companyStr = companyInput && companyInput.value ? `_${companyInput.value.replace(/[^a-z0-9]/gi, '')}` : '';
     const defaultFilename = `Exotel_Quote_${QG.quoteNumber || 'Generated'}${companyStr}.pdf`;
     
-    let userFilename = prompt("Enter a filename for the Quote PDF:", defaultFilename);
+    let userFilename = await showPrompt("Enter a filename for the Quote PDF:", defaultFilename, { title: 'Save PDF As' });
     if (userFilename === null) return; // Cancelled
     if (!userFilename.trim()) userFilename = defaultFilename;
     else if (!userFilename.toLowerCase().endsWith('.pdf')) userFilename += '.pdf';
@@ -2771,7 +2771,7 @@ window.printQuote = async function () {
         window.URL.revokeObjectURL(url);
     } catch (e) {
         console.error("Puppeteer PDF Request Error", e);
-        alert("Failed to generate PDF. Please ensure your session is active and server is running.");
+        showAlert("Failed to generate PDF. Please ensure your session is active and server is running.", { type: 'error', title: 'PDF Error' });
     } finally {
         if(renderBtn) renderBtn.innerHTML = originalText;
     }
@@ -2780,11 +2780,11 @@ window.printQuote = async function () {
 // -- Generate Quote (Save) ----------------------------------
 async function generateQuote() {
   const validItems = QG.skuItems.filter(i => i.sku_key);
-  if (validItems.length === 0) { alert('Please select a SKU plan first.'); return; }
+  if (validItems.length === 0) { showAlert('Please select a SKU plan first.', { type: 'warning', title: 'No SKU Selected' }); return; }
   const firstSku = SKUS.find(s => s.key === validItems[0].sku_key);
 
   const company = document.getElementById('q-client-company')?.value?.trim();
-  if (!company) { alert('Please enter a client company name.'); return; }
+  if (!company) { showAlert('Please enter a client company name.', { type: 'warning', title: 'Company Required' }); return; }
 
   const violations = [];
   for (const item of validItems) {
@@ -2855,7 +2855,7 @@ async function generateQuote() {
     });
     
     if (res.status === 401) {
-      alert("Your session has expired. Please log in again.");
+      showAlert("Your session has expired. Please log in again.", { type: 'error', title: 'Session Expired' });
       window.location.href = '/login';
       return;
     }
@@ -2868,20 +2868,20 @@ async function generateQuote() {
     await fetch('/api/drafts/key/draft_' + QG.quoteNumber, { method: 'DELETE' }).catch(() => null);
     updateNavCounters();
 
-    alert(isEdit ? `Quote ${QG.quoteNumber} updated successfully!` : `Quote ${QG.quoteNumber} generated and saved successfully!`);
+    showAlert(isEdit ? `Quote ${QG.quoteNumber} updated successfully!` : `Quote ${QG.quoteNumber} generated and saved successfully!`, { type: 'success', title: 'Quote Saved!' });
     await window.printQuote();
     // Reset & get new number
     resetQuoteForm();
     document.getElementById('qtab-myquotes')?.click();
   } catch (e) {
-    alert('Failed to save quote: ' + e.message);
+    showAlert('Failed to save quote: ' + e.message, { type: 'error', title: 'Save Failed' });
   }
 }
 
 // -- Save Draft ---------------------------------------------
 async function saveDraft(e, silent = false) {
   const validItems = QG.skuItems.filter(i => i.sku_key);
-  if (validItems.length === 0) { alert('Select a SKU before saving a draft.'); return; }
+  if (validItems.length === 0) { showAlert('Select a SKU before saving a draft.', { type: 'warning', title: 'No SKU' }); return; }
   const firstSku = SKUS.find(s => s.key === validItems[0].sku_key);
 
   const draftData = {
@@ -2916,7 +2916,7 @@ async function saveDraft(e, silent = false) {
       // Optional: alert('Draft saved! You can resume it from the Drafts tab.');
     }
   } catch (e) {
-    if (!silent) alert('Failed to save draft.');
+    if (!silent) showAlert('Failed to save draft.', { type: 'error', title: 'Draft Error' });
   }
 }
 
@@ -3095,7 +3095,7 @@ window.viewQuoteHistory = async function (id, qNumber) {
     }
     document.getElementById('quote-history-modal').classList.remove('hidden');
   } catch (e) {
-    alert('Failed to load version history.');
+    showAlert('Failed to load version history.', { type: 'error', title: 'Error' });
   }
 };
 
@@ -3202,7 +3202,7 @@ window.printHistoricalQuote = async function (id) {
         q = adminQuotes.find(x => x.id === id);
       }
     }
-    if (!q) return alert('Quote not found.');
+    if (!q) return showAlert('Quote not found.', { type: 'error', title: 'Not Found' });
 
     // Track which tab was active so we can restore it
     const activeTab = document.querySelector('.quote-tab.active');
@@ -3274,7 +3274,7 @@ window.printHistoricalQuote = async function (id) {
     }, 300); // Only a brief 300ms wait to ensure CSS/DOM parsed
   } catch (e) {
     console.error(e);
-    alert('Failed to generate PDF for historical quote.');
+    showAlert("Failed to generate PDF for historical quote.", { type: 'error', title: 'PDF Error' });
   }
 };
 
@@ -3296,7 +3296,7 @@ window.viewQuote = async function (id) {
       }
     }
 
-    if (!q) { alert('Quote not found or permission denied.'); return; }
+    if (!q) { showAlert('Quote not found or permission denied.', { type: 'error', title: 'Not Found' }); return; }
 
     const data = typeof q.quote_data === 'string' ? JSON.parse(q.quote_data) : q.quote_data;
 
@@ -3374,7 +3374,7 @@ window.viewQuote = async function (id) {
 
   } catch (e) {
     console.error(e);
-    alert('Failed to load quote details.');
+    showAlert('Failed to load quote details.', { type: 'error', title: 'Error' });
   }
 };
 
@@ -3453,7 +3453,7 @@ window.resumeDraft = async function (id) {
       }
       updatePreview();
     }, 400);
-  } catch (e) { alert('Failed to resume draft.'); }
+  } catch (e) { showAlert('Failed to resume draft.', { type: 'error', title: 'Error' }); }
 };
 
 window.deleteDraft = async function (id) {
@@ -3578,7 +3578,7 @@ window.submitSkuRequestForm = async function () {
   const btn = document.getElementById('q-sku-request-submit');
 
   if (!name) {
-    alert('Please enter a SKU name.');
+    showAlert('Please enter a SKU name.', { type: 'warning', title: 'Missing Name' });
     return;
   }
 
@@ -3592,7 +3592,7 @@ window.submitSkuRequestForm = async function () {
     });
 
     if (res.ok) {
-      alert('SKU request submitted successfully!');
+      showAlert('SKU request submitted successfully!', { type: 'success', title: 'Request Sent!' });
       closeSkuRequestModal();
       updateNavCounters();
       // If admin is viewing the tab, refresh it
@@ -3601,7 +3601,7 @@ window.submitSkuRequestForm = async function () {
       throw new Error('Failed to submit request');
     }
   } catch (e) {
-    alert('Error submitting request: ' + e.message);
+    showAlert('Error submitting request: ' + e.message, { type: 'error', title: 'Error' });
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -3683,7 +3683,7 @@ window.resolveSkuRequest = async function (id, btn) {
         btn.disabled = false;
         btn.style.opacity = '1';
         btn.textContent = 'Retry';
-        alert('Failed: ' + (err.error || 'Check console'));
+        showAlert('Failed: ' + (err.error || 'Check console'), { type: 'error', title: 'Error' });
       }
     }
   } catch (e) {
@@ -3692,7 +3692,7 @@ window.resolveSkuRequest = async function (id, btn) {
       btn.disabled = false;
       btn.style.opacity = '1';
       btn.textContent = 'Error';
-      alert('Network Error connecting to server.');
+      showAlert('Network Error connecting to server.', { type: 'error', title: 'Network Error' });
     }
   }
 };
@@ -3734,30 +3734,30 @@ function resetQuoteForm() {
 
 // -- Reset Quote Counter ------------------------------------
 window.resetMyCounter = async function () {
-  if (!confirm('Reset your quote counter? Your next quote number will start fresh from -01. This does NOT delete any existing quotes.')) return;
+  if (!await showConfirm('Reset your quote counter? Your next quote number will start fresh from -01. This does NOT delete any existing quotes.', { title: 'Reset Counter', confirmText: 'Reset', type: 'warning', danger: false })) return;
   try {
     const res = await fetch('/api/quotes/reset-counter', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed');
     // Get a fresh quote number immediately
     await initQuoteNumber();
-    alert('Quote counter reset! Your next quote number is: ' + (document.getElementById('q-quote-number')?.textContent || ''));
+    showAlert('Quote counter reset! Your next quote number is: ' + (document.getElementById('q-quote-number')?.textContent || ''), { type: 'success', title: 'Counter Reset' });
   } catch (e) {
-    alert('Failed to reset counter: ' + e.message);
+    showAlert('Failed to reset counter: ' + e.message, { type: 'error', title: 'Error' });
   }
 };
 
 // -- Reset ALL Counters (admin only) ------------------------
 window.resetAllCounters = async function () {
-  if (!confirm('ADMIN: Reset ALL users quote counters to 0? This affects everyone. Proceed?')) return;
+  if (!await showConfirm('ADMIN: Reset ALL users quote counters to 0? This affects everyone. Proceed?', { title: 'Admin Reset All Counters', confirmText: 'Reset All', danger: true, type: 'warning' })) return;
   try {
     const res = await fetch('/api/admin/reset-all-counters', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Failed');
     await initQuoteNumber();
-    alert('All quote counters have been reset! Next quote number: ' + (document.getElementById('q-quote-number')?.textContent || ''));
+    showAlert('All quote counters have been reset! Next quote number: ' + (document.getElementById('q-quote-number')?.textContent || ''), { type: 'success', title: 'Reset Done' });
   } catch (e) {
-    alert('Failed: ' + e.message);
+    showAlert('Failed: ' + e.message, { type: 'error', title: 'Error' });
   }
 };
 
@@ -3939,7 +3939,7 @@ function setupAIVoice() {
           };
         } catch (e) {
           console.error(e);
-          alert('Failed to parse quote: ' + e.message);
+          showAlert('Failed to parse quote: ' + e.message, { type: 'error', title: 'Parse Error' });
           overlay.classList.add('hidden');
         }
       };
@@ -3948,7 +3948,7 @@ function setupAIVoice() {
 
     } catch (e) {
       console.error("Microphone access denied or error:", e);
-      alert('Could not access microphone: ' + e.message);
+      showAlert('Could not access microphone: ' + e.message, { type: 'error', title: 'Mic Error' });
     }
   });
 
@@ -3970,7 +3970,7 @@ function applyAIParsedQuote(data) {
   }
 
   if (!data.skus || data.skus.length === 0) {
-    alert("AI couldn't extract any recognizable product plans from your dictation.");
+    showAlert("AI couldn't extract any recognizable product plans from your dictation.", { type: 'warning', title: 'No Plans Found' });
     return;
   }
 
@@ -4114,7 +4114,7 @@ function applyAIParsedQuote(data) {
     }
     
     updatePreview();
-    alert('Quote Auto-Generated Successfully from Voice AI! Check the right preview panel.');
+    showAlert('Quote Auto-Generated Successfully from Voice AI! Check the right preview panel.', { type: 'success', title: 'Voice Quote Ready!' });
   }, 250);
 }
 
@@ -4203,8 +4203,8 @@ function setupQuoteGenerator() {
   // Generate
   document.getElementById('q-btn-generate')?.addEventListener('click', generateQuote);
   document.getElementById('q-btn-draft')?.addEventListener('click', saveDraft);
-  document.getElementById('q-btn-reset')?.addEventListener('click', () => {
-    if (confirm('Reset all fields and start a new quote?')) {
+  document.getElementById('q-btn-reset')?.addEventListener('click', async () => {
+    if (await showConfirm('Reset all fields and start a new quote?', { title: 'New Quote', confirmText: 'Start Fresh', type: 'confirm' })) {
       resetQuoteForm();
     }
   });

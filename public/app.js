@@ -518,7 +518,7 @@ async function makeExotelRequest(endpointPath, method = 'GET', data = null, isFo
 }
 
 // ==========================================
-// Toast Notification System
+// Toast & Modal Notification System
 // ==========================================
 function showToast(message, type = 'error') {
     let container = document.getElementById('toast-container');
@@ -537,13 +537,239 @@ function showToast(message, type = 'error') {
     setTimeout(() => { if (toast.parentElement) toast.remove(); }, 5000);
 }
 
-// Inject toast animation if not present
-if (!document.getElementById('toast-style')) {
-    const s = document.createElement('style');
-    s.id = 'toast-style';
-    s.textContent = '@keyframes slideInRight { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }';
-    document.head.appendChild(s);
-}
+// ==========================================
+// In-House Modal Popup System
+// Replaces browser alert() / confirm() / prompt()
+// ==========================================
+(function() {
+    // Inject polished modal CSS
+    if (!document.getElementById('isd-modal-style')) {
+        const style = document.createElement('style');
+        style.id = 'isd-modal-style';
+        style.textContent = `
+        @keyframes slideInRight { from { opacity:0; transform:translateX(40px); } to { opacity:1; transform:translateX(0); } }
+        .isd-overlay {
+            position:fixed; inset:0; z-index:199999;
+            background:rgba(15,23,42,0.55);
+            backdrop-filter:blur(4px);
+            display:flex; align-items:center; justify-content:center;
+            animation:isdFadeIn 0.15s ease;
+        }
+        .isd-overlay.closing { animation:isdFadeOut 0.15s ease forwards; }
+        .isd-modal {
+            background:#ffffff; border-radius:16px;
+            padding:28px 28px 24px;
+            max-width:420px; width:calc(100% - 40px);
+            box-shadow:0 24px 60px -10px rgba(0,0,0,0.25),0 0 0 1px rgba(0,0,0,0.04);
+            animation:isdSlideUp 0.18s cubic-bezier(0.34,1.56,0.64,1);
+            font-family:'Inter',sans-serif;
+        }
+        .isd-overlay.closing .isd-modal { animation:isdSlideDown 0.15s ease forwards; }
+        .isd-modal-icon {
+            width:44px; height:44px; border-radius:12px;
+            display:flex; align-items:center; justify-content:center;
+            margin-bottom:14px; font-size:1.3rem;
+        }
+        .isd-modal-icon.info    { background:#eff6ff; color:#2563eb; }
+        .isd-modal-icon.success { background:#f0fdf4; color:#16a34a; }
+        .isd-modal-icon.warning { background:#fffbeb; color:#d97706; }
+        .isd-modal-icon.error   { background:#fef2f2; color:#dc2626; }
+        .isd-modal-icon.prompt  { background:#f0f9ff; color:#0284c7; }
+        .isd-modal-icon.confirm { background:#fef3c7; color:#b45309; }
+        .isd-modal-title { font-size:1.1rem; font-weight:700; color:#0f172a; margin:0 0 8px 0; }
+        .isd-modal-message { font-size:0.92rem; color:#475569; line-height:1.55; margin:0 0 20px 0; }
+        .isd-modal-input {
+            width:100%; padding:10px 14px;
+            border:1.5px solid #cbd5e1; border-radius:8px;
+            font-size:0.95rem; font-family:'Inter',sans-serif; color:#0f172a;
+            background:#f8fafc; margin-bottom:20px; box-sizing:border-box;
+            outline:none; transition:border-color 0.15s;
+        }
+        .isd-modal-input:focus { border-color:#0284c7; background:#fff; }
+        .isd-modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+        .isd-btn {
+            padding:9px 20px; border-radius:8px; font-size:0.9rem;
+            font-weight:600; cursor:pointer; border:none;
+            font-family:'Inter',sans-serif; transition:all 0.15s;
+        }
+        .isd-btn-primary { background:#0284c7; color:#fff; }
+        .isd-btn-primary:hover { background:#0369a1; transform:translateY(-1px); }
+        .isd-btn-danger  { background:#ef4444; color:#fff; }
+        .isd-btn-danger:hover  { background:#dc2626; transform:translateY(-1px); }
+        .isd-btn-cancel  { background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; }
+        .isd-btn-cancel:hover  { background:#e2e8f0; }
+        @keyframes isdFadeIn   { from{opacity:0} to{opacity:1} }
+        @keyframes isdFadeOut  { from{opacity:1} to{opacity:0} }
+        @keyframes isdSlideUp  { from{opacity:0;transform:translateY(16px) scale(0.97)} to{opacity:1;transform:translateY(0) scale(1)} }
+        @keyframes isdSlideDown{ from{opacity:1;transform:translateY(0)} to{opacity:0;transform:translateY(12px)} }
+        `;
+        document.head.appendChild(style);
+    }
+
+    function _closeOverlay(overlay, cb) {
+        overlay.classList.add('closing');
+        setTimeout(() => { overlay.remove(); if(cb) cb(); }, 150);
+    }
+
+    function _iconSvg(type) {
+        const icons = {
+            info:    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>',
+            success: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+            warning: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+            error:   '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+            confirm: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+            prompt:  '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+        };
+        return icons[type] || icons.info;
+    }
+
+    /**
+     * showAlert(message, { title, type }) → Promise<void>
+     * type: 'info' | 'success' | 'warning' | 'error'
+     */
+    window.showAlert = function(message, { title = '', type = 'info' } = {}) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'isd-overlay';
+            overlay.innerHTML = `
+                <div class="isd-modal" role="dialog" aria-modal="true">
+                    <div class="isd-modal-icon ${type}">${_iconSvg(type)}</div>
+                    ${title ? `<div class="isd-modal-title">${title}</div>` : ''}
+                    <p class="isd-modal-message">${message}</p>
+                    <div class="isd-modal-actions">
+                        <button class="isd-btn isd-btn-primary" id="isd-ok">OK</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const btn = overlay.querySelector('#isd-ok');
+            btn.focus();
+            const close = () => _closeOverlay(overlay, resolve);
+            btn.addEventListener('click', close);
+            overlay.addEventListener('keydown', e => { if(e.key==='Enter'||e.key==='Escape') close(); });
+        });
+    };
+
+    /**
+     * showConfirm(message, { title, type, confirmText, cancelText, danger }) → Promise<boolean>
+     */
+    window.showConfirm = function(message, { title = 'Confirm', type = 'confirm', confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'isd-overlay';
+            const btnClass = danger ? 'isd-btn-danger' : 'isd-btn-primary';
+            overlay.innerHTML = `
+                <div class="isd-modal" role="dialog" aria-modal="true">
+                    <div class="isd-modal-icon ${type}">${_iconSvg(type)}</div>
+                    ${title ? `<div class="isd-modal-title">${title}</div>` : ''}
+                    <p class="isd-modal-message">${message}</p>
+                    <div class="isd-modal-actions">
+                        <button class="isd-btn isd-btn-cancel" id="isd-cancel">${cancelText}</button>
+                        <button class="isd-btn ${btnClass}" id="isd-confirm">${confirmText}</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const btnConfirm = overlay.querySelector('#isd-confirm');
+            const btnCancel  = overlay.querySelector('#isd-cancel');
+            btnCancel.focus();
+            btnConfirm.addEventListener('click', () => _closeOverlay(overlay, () => resolve(true)));
+            btnCancel.addEventListener('click',  () => _closeOverlay(overlay, () => resolve(false)));
+            overlay.addEventListener('keydown', e => {
+                if(e.key==='Escape') _closeOverlay(overlay, () => resolve(false));
+                if(e.key==='Enter')  _closeOverlay(overlay, () => resolve(true));
+            });
+        });
+    };
+
+    /**
+     * showPrompt(message, defaultValue, { title }) → Promise<string|null>
+     * Returns null if cancelled.
+     */
+    window.showPrompt = function(message, defaultValue = '', { title = '' } = {}) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.className = 'isd-overlay';
+            overlay.innerHTML = `
+                <div class="isd-modal" role="dialog" aria-modal="true">
+                    <div class="isd-modal-icon prompt">${_iconSvg('prompt')}</div>
+                    ${title ? `<div class="isd-modal-title">${title}</div>` : ''}
+                    <p class="isd-modal-message">${message}</p>
+                    <input class="isd-modal-input" id="isd-prompt-input" type="text" value="" autocomplete="off">
+                    <div class="isd-modal-actions">
+                        <button class="isd-btn isd-btn-cancel" id="isd-cancel">Cancel</button>
+                        <button class="isd-btn isd-btn-primary" id="isd-ok">OK</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const input     = overlay.querySelector('#isd-prompt-input');
+            const btnOk     = overlay.querySelector('#isd-ok');
+            const btnCancel = overlay.querySelector('#isd-cancel');
+            input.value = defaultValue;
+            input.focus();
+            input.select();
+            const submit = () => _closeOverlay(overlay, () => resolve(input.value));
+            const cancel = () => _closeOverlay(overlay, () => resolve(null));
+            btnOk.addEventListener('click', submit);
+            btnCancel.addEventListener('click', cancel);
+            input.addEventListener('keydown', e => { if(e.key==='Enter') submit(); if(e.key==='Escape') cancel(); });
+        });
+    };
+})();
+
+// ==========================================
+// Click Sound Engine (Web Audio API)
+// ==========================================
+(function() {
+    let _ctx = null;
+    function _getCtx() {
+        if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+        return _ctx;
+    }
+    function playClickSound(type = 'default') {
+        try {
+            const ctx = _getCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            const now = ctx.currentTime;
+            if (type === 'danger') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(160, now + 0.08);
+                gain.gain.setValueAtTime(0.08, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+                osc.start(now); osc.stop(now + 0.12);
+            } else if (type === 'success') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(660, now);
+                osc.frequency.setValueAtTime(880, now + 0.06);
+                gain.gain.setValueAtTime(0.07, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+                osc.start(now); osc.stop(now + 0.2);
+            } else {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(520, now);
+                osc.frequency.exponentialRampToValueAtTime(440, now + 0.05);
+                gain.gain.setValueAtTime(0.06, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+                osc.start(now); osc.stop(now + 0.08);
+            }
+        } catch(e) { /* audio unavailable */ }
+    }
+    window.playClickSound = playClickSound;
+    document.addEventListener('click', function(e) {
+        const target = e.target.closest('button, .btn, .nav-item, .app-card, .use-case-card, .auth-btn, [role="button"]');
+        if (!target) return;
+        const isDanger  = target.classList.contains('btn-reset') || target.classList.contains('btn-danger') ||
+                          target.classList.contains('isd-btn-danger') ||
+                          /delete|reset/i.test(target.textContent);
+        const isSuccess = target.classList.contains('btn-primary') ||
+                          target.id === 'isd-confirm' || target.id === 'isd-ok';
+        if (isDanger) playClickSound('danger');
+        else if (isSuccess) playClickSound('success');
+        else playClickSound('default');
+    }, { passive: true });
+})();
 
 // ==========================================
 // Terminal Logger
@@ -614,7 +840,7 @@ function setupUsersApplet() {
         const fromNum = els.quickVerifyFrom.value.trim();
 
         if (!fromNum) {
-            alert("Please enter a Phone Number to verify.");
+            showAlert("Please enter a Phone Number to verify.", { type: 'warning', title: 'Missing Input' });
             return;
         }
 
@@ -657,7 +883,7 @@ function setupUsersApplet() {
 // Global drag-drop handler for Add Users CSV
 window.handleDroppedCsv = function(file) {
     if (!file || !file.name.endsWith('.csv')) {
-        alert('Please drop a valid .csv file.');
+        showAlert('Please drop a valid .csv file.', { type: 'warning', title: 'Invalid File' });
         return;
     }
     document.getElementById('csv-filename-label').textContent = `✓ ${file.name}`;
@@ -796,7 +1022,7 @@ async function processSelectedUsers() {
 
     const checkboxes = document.querySelectorAll('.user-checkbox:checked');
     if (checkboxes.length === 0) {
-        alert("Please select at least one user to process.");
+        showAlert("Please select at least one user to process.", { type: 'warning', title: 'Nothing Selected' });
         return;
     }
 
@@ -885,7 +1111,7 @@ let verifyBatchNumbers = [];
 
 window.handleVerifyCsvDrop = function(file) {
     if (!file || !file.name.endsWith('.csv')) {
-        alert('Please provide a valid .csv file.');
+        showAlert('Please provide a valid .csv file.', { type: 'warning', title: 'Invalid File' });
         return;
     }
     document.getElementById('verify-csv-filename').textContent = `✓ ${file.name}`;
@@ -920,7 +1146,7 @@ window.handleVerifyCsvDrop = function(file) {
             if (verifyCsvFile) verifyCsvFile.value = '';
         },
         error: function(err) {
-            alert('Error parsing CSV: ' + err.message);
+            showAlert('Error parsing CSV: ' + err.message, { type: 'error', title: 'Parse Error' });
             const verifyCsvFile = document.getElementById('verify-csv-file');
             if (verifyCsvFile) verifyCsvFile.value = '';
         }
@@ -929,7 +1155,7 @@ window.handleVerifyCsvDrop = function(file) {
 
 async function runBatchVerification() {
     if (verifyBatchNumbers.length === 0) {
-        alert('No numbers loaded. Please upload a CSV first.');
+        showAlert('No numbers loaded. Please upload a CSV first.', { type: 'warning', title: 'No Data' });
         return;
     }
     const btn = document.getElementById('btn-verify-batch');
@@ -1070,17 +1296,16 @@ function downloadExophonesCsv() {
 }
 
 
-
 async function allocateExophones() {
     const count = parseInt(els.exoAllocateCount.value || 0);
 
-    if (count <= 0) {
-        alert("Enter a valid number of exophones to allocate");
+    if (!count || count < 1) {
+        showAlert("Enter a valid number of exophones to allocate", { type: 'warning', title: 'Invalid Input' });
         return;
     }
 
     if (availableExophones.length < count) {
-        alert(`You requested to allocate ${count} numbers, but only ${availableExophones.length} are currently available. Please fetch numbers first or reduce the batch size.`);
+        showAlert(`You requested to allocate ${count} numbers, but only ${availableExophones.length} are currently available. Please fetch numbers first or reduce the batch size.`, { type: 'warning', title: 'Not Enough Numbers' });
         return;
     }
 
@@ -1113,13 +1338,13 @@ async function allocateExophones() {
 
     els.btnAllocateExo.disabled = false;
     logTerminal(`Allocation process complete.`, 'success');
-    alert(`Allocation process complete. Check Logs for details.`);
+    showAlert(`Allocation process complete. Check Logs for details.`, { type: 'success', title: 'Done!' });
     fetchLogs();
     fetchExophones();
 }
 
 async function allocateSingleExo(phoneNumber) {
-    if (!confirm(`Are you sure you want to allocate ${phoneNumber} to your account?`)) return;
+    if (!await showConfirm(`Are you sure you want to allocate ${phoneNumber} to your account?`, { title: 'Confirm Allocation', confirmText: 'Allocate' })) return;
 
     logTerminal(`Requesting allocation for ${phoneNumber}...`, 'info');
     try {
@@ -1127,12 +1352,12 @@ async function allocateSingleExo(phoneNumber) {
         formData.append('PhoneNumber', phoneNumber);
         await makeExotelRequest(`/v2_beta/Accounts/{sid}/IncomingPhoneNumbers`, 'POST', formData.toString(), true);
         logTerminal(`${phoneNumber} Allocated successfully!`, 'success');
-        alert(`Success! Number ${phoneNumber} has been allocated to your account.`);
+        showAlert(`Success! Number ${phoneNumber} has been allocated to your account.`, { type: 'success', title: 'Allocated!' });
         fetchLogs();
         fetchExophones(); // Refresh the list
     } catch (error) {
         logTerminal(`Failed to allocate ${phoneNumber}: ${error.message}`, 'error');
-        alert(`Failed to allocate: ${error.message}`);
+        showAlert(`Failed to allocate: ${error.message}`, { type: 'error', title: 'Allocation Failed' });
     }
 }
 
@@ -1448,7 +1673,7 @@ function setupFeedbackSystem() {
     btnSubmit?.addEventListener('click', async () => {
         const message = textarea.value.trim();
         if (!message) {
-            alert('Please enter a message before sending.');
+            showAlert('Please enter a message before sending.', { type: 'warning', title: 'Empty Message' });
             return;
         }
 
@@ -1463,13 +1688,13 @@ function setupFeedbackSystem() {
             });
 
             if (res.ok) {
-                alert('Success! Your feedback has been sent to the developer.');
+                showAlert('Your feedback has been sent to the developer. Thank you!', { type: 'success', title: 'Feedback Sent!' });
                 closeModal();
             } else {
                 throw new Error('Failed to send feedback');
             }
         } catch (e) {
-            alert('Error: ' + e.message);
+            showAlert('Error: ' + e.message, { type: 'error', title: 'Send Failed' });
         } finally {
             btnSubmit.disabled = false;
             btnSubmit.textContent = 'Send Feedback';
@@ -1544,16 +1769,16 @@ async function fetchDevFeedback() {
 }
 
 window.deleteFeedback = async function(id) {
-    if (!confirm('Are you sure you want to delete this feedback?')) return;
+    if (!await showConfirm('Are you sure you want to delete this feedback?', { title: 'Delete Feedback', confirmText: 'Delete', danger: true, type: 'warning' })) return;
     try {
         const res = await fetch(`/api/admin/dev-feedback/${id}/delete`, { method: 'POST' });
         if (res.ok) {
             fetchDevFeedback();
         } else {
-            alert('Failed to delete feedback');
+            showAlert('Failed to delete feedback', { type: 'error', title: 'Error' });
         }
     } catch (e) {
-        alert('Error: ' + e.message);
+        showAlert('Error: ' + e.message, { type: 'error', title: 'Error' });
     }
 };
 
