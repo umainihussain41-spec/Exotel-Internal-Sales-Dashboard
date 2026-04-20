@@ -792,6 +792,39 @@
                 <div id="admin-log-quotes-panel" class="hidden">
                     <div id="admin-logs-quotes-list" style="display:flex; flex-direction:column; gap:8px;"></div>
                 </div>
+
+                <!-- ── Danger Zone ─────────────────────────────────────── -->
+                <div id="admin-danger-zone" style="margin-top:40px; border:1.5px solid #fecaca; border-radius:14px; overflow:hidden;">
+                    <div style="background:linear-gradient(135deg,#fff5f5 0%,#fef2f2 100%); padding:18px 22px; border-bottom:1px solid #fecaca; display:flex; align-items:center; gap:12px;">
+                        <div style="width:36px; height:36px; background:#fef2f2; border:1px solid #fca5a5; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <div style="font-weight:700; color:#991b1b; font-size:0.95rem; letter-spacing:0.01em;">Danger Zone</div>
+                            <div style="font-size:0.8rem; color:#b91c1c; margin-top:1px;">Irreversible actions. Proceed with extreme caution.</div>
+                        </div>
+                    </div>
+                    <div style="padding:20px 22px; background:#fff; display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap;">
+                        <div>
+                            <div style="font-weight:600; color:#1e293b; font-size:0.93rem; margin-bottom:4px;">Reset Entire Database</div>
+                            <div style="font-size:0.83rem; color:#64748b; max-width:480px; line-height:1.5;">
+                                Permanently deletes <strong>all</strong> quotes, drafts, logs, SKUs, approval requests, user profiles, and feedback.
+                                The application schema is preserved — no restart required. This action <strong>cannot be undone</strong>.
+                            </div>
+                        </div>
+                        <button id="btn-reset-db"
+                            style="flex-shrink:0; display:inline-flex; align-items:center; gap:8px; padding:10px 20px; background:#dc2626; color:#fff; border:none; border-radius:8px; font-size:0.9rem; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s, transform 0.1s; white-space:nowrap;"
+                            onmouseover="this.style.background='#b91c1c'"
+                            onmouseout="this.style.background='#dc2626'">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                            </svg>
+                            Reset Database
+                        </button>
+                    </div>
+                </div>
             </section>
 
             <!-- ==========================================

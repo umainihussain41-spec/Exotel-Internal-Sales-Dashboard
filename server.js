@@ -679,6 +679,32 @@ app.post('/api/admin/reset-all-counters', ensureAuthenticated, ensureAdmin, (req
     }
 });
 
+// ─── Admin: Full Database Reset ──────────────────────────────────────────────
+// Wipes ALL data from every table. Schema is preserved; no server restart needed.
+app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => {
+    const callerEmail = req.user?.emails?.[0]?.value;
+    try {
+        db.transaction(() => {
+            db.prepare(`DELETE FROM quote_versions`).run();
+            db.prepare(`DELETE FROM quotes`).run();
+            db.prepare(`DELETE FROM drafts`).run();
+            db.prepare(`DELETE FROM sku_requests`).run();
+            db.prepare(`DELETE FROM skus`).run();
+            db.prepare(`DELETE FROM approval_requests`).run();
+            db.prepare(`DELETE FROM dev_feedback`).run();
+            db.prepare(`DELETE FROM logs`).run();
+            db.prepare(`DELETE FROM user_profiles`).run();
+        })();
+        // Write one bootstrap audit log AFTER the wipe so we know who did it
+        addLog('DB_RESET', 'WARNING', `Full database reset performed by ${callerEmail}`, callerEmail);
+        console.warn(`[SECURITY] Full DB reset by ${callerEmail} at ${new Date().toISOString()}`);
+        res.json({ success: true, message: 'Database has been fully reset. All data has been erased.' });
+    } catch (e) {
+        console.error('[DB RESET ERROR]', e);
+        res.status(500).json({ error: 'Failed to reset database: ' + e.message });
+    }
+});
+
 // ─── Developer Feedback ──────────────────────────────────────────────────────
 app.post('/api/feedback', ensureAuthenticated, (req, res) => {
     const email = req.user?.emails?.[0]?.value;

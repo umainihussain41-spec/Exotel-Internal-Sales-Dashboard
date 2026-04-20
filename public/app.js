@@ -799,6 +799,17 @@ function logTerminal(message, type = 'info') {
 }
 
 // ==========================================
+// 🚧 Under-Construction Guard
+// ==========================================
+function _wip(featureName) {
+    showAlert(
+        `<strong>${featureName || 'This feature'}</strong> is currently <strong>under construction</strong> and will be available in a future update.<br><br>` +
+        `<span style="font-size:0.85em;color:#64748b;">The UI is live and fully functional — the backend integration for this section is still being wired up. Stay tuned! 🚀</span>`,
+        { title: '🚧 Under Construction', type: 'warning' }
+    );
+}
+
+// ==========================================
 // Users Applet Logic
 // ==========================================
 function setupUsersApplet() {
@@ -837,6 +848,7 @@ function setupUsersApplet() {
 
     // Quick Verify logic
     els.btnQuickVerify.addEventListener('click', async () => {
+        _wip('Single Number Verification'); return; // 🚧 Under Construction
         const fromNum = els.quickVerifyFrom.value.trim();
 
         if (!fromNum) {
@@ -877,7 +889,7 @@ function setupUsersApplet() {
         });
     }
     const btnVerifyBatch = document.getElementById('btn-verify-batch');
-    if (btnVerifyBatch) btnVerifyBatch.addEventListener('click', runBatchVerification);
+    if (btnVerifyBatch) btnVerifyBatch.addEventListener('click', () => { _wip('Batch Number Verification'); }); // 🚧 Under Construction
 }
 
 // Global drag-drop handler for Add Users CSV
@@ -1006,6 +1018,7 @@ function renderUsersPreview() {
 }
 
 async function processSelectedUsers() {
+    _wip('Sync Users'); return; // 🚧 Under Construction
     if (isProcessing) return;
 
     // Additional safeguard before making batch POST requests
@@ -1186,9 +1199,9 @@ async function runBatchVerification() {
 // Exophones Applet Logic
 // ==========================================
 function setupExophonesApplet() {
-    els.btnFetchExo.addEventListener('click', fetchExophones);
+    els.btnFetchExo.addEventListener('click', () => { _wip('Fetch Available Numbers'); }); // 🚧 Under Construction
     els.btnDownloadExo.addEventListener('click', downloadExophonesCsv);
-    els.btnAllocateExo.addEventListener('click', allocateExophones);
+    els.btnAllocateExo.addEventListener('click', () => { _wip('Allocate Exophones'); }); // 🚧 Under Construction
 }
 
 async function fetchExophones() {
@@ -1344,6 +1357,7 @@ async function allocateExophones() {
 }
 
 async function allocateSingleExo(phoneNumber) {
+    _wip('Allocate Exophone'); return; // 🚧 Under Construction
     if (!await showConfirm(`Are you sure you want to allocate ${phoneNumber} to your account?`, { title: 'Confirm Allocation', confirmText: 'Allocate' })) return;
 
     logTerminal(`Requesting allocation for ${phoneNumber}...`, 'info');
@@ -1582,6 +1596,50 @@ function setupAdminPanel() {
     // Date pickers re-fetch from server (server-side filtering)
     document.getElementById('admin-log-from')?.addEventListener('change', fetchAdminLogs);
     document.getElementById('admin-log-to')?.addEventListener('change', fetchAdminLogs);
+
+    // ── Reset DB button ───────────────────────────────────────────────────────
+    document.getElementById('btn-reset-db')?.addEventListener('click', async () => {
+        // Step 1: primary warning confirm
+        const step1 = await showConfirm(
+            'This will permanently erase <strong>all</strong> quotes, drafts, logs, SKUs, approval requests, user profiles, and feedback from the database.<br><br>This action <strong>cannot be undone</strong>.',
+            { title: '⚠️ Reset Entire Database?', type: 'warning', confirmText: 'Yes, continue', cancelText: 'Cancel', danger: true }
+        );
+        if (!step1) return;
+
+        // Step 2: final typed-confirmation guard
+        const typed = await showPrompt(
+            'Type <strong>RESET</strong> in all-caps to confirm you want to permanently wipe all data.',
+            '',
+            { title: 'Final Confirmation Required' }
+        );
+        if (typed === null) return; // cancelled
+        if (typed.trim() !== 'RESET') {
+            showAlert('Confirmation text did not match. Database reset cancelled.', { type: 'info', title: 'Cancelled' });
+            return;
+        }
+
+        // Disable button during request
+        const btn = document.getElementById('btn-reset-db');
+        if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+
+        try {
+            const res = await fetch('/api/admin/reset-db', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                playClickSound('danger');
+                await showAlert(
+                    'The database has been fully reset. All data has been erased. The page will now reload.',
+                    { type: 'success', title: 'Database Reset Complete' }
+                );
+                window.location.reload();
+            } else {
+                throw new Error(data.error || 'Unknown error');
+            }
+        } catch (e) {
+            showAlert('Reset failed: ' + e.message, { type: 'error', title: 'Reset Failed' });
+            if (btn) { btn.disabled = false; btn.innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg> Reset Database`; }
+        }
+    });
 }
 
 async function fetchAdminLogs() {
