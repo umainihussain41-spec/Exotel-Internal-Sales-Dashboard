@@ -4256,17 +4256,16 @@ async function updateNavCounters() {
     if (QG.isAdmin) {
       fetches.push(fetch('/api/admin/approval-requests').catch(() => null));
       fetches.push(fetch('/api/admin/sku-requests').catch(() => null));
+      fetches.push(fetch('/api/quotes/admin').catch(() => null));
     }
 
-    const [qRes, dRes, aRes, sRes] = await Promise.all(fetches);
+    const [qRes, dRes, aRes, sRes, allQRes] = await Promise.all(fetches);
 
     if (qRes && qRes.ok) {
       const quotes = await qRes.json();
       const mine = quotes.filter(q => q.status !== 'deleted');
       const countEl = document.getElementById('my-quotes-count');
       if (countEl) countEl.textContent = mine.length;
-      const allEl = document.getElementById('all-quotes-count');
-      if (allEl) allEl.textContent = quotes.length;
     }
     if (dRes && dRes.ok) {
       const drafts = await dRes.json();
@@ -4285,6 +4284,11 @@ async function updateNavCounters() {
       const pending = skuReqs.filter(x => x.status === 'pending').length;
       const sBadge = document.getElementById('sku-requests-count');
       if (sBadge) sBadge.textContent = pending;
+    }
+    if (allQRes && allQRes.ok) {
+      const allQuotes = await allQRes.json();
+      const allEl = document.getElementById('all-quotes-count');
+      if (allEl) allEl.textContent = allQuotes.length;
     }
   } catch (e) { }
 }
