@@ -715,61 +715,6 @@ function showToast(message, type = 'error') {
     };
 })();
 
-// ==========================================
-// Click Sound Engine (Web Audio API)
-// ==========================================
-(function() {
-    let _ctx = null;
-    function _getCtx() {
-        if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
-        return _ctx;
-    }
-    function playClickSound(type = 'default') {
-        try {
-            const ctx = _getCtx();
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            const now = ctx.currentTime;
-            if (type === 'danger') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(220, now);
-                osc.frequency.exponentialRampToValueAtTime(160, now + 0.08);
-                gain.gain.setValueAtTime(0.08, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
-                osc.start(now); osc.stop(now + 0.12);
-            } else if (type === 'success') {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(660, now);
-                osc.frequency.setValueAtTime(880, now + 0.06);
-                gain.gain.setValueAtTime(0.07, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-                osc.start(now); osc.stop(now + 0.2);
-            } else {
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(520, now);
-                osc.frequency.exponentialRampToValueAtTime(440, now + 0.05);
-                gain.gain.setValueAtTime(0.06, now);
-                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-                osc.start(now); osc.stop(now + 0.08);
-            }
-        } catch(e) { /* audio unavailable */ }
-    }
-    window.playClickSound = playClickSound;
-    document.addEventListener('click', function(e) {
-        const target = e.target.closest('button, .btn, .nav-item, .app-card, .use-case-card, .auth-btn, [role="button"]');
-        if (!target) return;
-        const isDanger  = target.classList.contains('btn-reset') || target.classList.contains('btn-danger') ||
-                          target.classList.contains('isd-btn-danger') ||
-                          /delete|reset/i.test(target.textContent);
-        const isSuccess = target.classList.contains('btn-primary') ||
-                          target.id === 'isd-confirm' || target.id === 'isd-ok';
-        if (isDanger) playClickSound('danger');
-        else if (isSuccess) playClickSound('success');
-        else playClickSound('default');
-    }, { passive: true });
-})();
 
 // ==========================================
 // Terminal Logger
@@ -1626,7 +1571,6 @@ function setupAdminPanel() {
             const res = await fetch('/api/admin/reset-db', { method: 'POST' });
             const data = await res.json();
             if (res.ok && data.success) {
-                playClickSound('danger');
                 await showAlert(
                     'The database has been fully reset. All data has been erased. The page will now reload.',
                     { type: 'success', title: 'Database Reset Complete' }
