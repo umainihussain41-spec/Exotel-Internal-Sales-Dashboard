@@ -22,6 +22,7 @@ const QG = {
   activeItemId: null,      // id of item currently being edited
   lockedEntity: null,      // 'Exotel' | 'Veeno' | null - entity of first SKU selected
   compareMode: false,
+  multiSkuMode: false,     // true when multi-SKU quote mode is enabled
 };
 
 // ── SKU Definitions ────────────────────────────────────────
@@ -38,12 +39,13 @@ const I_HASH = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stro
 const SKUS = [
   { key: 'voice_exotel_std', label: 'Voice STD', sub: 'Minute Based', entity: 'Exotel', icon: I_PHONE, hasTiers: true },
   { key: 'voice_exotel_user', label: 'Voice User', sub: 'User Based', entity: 'Exotel', icon: I_USERS, hasTiers: false },
+  { key: 'voice_exotel_campaigns', label: 'Campaigns', sub: 'Single-leg Billing', entity: 'Exotel', icon: I_PHONE, hasTiers: true },
   { key: 'voice_exotel_tfn', label: 'Toll-Free (TFN)', sub: 'Exotel', entity: 'Exotel', icon: I_MOBILE, hasTiers: false },
   { key: 'voice_exotel_stream', label: 'Web Streaming', sub: 'WebSocket / Bot', entity: 'Exotel', icon: I_GLOBE, hasTiers: false },
   { key: 'sms_exotel', label: 'SMS Plan', sub: 'Exotel SMS', entity: 'Exotel', icon: I_MSG, hasTiers: false },
   { key: 'whatsapp_exotel', label: 'WhatsApp Plan', sub: 'Exotel WA', entity: 'Exotel', icon: I_WA, hasTiers: false },
   { key: 'rcs_exotel', label: 'RCS Plan', sub: 'Exotel RCS', entity: 'Exotel', icon: I_DIAMOND, hasTiers: false },
-  { key: 'voice_veeno_std', label: 'Voice STD', sub: 'Minute Based', entity: 'Veeno', icon: I_PHONE, hasTiers: true },
+  { key: 'voice_veeno_std', label: 'Voice STD', sub: 'Minute Based', entity: 'Veeno', icon: I_PHONE, hasTiers: false },
   { key: 'voice_veeno_user', label: 'Voice User', sub: 'User Based', entity: 'Veeno', icon: I_USERS, hasTiers: false },
   { key: 'sip_veeno', label: 'SIP Lines', sub: 'WebRTC / Browser', entity: 'Veeno', icon: I_MONITOR, hasTiers: true },
   { key: 'num_1400', label: '1400 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
@@ -1053,6 +1055,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'Call Credits (₹)', value: t.credits, locked: true, stopType: 'lower', stopVal: t.credits },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'single_leg', label: 'Single Leg Charge (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single },
         { id: 'incoming', label: 'Incoming (Single Leg) (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single },
         { id: 'outgoing', label: 'Outgoing (Double Leg) (p/min)', value: t.single_leg * 2, locked: true, stopType: 'lower', stopVal: t.stop_single * 2 },
@@ -1060,11 +1064,11 @@ function getSkuFields(skuKey, tier) {
       ];
     }
 
-    // ── Veeno STD (minute-based, user charge from user 1, no addons) ─
+    // ── Veeno STD (minute-based, flat ₹1,000/month rental, no tiers) ─
     case 'voice_veeno_std': {
       return [
-        { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
-        { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: false, stopType: 'lower', stopVal: 0, note: 'Can be waived' },
+        { id: 'validity', label: 'Validity (months)', value: 11, locked: false, stopType: 'lower', stopVal: 1 },
+        { id: 'rental', label: 'Account Rental (₹/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000, note: 'Flat rate, non-waiveable' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         // No free users - charged from first user, non-waiveable
@@ -1073,16 +1077,18 @@ function getSkuFields(skuKey, tier) {
           id: 'user_charge', label: 'User Charge (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000,
           note: 'Non-waiveable. Charged from user 1.'
         },
-        { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
         // DID option instead of landline
         { id: 'did_numbers', label: 'DID Numbers (optional)', value: 0, locked: false, note: '₹1,500/DID/month' },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
-        { id: 'credits', label: 'Call Credits (₹)', value: t.credits, locked: true, stopType: 'lower', stopVal: t.credits },
-        { id: 'single_leg', label: 'Single Leg Charge (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single },
-        { id: 'incoming', label: 'Incoming Calls', value: 'Free', locked: true, nonEditable: true },
-        { id: 'outgoing', label: 'Outgoing (Single Leg) (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single },
+        { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 4000 },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'single_leg', label: 'Single Leg Charge (p/min)', value: 52, locked: true, stopType: 'lower', stopVal: 52 },
+        { id: 'incoming', label: 'Incoming Call Charges (p/min, 0=Free)', value: 0, locked: false, stopType: 'lower', stopVal: 0, note: '0 means Free for client' },
+        { id: 'outgoing', label: 'Outgoing (Single Leg) (p/min)', value: 52, locked: true, stopType: 'lower', stopVal: 52 },
       ];
     }
 
@@ -1141,9 +1147,13 @@ function getSkuFields(skuKey, tier) {
         { id: 'num_channels', label: 'No. of Channels', value: 5, locked: true, stopType: 'lower', stopVal: 3 },
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 4000 },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
-        { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 5, locked: true, nonEditable: true },
+        { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 5, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
       ];
     case 'sms_exotel':
       return [
@@ -1196,9 +1206,11 @@ function getSkuFields(skuKey, tier) {
         { id: 'did_numbers', label: 'DID Numbers (optional)', value: 0, locked: false, note: '₹1,500/DID/month' },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: t2.credits, locked: true, stopType: 'lower', stopVal: t2.credits },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
-        { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 5, locked: true, nonEditable: true },
+        { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 5, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         // No SMS/WA addons for Veeno
       ];
     }
@@ -1214,6 +1226,26 @@ function getSkuFields(skuKey, tier) {
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 20000 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 50 },
       ];
+    case 'voice_exotel_campaigns': {
+      return [
+        { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
+        { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, nonEditable: true },
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
+        { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
+        { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'credits', label: 'Call Credits (₹)', value: t.credits, locked: true, stopType: 'lower', stopVal: t.credits },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'call_rate', label: 'Campaign Rate (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single, note: 'Single-leg: one charge per call per minute' },
+      ];
+    }
+    case 'voice_veeno_campaigns':
+      return [];
+
     default: return [];
   }
 }
@@ -1245,117 +1277,6 @@ function syncActiveAliases() {
   QG.stopLockOverrides = item.stopLockOverrides;
 }
 
-function renderSkuItemManager() {
-  const manager = document.getElementById('sku-item-manager');
-  const list = document.getElementById('sku-item-list');
-  const lockBadge = document.getElementById('sku-entity-lock-badge');
-  const lockName = document.getElementById('sku-entity-lock-name');
-  const hint = document.getElementById('sku-selector-hint');
-  if (!manager || !list) return;
-
-  // Show/hide panel
-  const hasSku = QG.skuItems.some(i => i.sku_key);
-  manager.style.display = hasSku || QG.skuItems.length > 1 ? '' : 'none';
-
-  // Entity lock badge
-  if (QG.lockedEntity && lockBadge && lockName) {
-    lockBadge.style.display = '';
-    lockName.textContent = QG.lockedEntity;
-    if (hint) hint.textContent = `Only ${QG.lockedEntity} plans can be added to this quote.`;
-  } else {
-    if (lockBadge) lockBadge.style.display = 'none';
-    if (hint) hint.textContent = 'Choose the product plan for this quote. The logo and entity will switch automatically.';
-  }
-
-  // Item rows
-  list.innerHTML = QG.skuItems.map((item, idx) => {
-    const sku = SKUS.find(s => s.key === item.sku_key);
-    const isActive = item.id === QG.activeItemId;
-    const label = sku ? `${sku.label}${item.sku_key && SKUS.find(s => s.key === item.sku_key)?.hasTiers ? ' · ' + (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)) : ''}` : 'Not configured';
-    const entityColor = sku?.entity === 'Veeno' ? '#be185d' : '#0369a1';
-    const entityBg = sku?.entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
-    return `
-      <div class="sku-item-row ${isActive ? 'active' : ''}" onclick="window.switchActiveItem('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1.5px solid ${isActive ? '#0284c7' : '#e2e8f0'};background:${isActive ? '#f0f9ff' : '#fff'};transition:all 0.15s;">
-        <div style="width:8px;height:8px;border-radius:50%;background:${isActive ? '#0284c7' : '#cbd5e1'};flex-shrink:0;"></div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sku ? sanitize(label) : '<span style="color:#94a3b8;font-style:italic;">Not configured</span>'}</div>
-          ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1}${sku ? ' · ' + sku.entity : ''}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
-        </div>
-        ${sku ? `<span style="padding:2px 7px;border-radius:20px;font-size:0.68rem;font-weight:700;background:${entityBg};color:${entityColor};">${sku.entity}</span>` : ''}
-        ${QG.skuItems.length > 1 ? `<button onclick="event.stopPropagation();window.removeSkuItem('${item.id}')" style="width:22px;height:22px;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;font-size:14px;line-height:1;" title="Remove">×</button>` : ''}
-      </div>`;
-  }).join('');
-}
-
-window.addSkuItem = function () {
-  const activeItem = getActiveItem();
-  if (!activeItem.sku_key) {
-    showAlert('Please select a SKU for the current item before adding another.', { type: 'warning', title: 'SKU Required' });
-    return;
-  }
-  const newId = 'item_' + Date.now();
-  const newItem = _makeItem(newId);
-  newItem.tier = QG.currentTier; // inherit tier
-  QG.skuItems.push(newItem);
-  QG.activeItemId = newId;
-  syncActiveAliases();
-  renderSkuItemManager();
-  renderSkuSelector(); // re-render filtered SKU grid
-  // Clear SKU selection highlight & config area for new item
-  document.querySelectorAll('.sku-option').forEach(el => el.classList.remove('selected'));
-  const cfgArea = document.getElementById('sku-config-area');
-  if (cfgArea) cfgArea.innerHTML = '';
-  // Scroll left panel to sku selector
-  document.getElementById('sku-selector-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-};
-
-window.removeSkuItem = function (itemId) {
-  if (QG.skuItems.length <= 1) return;
-  const idx = QG.skuItems.findIndex(i => i.id === itemId);
-  if (idx === -1) return;
-  QG.skuItems.splice(idx, 1);
-  // If we removed the active item, switch to first item
-  if (QG.activeItemId === itemId) {
-    QG.activeItemId = QG.skuItems[0].id;
-    syncActiveAliases();
-    // Re-render the form for the now-active item
-    if (QG.currentSku) {
-      selectSku(QG.currentSku);
-    } else {
-      document.querySelectorAll('.sku-option').forEach(el => el.classList.remove('selected'));
-      const cfgArea = document.getElementById('sku-config-area');
-      if (cfgArea) cfgArea.innerHTML = '';
-    }
-  }
-  // Update entity lock
-  const remaining = QG.skuItems.filter(i => i.sku_key);
-  QG.lockedEntity = remaining.length > 0 ? SKUS.find(s => s.key === remaining[0].sku_key)?.entity || null : null;
-  renderSkuItemManager();
-  renderSkuSelector();
-  updatePreview();
-};
-
-window.switchActiveItem = function (itemId) {
-  if (QG.activeItemId === itemId) return;
-  QG.activeItemId = itemId;
-  syncActiveAliases();
-  renderSkuItemManager();
-  // Re-render SKU selector with current active item's selection
-  renderSkuSelector();
-  // Re-render config form if item has a SKU
-  const cfgArea = document.getElementById('sku-config-area');
-  if (QG.currentSku) {
-    const sku = SKUS.find(s => s.key === QG.currentSku);
-    if (sku?.hasTiers) {
-      renderTierSelector();
-    } else {
-      if (cfgArea) cfgArea.innerHTML = '';
-      renderSkuForm(QG.currentSku, QG.currentTier);
-    }
-  } else {
-    if (cfgArea) cfgArea.innerHTML = '';
-  }
-};
 
 // ── Helpers ────────────────────────────────────────────────
 function fmtAmount(val) {
@@ -1464,8 +1385,15 @@ function setupLockButtons() {
 
 // ── Multi-SKU Item Manager Render ──────────────────────────
 function renderSkuItemManager() {
+  const manager = document.getElementById('sku-item-manager');
   const list = document.getElementById('sku-item-list');
   if (!list) return;
+
+  // Show panel whenever multi-SKU mode is on or multiple items exist
+  if (manager) {
+    const hasSku = QG.skuItems.some(i => i.sku_key);
+    manager.style.display = (QG.multiSkuMode || QG.skuItems.length > 1 || hasSku) ? '' : 'none';
+  }
 
   // Update entity lock badge UI based on QG.lockedEntity
   const lockBadge = document.getElementById('sku-entity-lock-badge');
@@ -1597,24 +1525,62 @@ window.toggleMultiSkuMode = function (enabled) {
 function renderSkuSelector() {
   const grid = document.getElementById('sku-selector-grid');
   if (!grid) return;
-  // Filter by locked entity if applicable
   const filtered = (QG.multiSkuMode && QG.lockedEntity)
     ? SKUS.filter(s => s.entity === QG.lockedEntity || s.entity === 'Both')
     : SKUS.filter(s => !s.hidden);
 
-  grid.innerHTML = filtered.map(s => `
+  const compareCapable = ['voice_exotel_std', 'voice_exotel_user', 'voice_veeno_std', 'voice_veeno_user'];
+  const CMP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 4 7 4"/><polyline points="7 20 17 20"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><polyline points="11 8 7 12 11 16"/><polyline points="13 8 17 12 13 16"/></svg>`;
+
+  grid.innerHTML = filtered.map(s => {
+    const canCmp = compareCapable.includes(s.key);
+    const isCmpActive = QG.compareMode && QG.currentSku === s.key;
+    const cmpBtn = canCmp
+      ? `<button class="sku-compare-btn${isCmpActive ? ' active' : ''}" title="Compare mode" onclick="event.stopPropagation(); window.enableCompareFor('${s.key}')">${CMP_ICON}</button>`
+      : '';
+    return `
     <div class="sku-option sku-${s.entity.toLowerCase()}${QG.currentSku === s.key ? ' selected' : ''}" data-sku="${s.key}" onclick="selectSku('${s.key}')">
+      ${cmpBtn}
       <div class="sku-option-icon">${s.icon}</div>
       <div>
         <div class="sku-option-label">${sanitize(s.label)}</div>
         <div class="sku-option-sub">${sanitize(s.sub)}</div>
         <span class="sku-entity-tag ${s.entity.toLowerCase()}">${s.entity}</span>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
-// ── Select SKU ─────────────────────────────────────────────
+// Enable compare mode for a specific SKU (called from the per-card icon button)
+window.enableCompareFor = function(key) {
+  // Toggle off if already comparing this SKU
+  if (QG.compareMode && QG.currentSku === key) {
+    window.toggleCompareMode(false);
+    renderSkuSelector();
+    return;
+  }
+  const sku = SKUS.find(s => s.key === key);
+  if (!sku) return;
+  // Switch to this SKU
+  QG.currentSku = key;
+  const item = QG.skuItems[0] || _makeItem('item_0');
+  if (item.sku_key !== key) {
+    item.sku_key = key;
+    item.values = {};
+    item.stopLockOverrides = [];
+    QG._dirty = true;
+    if (QG.skuItems.length === 0) QG.skuItems = [item];
+    else QG.skuItems[0] = item;
+  }
+  QG.activeItemId = item.id;
+  syncActiveAliases();
+  document.querySelectorAll('.sku-option').forEach(el => {
+    el.classList.toggle('selected', el.dataset.sku === key);
+  });
+  updateEntityBadge(sku.entity);
+  window.toggleCompareMode(true);
+  renderSkuSelector(); // refresh icon state
+};
 function selectSku(key) {
   const sku = SKUS.find(s => s.key === key);
   if (!sku) return;
@@ -1649,18 +1615,23 @@ function selectSku(key) {
   });
 
   updateEntityBadge(sku.entity);
-  
+
   const ctSelector = document.getElementById('compare-tier-selector');
-  const validSkus = ['voice_exotel_std', 'voice_veeno_std', 'sip_veeno'];
+  const tierCompareSkus = ['voice_exotel_std', 'sip_veeno'];
   if (QG.compareMode) {
-    if (validSkus.includes(key)) {
+    if (key === QG.currentSku && tierCompareSkus.includes(key)) {
+      // Same tier-compare SKU — refresh tier compare
       if (ctSelector) ctSelector.style.display = 'flex';
       window.updateCompareTiers();
-      return; // updateCompareTiers will render everything
+      return;
     } else {
+      // Different SKU selected — always kill compare mode and clear extra items
       if (ctSelector) ctSelector.style.display = 'none';
       QG.compareMode = false;
-      document.getElementById('toggle-compare-mode').checked = false;
+      const mainItem = QG.skuItems[0] || _makeItem('item_0');
+      QG.skuItems = [mainItem];
+      QG.activeItemId = mainItem.id;
+      renderSkuSelector(); // refresh compare icon states
     }
   }
 
@@ -1722,13 +1693,20 @@ window.toggleCompareMode = function (enabled) {
   QG.compareMode = enabled;
   const manager = document.getElementById('sku-item-manager');
   const ctSelector = document.getElementById('compare-tier-selector');
-  const validSkus = ['voice_exotel_std', 'voice_veeno_std', 'sip_veeno'];
+  // SKUs that support tier-based comparison
+  const tierCompareSkus = ['voice_exotel_std', 'sip_veeno'];
+  const userCompareSkus = ['voice_exotel_user', 'voice_veeno_user', 'voice_veeno_std'];
 
   if (enabled) {
-    if (validSkus.includes(QG.currentSku)) {
+    if (tierCompareSkus.includes(QG.currentSku)) {
       if (ctSelector) ctSelector.style.display = 'flex';
       window.updateCompareTiers();
       return; // updateCompareTiers handles the rest
+    } else if (userCompareSkus.includes(QG.currentSku)) {
+      // User-based compare: create 2 config columns
+      if (ctSelector) ctSelector.style.display = 'none';
+      window.updateUserCompare();
+      return;
     }
   } else {
     if (ctSelector) ctSelector.style.display = 'none';
@@ -1756,6 +1734,40 @@ window.toggleCompareMode = function (enabled) {
   }
   updatePreview();
 };
+
+// User-based plan comparison (different configs side by side)
+window.updateUserCompare = function () {
+  if (!QG.compareMode) return;
+  const existingA = QG.skuItems[0] || _makeItem('item_0');
+  const existingB = QG.skuItems[1];
+
+  existingA.sku_key = QG.currentSku;
+  if (!existingA.values.num_users) existingA.values.num_users = 10;
+  if (!existingA.values.num_months) existingA.values.num_months = 6;
+  if (!existingA.values.user_charge) existingA.values.user_charge = 2000;
+
+  const newB = existingB || {
+    id: 'item_' + Date.now(),
+    sku_key: QG.currentSku,
+    tier: QG.currentTier,
+    values: { num_users: 10, num_months: 3, user_charge: 2500 },
+    stopLockOverrides: []
+  };
+  if (!newB.sku_key) { newB.sku_key = QG.currentSku; newB.tier = QG.currentTier; }
+
+  QG.skuItems = [existingA, newB];
+  QG.activeItemId = existingA.id;
+  QG.lockedEntity = SKUS.find(s => s.key === QG.currentSku)?.entity;
+  syncActiveAliases();
+
+  renderSkuItemManager();
+  renderSkuSelector();
+  const cfgArea = document.getElementById('sku-config-area');
+  if (cfgArea) cfgArea.innerHTML = '';
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+
 
 window.updateCompareTiers = function () {
   if (!QG.compareMode) return;
@@ -1867,7 +1879,7 @@ function renderSkuForm(skuKey, tier) {
       </div>` : ''}
 
       <div class="q-card-fields-container">
-        ${fields.map(f => renderFieldRow(f, item)).join('')}
+        ${renderFieldsGrouped(fields, item)}
       </div>
     `;
     grid.appendChild(card);
@@ -1878,10 +1890,14 @@ function renderSkuForm(skuKey, tier) {
         if (f.nonEditable) return;
 
         if (f.type === 'boolean') {
-          const radios = card.querySelectorAll(`input[name="qf_${f.id}_${item.id}"]`);
-          radios.forEach(r => {
-            r.addEventListener('change', () => {
-              item.values[f.id] = parseInt(r.value, 10);
+          const toggleGroup = card.querySelector(`#qf_toggle_${f.id}_${item.id}`);
+          toggleGroup?.querySelectorAll('.q-toggle-opt').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const val = parseInt(btn.dataset.val, 10);
+              item.values[f.id] = val;
+              toggleGroup.querySelectorAll('.q-toggle-opt').forEach(b =>
+                b.classList.toggle('active', parseInt(b.dataset.val, 10) === val)
+              );
               updatePreview();
             });
           });
@@ -1995,16 +2011,15 @@ function renderFieldRow(f, item) {
   }
 
   if (f.type === 'boolean') {
+    const boolVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
     return `
       <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
         <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
-        <div class="q-field-value" style="display:flex; justify-content:flex-end; gap:16px;">
-          <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;">
-            <input type="radio" name="qf_${f.id}_${item.id}" value="1" ${v == 1 ? 'checked' : ''}> Yes
-          </label>
-          <label style="display:flex; align-items:center; gap:4px; font-size:0.9rem; cursor:pointer;">
-            <input type="radio" name="qf_${f.id}_${item.id}" value="0" ${v == 0 ? 'checked' : ''}> No
-          </label>
+        <div class="q-field-value" style="justify-content:flex-end;">
+          <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}">
+            <button type="button" class="q-toggle-opt${boolVal == 1 ? ' active' : ''}" data-val="1">Yes</button>
+            <button type="button" class="q-toggle-opt${boolVal == 0 ? ' active' : ''}" data-val="0">No</button>
+          </div>
         </div>
       </div>`;
   }
@@ -2020,6 +2035,34 @@ function renderFieldRow(f, item) {
           step="any">
       </div>
     </div>`;
+}
+
+// ── Grouped field renderer ─────────────────────────────────
+function renderFieldsGrouped(fields, item) {
+  const SECTION_MAP = {
+    validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
+    channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
+    num_months: 'Plan Overview',
+    num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan',
+    free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
+    num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan',
+    remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan',
+    credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity',
+    single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
+    attempt: 'Call Charges', call_rate: 'Call Charges',
+  };
+  const sectionOrder = [];
+  const sectionMap = {};
+  fields.forEach(f => {
+    const sec = SECTION_MAP[f.id] || 'Settings';
+    if (!sectionMap[sec]) { sectionMap[sec] = []; sectionOrder.push(sec); }
+    sectionMap[sec].push(f);
+  });
+  const multiSec = sectionOrder.length > 1;
+  return sectionOrder.map(sec =>
+    (multiSec ? `<div class="q-form-section-header">${sec}</div>` : '') +
+    sectionMap[sec].map(f => renderFieldRow(f, item)).join('')
+  ).join('');
 }
 
 // ── Approval Modal ─────────────────────────────────────────
@@ -2087,7 +2130,8 @@ function updatePreview() {
   const clientPhone = document.getElementById('q-client-phone')?.value || '';
   const seName = document.getElementById('q-se-name')?.textContent || '';
   const seEmail = document.getElementById('q-se-email')?.textContent || '';
-  const sePhone = document.getElementById('q-se-phone')?.value || '';
+  const sePhone = (document.getElementById('q-se-phone-text')?.textContent || '').replace(/—/g, '').trim()
+                   || document.getElementById('q-se-phone')?.value || '';
   const quoteNum = document.getElementById('q-quote-number')?.textContent || '';
   const dateStr = document.getElementById('q-date')?.textContent || today();
 
@@ -2097,9 +2141,182 @@ function updatePreview() {
   };
 
   // ── Compare Mode: side-by-side tier comparison table ─────────────────────
-  const isCompareTiers = QG.compareMode && validItems.length >= 2 &&
+  const userBasedCompareSkus = ['voice_exotel_user', 'voice_veeno_user', 'voice_veeno_std'];
+  const isUserCompare = QG.compareMode && validItems.length >= 2 &&
     validItems.every(i => i.sku_key === validItems[0].sku_key) &&
-    ['voice_exotel_std', 'voice_veeno_std', 'sip_veeno'].includes(validItems[0].sku_key);
+    userBasedCompareSkus.includes(validItems[0].sku_key);
+
+  const isCompareTiers = !isUserCompare && QG.compareMode && validItems.length >= 2 &&
+    validItems.every(i => i.sku_key === validItems[0].sku_key) &&
+    ['voice_exotel_std', 'sip_veeno'].includes(validItems[0].sku_key);
+
+  // ── User-based comparison (side-by-side configs) ─────────────────────────
+  if (isUserCompare) {
+    const skuDef = SKUS.find(s => s.key === validItems[0].sku_key);
+    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+    const W = `<span class="waived-text">✓ Waived</span>`;
+
+    const colData = validItems.map(item => {
+      const fields = getSkuFields(item.sku_key, item.tier);
+      const getVal = (id) => { const f = fields.find(x => x.id === id); if (!f) return undefined; return item.values[id] ?? f.value; };
+      const getSN = (id) => { const f = fields.find(x => x.id === id); if (!f || f.waived) return 0; return parseFloat(item.values[id] ?? f.value ?? 0); };
+      return { item, fields, getVal, getSN };
+    });
+
+    const cmpRow = (label, vals, isSection = false) => {
+      if (isSection) return `<tr class="section-header-row"><td colspan="${validItems.length + 1}">${label}</td></tr>`;
+      return `<tr><td class="sku-row-name">${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /^</.test(v) ? v : sanitize(String(v ?? '-'))}</td>`).join('')}</tr>`;
+    };
+
+    const subtotals = colData.map(({ item, getVal, getSN }) => {
+      const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
+      const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
+      const did = (getSN('did_numbers') || 0) * 1500 * m;
+      return getSN('credits') + (u * m * c) + nums + did;
+    });
+
+    const optionLabels = validItems.map((_, i) => `Option ${String.fromCharCode(65 + i)}`);
+
+    // Recalculate subtotals without call credits (user SKU has no call credits)
+    const userSubtotals = colData.map(({ getSN }) => {
+      const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
+      const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
+      const did = (getSN('did_numbers') || 0) * 1500 * m;
+      return (u * m * c) + nums + did;
+    });
+
+    const FREE_CMP = `<span style="color:#16a34a;font-weight:600;">✓ Free</span>`;
+    const W_CMP = `<span style="color:#16a34a;font-weight:600;">✓ Waived</span>`;
+    let uRows = '';
+    const allSku0 = validItems[0].sku_key;
+
+    const cmpIndRow = (label, vals) =>
+      `<tr class="sub-row"><td>${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /^</.test(v) ? v : sanitize(String(v ?? ''))}</td>`).join('')}</tr>`;
+
+    if (allSku0 === 'voice_veeno_std') {
+      // ── Veeno STD side-by-side comparison ─────────────────────
+      uRows += cmpRow('Plan Details', [], true);
+      uRows += cmpRow('Validity', colData.map(({ getVal }) => getVal('validity') + ' Months'));
+      uRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W_CMP : fmtR(r) + '/month'; }));
+      uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
+        const r = getSN('rental'), v = parseFloat(getVal('validity')) || 0;
+        return `${fmtR(r)}/month × ${v} months = ${fmtR(r * v)}`;
+      }));
+      uRows += cmpRow('Setup Charges', colData.map(() => W_CMP));
+      uRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
+      uRows += cmpRow('User Plan', [], true);
+      uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
+      uRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + '/user/month'));
+      uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
+        const u = getSN('num_users'), v = parseFloat(getVal('validity')) || 0, c = getSN('user_charge');
+        return `${u} users × ${v} months × ${fmtR(c)} = ${fmtR(u*v*c)}`;
+      }));
+      uRows += cmpRow('Number Plan', [], true);
+      uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
+      const anyPaidV = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
+      if (anyPaidV) {
+        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
+        uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
+          const p = getSN('num_paid_numbers'), v = parseFloat(getVal('validity')) || 0, c = getSN('extra_number');
+          return p > 0 ? `${p} numbers × ${v} months × ${fmtR(c)} = ${fmtR(p*v*c)}` : '';
+        }));
+      }
+      const anyDID = colData.some(({ getSN }) => getSN('did_numbers') > 0);
+      if (anyDID) {
+        uRows += cmpRow('DID Numbers', colData.map(({ getSN }) => { const d = getSN('did_numbers'); return d > 0 ? `${d} DID(s)` : '—'; }));
+        uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
+          const d = getSN('did_numbers'), v = parseFloat(getVal('validity')) || 0;
+          return d > 0 ? `${d} DIDs × ${v} months × ${fmtR(1500)} = ${fmtR(d*v*1500)}` : '';
+        }));
+      }
+      uRows += cmpRow('Call Credits & Charges', [], true);
+      uRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
+      uRows += cmpRow('Incoming Call Charges', colData.map(({ getSN }) => { const inc = getSN('incoming'); return inc === 0 ? FREE_CMP : inc + 'p/min'; }));
+      uRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => { const out = getSN('outgoing'); return out >= 100 ? '₹' + (out/100).toFixed(2) + '/min' : out + 'p/min'; }));
+      const veenoSubs = colData.map(({ getSN, getVal }) => {
+        const u = getSN('num_users'), v = parseFloat(getVal('validity')) || 0, c = getSN('user_charge');
+        const r = getSN('rental') * v;
+        const nums = getSN('num_paid_numbers') * getSN('extra_number') * v;
+        const did = getSN('did_numbers') * 1500 * v;
+        return getSN('credits') + r + (u * v * c) + nums + did;
+      });
+      uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${veenoSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
+      uRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${veenoSubs.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s*0.18))}</td>`).join('')}</tr>`;
+      uRows += `<tr style="background:#f0f9ff;"><td style="font-weight:800;color:#0284c7;">Total (incl. GST)</td>${veenoSubs.map(s => `<td style="font-weight:800;color:#0284c7;">${fmtR(Math.round(s*1.18))}</td>`).join('')}</tr>`;
+
+    } else {
+      // ── Exotel User / Veeno User side-by-side comparison ──────
+      uRows += cmpRow('Plan Details', [], true);
+      uRows += cmpRow('Account Rental', colData.map(() => W_CMP));
+      uRows += cmpRow('Setup Charges', colData.map(() => W_CMP));
+      uRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
+      uRows += cmpRow('User Plan', [], true);
+      uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
+      uRows += cmpRow('No. of Months', colData.map(({ getVal }) => getVal('num_months') + ' Months'));
+      uRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + '/user/month'));
+      uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
+        const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
+        return `${u} users × ${m} months × ${fmtR(c)} = ${fmtR(u*m*c)}`;
+      }));
+      uRows += cmpRow('Number Plan', [], true);
+      uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
+      const anyPaidNums = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
+      if (anyPaidNums) {
+        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
+        uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
+          const p = getSN('num_paid_numbers'), m = getSN('num_months'), c = getSN('extra_number');
+          return p > 0 ? `${p} numbers × ${m} months × ${fmtR(c)} = ${fmtR(p*m*c)}` : '';
+        }));
+      }
+      const anyDIDu = colData.some(({ getSN }) => getSN('did_numbers') > 0);
+      if (anyDIDu) {
+        uRows += cmpRow('DID Numbers', colData.map(({ getSN }) => { const d = getSN('did_numbers'); return d > 0 ? `${d} DID(s)` : '—'; }));
+        uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
+          const d = getSN('did_numbers'), m = getSN('num_months');
+          return d > 0 ? `${d} DIDs × ${m} months × ${fmtR(1500)} = ${fmtR(d*m*1500)}` : '';
+        }));
+      }
+      const userSubs = colData.map(({ getSN }) => {
+        const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
+        const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
+        const did = getSN('did_numbers') * 1500 * m;
+        return (u * m * c) + nums + did;
+      });
+      uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${userSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
+      uRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${userSubs.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s*0.18))}</td>`).join('')}</tr>`;
+      uRows += `<tr style="background:#f0f9ff;"><td style="font-weight:800;color:#0284c7;">Total (incl. GST)</td>${userSubs.map(s => `<td style="font-weight:800;color:#0284c7;">${fmtR(Math.round(s*1.18))}</td>`).join('')}</tr>`;
+    }
+
+    // Now build the shared doc.innerHTML (used by both paths)
+    doc.innerHTML = `<table class="print-master-table"><thead><tr><td><div class="print-master-header"></div></td></tr></thead><tbody><tr><td>
+    <div class="quote-doc-header">
+      <img src="${logoSrc}" class="quote-doc-logo ${firstSku.entity.toLowerCase()}-logo" alt="${firstSku.entity}">
+      <div class="quote-doc-meta">
+        <div class="quote-number-badge">${sanitize(quoteNum)}</div>
+        <div style="margin-top:4px;">Date: ${sanitize(dateStr)}</div>
+        <div style="margin-top:2px;font-weight:600;color:#0284c7;">${firstSku.entity}</div>
+      </div>
+    </div>
+    <div class="quote-doc-title">Commercial Proposal — ${validItems[0].sku_key === 'voice_veeno_std' ? 'Veeno Voice STD' : 'User Plan'} Comparison</div>
+    <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:18px;">Prepared For: ${sanitize(company)}</p>
+    <div class="quote-doc-section" style="margin-top:24px;">
+      <div style="overflow-x:auto;">
+      <table class="quote-sku-table" style="table-layout:auto;">
+        <thead><tr>
+          <th style="width:32%;background:#0f172a;color:#fff;">Component</th>
+          ${optionLabels.map((l,i) => `<th style="background:${i===0?'#0284c7':'#0369a1'};color:#fff;text-align:center;">${l}</th>`).join('')}
+        </tr></thead>
+        <tbody>${uRows}</tbody>
+      </table></div>
+    </div>
+    <div class="quote-doc-section" style="margin-top:30px;">
+      <div class="quote-doc-section-title">Terms &amp; Conditions</div>
+      <div class="quote-tnc" style="font-size:0.85rem;color:#475569;line-height:1.5;">${generateTncHtml(validItems, firstSku.entity)}</div>
+    </div>
+    </td></tr></tbody><tfoot><tr><td><div class="print-master-footer"></div></td></tr></tfoot></table>`;
+    return;
+  }
+  // ── End User Compare Mode ──────────────────────────────────────────────────
 
   if (isCompareTiers) {
     const skuKey0 = validItems[0].sku_key;
@@ -2180,9 +2397,9 @@ function updatePreview() {
       tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
       tableRows += cmpRow('Call Credits & Charges', [], true);
       tableRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
-      tableRows += cmpRow('Single Leg', colData.map(({ getSN }) => fmtP(getSN('single_leg'))));
-      tableRows += cmpRow('Incoming', colData.map(({ getSN }) => fmtP(getSN('incoming'))), false, true);
-      tableRows += cmpRow('Outgoing', colData.map(({ getSN }) => fmtP(getSN('outgoing'))), false, true);
+      tableRows += cmpRow('Incoming Call Charges', colData.map(({ getSN }) => fmtP(getSN('incoming'))));
+      tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
+
       // Messaging Services (Add-ons) - only shown if any tier has them enabled
       const hasSms = colData.some(({ item }) => item.values['sms_cost'] !== undefined);
       const hasWa = colData.some(({ item }) => item.values['wa_api'] !== undefined);
@@ -2219,9 +2436,9 @@ function updatePreview() {
       tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
       tableRows += cmpRow('Call Credits & Charges', [], true);
       tableRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
-      tableRows += cmpRow('Single Leg', colData.map(({ getSN }) => fmtP(getSN('single_leg'))));
-      tableRows += cmpRow('Incoming', colData.map(() => FREE), false, true);
-      tableRows += cmpRow('Outgoing', colData.map(({ getSN }) => fmtP(getSN('outgoing'))), false, true);
+      tableRows += cmpRow('Incoming Call Charges', colData.map(() => FREE));
+      tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
+
     } else if (skuKey0 === 'sip_veeno') {
       tableRows += cmpRow('Plan Details', [], true);
       tableRows += cmpRow('Validity', colData.map(({ getVal }) => getVal('validity') + ' Months'));
@@ -2235,8 +2452,8 @@ function updatePreview() {
       tableRows += cmpRow('Extra Number Cost', colData.map(() => fmtR(499) + perUnit('/number/month')), false, true);
       tableRows += cmpRow('Call Credits & Charges', [], true);
       tableRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
-      tableRows += cmpRow('Incoming', colData.map(({ getSN }) => fmtP(getSN('incoming'))));
-      tableRows += cmpRow('Outgoing', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
+      tableRows += cmpRow('Incoming Call Charges', colData.map(({ getSN }) => fmtP(getSN('incoming'))));
+      tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
       tableRows += cmpRow('Attempt Charges', colData.map(() => '5p / failed call'));
     }
 
@@ -2375,7 +2592,9 @@ function updatePreview() {
 
     if (sk === 'voice_exotel_std') {
       tableHTML += secRow('Plan Details');
-      tableHTML += stdRow('Validity', getVal('validity') + ' Months');
+      const baseValidityE = parseFloat(getVal('validity')) || 0;
+      const extraValidityE = getSafeNum('extra_validity') || 0;
+      tableHTML += stdRow('Validity', extraValidityE > 0 ? `${baseValidityE} + ${extraValidityE} months` : getVal('validity') + ' Months');
       const rentalStd = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
       tableHTML += stdRow('Setup Charges', null, true);
@@ -2398,10 +2617,14 @@ function updatePreview() {
       }
 
       tableHTML += secRow('Call Credits & Charges');
-      tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
-      tableHTML += stdRow('Single Leg Charge', fmtPaise(getSafeNum('single_leg')));
-      tableHTML += indRow('Incoming (Single Leg)', fmtPaise(getSafeNum('incoming')));
-      tableHTML += indRow('Outgoing (Double Leg)', fmtPaise(getSafeNum('outgoing')));
+      const baseCreditsE = getSafeNum('credits');
+      const extraCreditsE = getSafeNum('extra_credits') || 0;
+      const creditsDisplayE = extraCreditsE > 0
+        ? `${fmtRupee(baseCreditsE)} + ${fmtRupee(extraCreditsE)}`
+        : fmtRupee(baseCreditsE);
+      tableHTML += stdRow('Call Credits', creditsDisplayE);
+      tableHTML += stdRow('Incoming Call Charges', fmtPaise(getSafeNum('incoming')));
+      tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
 
       if (showSms || showWa) {
         tableHTML += secRow('Messaging & Communication Services');
@@ -2422,9 +2645,11 @@ function updatePreview() {
       const totalUserCostV = numUsers * validity * uCharge;
 
       tableHTML += secRow('Plan Details');
-      tableHTML += stdRow('Validity', validity + ' Months');
+      const extraValidityV = getSafeNum('extra_validity') || 0;
+      tableHTML += stdRow('Validity', extraValidityV > 0 ? `${validity} + ${extraValidityV} months` : validity + ' Months');
       const rVal = getSafeNum('rental');
-      tableHTML += stdRow('Account Rental', rVal === 0 ? W : fmtRupee(rVal));
+      tableHTML += stdRow('Account Rental', rVal === 0 ? W : `${fmtRupee(rVal)} ${perUnit('/month')}`);
+      tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('Channels', 'Unlimited');
 
@@ -2452,10 +2677,15 @@ function updatePreview() {
       }
 
       tableHTML += secRow('Call Credits & Charges');
-      tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
-      tableHTML += stdRow('Single Leg Charge', fmtPaise(getSafeNum('single_leg')));
-      tableHTML += indRow('Incoming Calls', FREE);
-      tableHTML += indRow('Outgoing (Single Leg)', fmtPaise(getSafeNum('outgoing')));
+      const baseCreditsV = getSafeNum('credits');
+      const extraCreditsV = getSafeNum('extra_credits') || 0;
+      const creditsDisplayV = extraCreditsV > 0
+        ? `${fmtRupee(baseCreditsV)} + ${fmtRupee(extraCreditsV)}`
+        : fmtRupee(baseCreditsV);
+      tableHTML += stdRow('Call Credits', creditsDisplayV);
+      const incomingV = getSafeNum('incoming');
+      tableHTML += stdRow('Incoming Call Charges', incomingV === 0 ? FREE : fmtPaise(incomingV));
+      tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
 
     } else if (sk === 'sip_veeno') {
       tableHTML += secRow('Plan Details');
@@ -2578,10 +2808,63 @@ function updatePreview() {
       tableHTML += indRow('Calculation', `${numChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
 
       tableHTML += secRow('Call Credits & Charges');
-      tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
+      const streamBaseCredits = getSafeNum('credits');
+      const streamExtraCredits = getSafeNum('extra_credits') || 0;
+      const streamCreditDisplay = streamExtraCredits > 0
+        ? `${fmtRupee(streamBaseCredits)} + ${fmtRupee(streamExtraCredits)}`
+        : fmtRupee(streamBaseCredits);
+      tableHTML += stdRow('Call Credits', streamCreditDisplay);
       tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
       tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
-      tableHTML += stdRow('Attempt Charges', '5p / failed call');
+      const attemptVal = getSafeNum('attempt');
+      if (attemptVal > 0) {
+        const attemptDisplay = attemptVal >= 100
+          ? '\u20b9' + (attemptVal / 100).toFixed(2) + ' / failed call'
+          : attemptVal + 'p / failed call';
+        tableHTML += stdRow('Attempt Charges', attemptDisplay);
+      }
+
+      const paidNumsStr = getSafeNum('num_paid_numbers') || 0;
+      if (paidNumsStr > 0) {
+        tableHTML += secRow('Number Plan');
+        tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+        tableHTML += stdRow('Extra Numbers', `${paidNumsStr} Number(s)`);
+        tableHTML += indRow('Calculation', `${paidNumsStr} × ${numMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsStr * numMos * getSafeNum('extra_number'))}</strong>`);
+      }
+
+    } else if (sk === 'voice_exotel_campaigns' || sk === 'voice_veeno_campaigns') {
+      const campValidity = parseFloat(getVal('validity')) || 0;
+      const campRate = getSafeNum('call_rate') || 0;
+      const campBaseCredits = getSafeNum('credits');
+      const campExtraCredits = getSafeNum('extra_credits') || 0;
+      const campCreditDisplay = campExtraCredits > 0
+        ? `${fmtRupee(campBaseCredits)} + ${fmtRupee(campExtraCredits)}`
+        : fmtRupee(campBaseCredits);
+      const campExtraValidity = getSafeNum('extra_validity') || 0;
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Validity', campValidity + ' Months');
+      tableHTML += stdRow('Account Rental', W);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('Channels', 'Unlimited');
+      const fuCamp = getVal('free_users');
+      tableHTML += stdRow('Free Users', fuCamp === null || fuCamp === 'Unlimited' ? 'Unlimited (Included)' : fuCamp + ' Users (Free)');
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      const campPaidNums = getSafeNum('num_paid_numbers') || 0;
+      if (campPaidNums > 0) {
+        const campNumCost = getSafeNum('extra_number');
+        tableHTML += stdRow('Extra Numbers', `${campPaidNums} Number(s)`);
+        tableHTML += indRow('Calculation', `${campPaidNums} × ${campValidity} months × ${fmtRupee(campNumCost)} = <strong>${fmtRupee(campPaidNums * campValidity * campNumCost)}</strong>`);
+      }
+
+      tableHTML += secRow('Call Credits & Campaign Rate');
+      if (campExtraValidity > 0) {
+        tableHTML += stdRow('Validity', `${campValidity} + ${campExtraValidity} months`);
+      }
+      tableHTML += stdRow('Call Credits', campCreditDisplay);
+      tableHTML += stdRow('Campaign Call Charges', fmtPaise(campRate));
 
     } else if (sk === 'sms_exotel') {
       tableHTML += secRow('Plan Details');
@@ -2818,55 +3101,60 @@ window.printQuote = async function () {
   <link rel="stylesheet" href="${window.location.origin}/style.css">
   <link rel="stylesheet" href="${window.location.origin}/quote-generator.css">
   <style>
-     /* Global backend PDF normalizer */
-     body { background: white !important; margin: 0 !important; padding: 0 !important; -webkit-print-color-adjust: exact; }
-     
-     /* Strip out screen-only paper styling so Puppeteer's native margins apply cleanly */
-     #quote-document {
-         width: 100% !important;
-         min-height: auto !important;
-         margin: 0 !important;
-         border: none !important;
-         box-shadow: none !important;
-     }
+     /* ── Global PDF Reset ─────────────────────────────────────── */
+     @page { margin: 10mm 12mm; }
+     body { background: white !important; margin: 0 !important; padding: 0 !important; font-size: 10px !important; -webkit-print-color-adjust: exact; }
 
-     /* Force flawless geometric vector rendering unconditionally purely for Puppeteer */
-     * { 
-         text-rendering: geometricPrecision !important; 
-         -webkit-font-smoothing: antialiased !important; 
-         -webkit-print-color-adjust: exact !important;
-         print-color-adjust: exact !important;
-     }
+     /* Strip screen paper styling */
+     #quote-document { width: 100% !important; min-height: auto !important; margin: 0 !important; border: none !important; box-shadow: none !important; }
 
-     /* Prevent responsive media queries from stacking the grid in PDF */
-     .quote-participant-grid {
-         grid-template-columns: 1fr 1fr !important;
-     }
+     /* Precise vector rendering */
+     * { text-rendering: geometricPrecision !important; -webkit-font-smoothing: antialiased !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
-     /* ── PDF-ONLY: Keep grid but auto-fit so single SKU takes full width ── */
-     .quote-skus-grid {
-         display: grid !important;
-         grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
-         gap: 14px !important;
-         margin-top: 16px !important;
-     }
-     .quote-doc-section.sku-card {
-         display: flex !important;
-         height: auto !important;
-         margin-top: 0 !important;
-         /* Do NOT use break-inside:avoid on grid items — it pushes entire grid to new page */
-         page-break-inside: auto;
-         break-inside: auto;
-     }
-     .quote-doc-section.sku-card .quote-sku-table {
-         flex-grow: unset !important;
-     }
-     /* Collapse print-master header/footer so no blank rows appear */
-     .print-master-header,
-     .print-master-footer {
-         height: 0 !important;
-         overflow: hidden !important;
-     }
+     /* ── Compact header ────────────────────────────────────────── */
+     .quote-doc-header { padding: 8px 0 !important; margin-bottom: 6px !important; }
+     .quote-doc-logo { max-height: 44px !important; }
+     .quote-number-badge { font-size: 0.75rem !important; padding: 3px 8px !important; }
+     .quote-doc-title { font-size: 1rem !important; margin: 4px 0 !important; }
+     .quote-intro-text { font-size: 0.72rem !important; line-height: 1.4 !important; margin: 4px 0 !important; }
+
+     /* ── Participant grid ──────────────────────────────────────── */
+     .quote-participant-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-bottom: 6px !important; }
+     .quote-participant-box { padding: 6px 10px !important; }
+     .quote-participant-box .label { font-size: 0.65rem !important; }
+     .quote-participant-box .value { font-size: 0.8rem !important; }
+     .quote-participant-box .sub { font-size: 0.68rem !important; }
+
+     /* ── Doc sections ──────────────────────────────────────────── */
+     .quote-doc-section { margin-top: 8px !important; padding: 0 !important; }
+     .quote-doc-section-title { font-size: 0.78rem !important; padding: 4px 8px !important; margin-bottom: 6px !important; }
+
+     /* ── SKU grid ──────────────────────────────────────────────── */
+     .quote-skus-grid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important; gap: 8px !important; margin-top: 8px !important; }
+     .quote-doc-section.sku-card { display: flex !important; height: auto !important; margin-top: 0 !important; page-break-inside: auto; break-inside: auto; }
+     .quote-doc-section.sku-card .quote-sku-table { flex-grow: unset !important; }
+
+     /* ── SKU table rows ────────────────────────────────────────── */
+     .quote-sku-table th, .quote-sku-table td { font-size: 0.72rem !important; padding: 3px 6px !important; }
+     .quote-sku-table .section-header-row td { font-size: 0.7rem !important; padding: 3px 6px !important; }
+     .quote-sku-table .sub-row td { font-size: 0.68rem !important; padding: 2px 6px !important; }
+     .sku-row-name { width: 55% !important; }
+
+     /* ── Totals ────────────────────────────────────────────────── */
+     .quote-totals { margin-top: 8px !important; padding-top: 8px !important; }
+     .quote-total-row { padding: 3px 6px !important; font-size: 0.75rem !important; }
+     .quote-total-row.grand-total { font-size: 0.85rem !important; }
+
+     /* ── T&C: ALWAYS starts on page 2 ─────────────────────────── */
+     .quote-doc-section:has(.quote-tnc) { page-break-before: always !important; break-before: page !important; }
+     .quote-tnc { font-size: 0.7rem !important; line-height: 1.45 !important; }
+     .quote-tnc li { margin-bottom: 3px !important; }
+
+     /* ── Print header/footer collapse ─────────────────────────── */
+     .print-master-header, .print-master-footer { height: 0 !important; overflow: hidden !important; }
+
+     /* ── Waived / free badges ──────────────────────────────────── */
+     .waived-text { font-size: 0.68rem !important; }
   </style>
 </head>
 <body>
@@ -2910,8 +3198,7 @@ async function generateQuote() {
   if (validItems.length === 0) { showAlert('Please select a SKU plan first.', { type: 'warning', title: 'No SKU Selected' }); return; }
   const firstSku = SKUS.find(s => s.key === validItems[0].sku_key);
 
-  const company = document.getElementById('q-client-company')?.value?.trim();
-  if (!company) { showAlert('Please enter a client company name.', { type: 'warning', title: 'Company Required' }); return; }
+  const company = document.getElementById('q-client-company')?.value?.trim() || '';
 
   const violations = [];
   for (const item of validItems) {
@@ -2982,8 +3269,27 @@ async function generateQuote() {
     });
     
     if (res.status === 401) {
-      showAlert("Your session has expired. Please log in again.", { type: 'error', title: 'Session Expired' });
-      window.location.href = '/login';
+      // Auto-save draft before logging out so work isn't lost
+      try {
+        const emergencyDraftKey = 'draft_session_emergency_' + (QG.quoteNumber || Date.now());
+        const emergencyData = {
+          sku_items: QG.skuItems,
+          company:   document.getElementById('q-client-company')?.value?.trim() || '',
+          contact:   document.getElementById('q-client-contact')?.value?.trim() || '',
+          clientEmail: document.getElementById('q-client-email')?.value?.trim() || '',
+          clientPhone: document.getElementById('q-client-phone')?.value?.trim() || '',
+          quoteNumber: QG.quoteNumber,
+          savedAt: new Date().toISOString(),
+        };
+        await fetch('/api/drafts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ draft_key: emergencyDraftKey, draft_data: emergencyData })
+        }).catch(() => null);
+        localStorage.setItem('returnToDraft', emergencyDraftKey);
+      } catch (_) { /* silent – session is already dead, best effort */ }
+      showAlert("Your session has expired. Your draft has been saved — it will be waiting for you after you log back in.", { type: 'warning', title: 'Session Expired' });
+      setTimeout(() => { window.location.href = '/login'; }, 2500);
       return;
     }
     
@@ -3914,26 +4220,71 @@ async function initProfile() {
     QG.profile = profile;
     const nameEl = document.getElementById('q-se-name');
     const emailEl = document.getElementById('q-se-email');
-    const phoneEl = document.getElementById('q-se-phone');
     if (nameEl) nameEl.textContent = profile.display_name || '-';
     if (emailEl) emailEl.textContent = profile.email || '-';
-    if (phoneEl) phoneEl.value = profile.phone || '';
+    // Populate new phone display span
+    const phoneText = document.getElementById('q-se-phone-text');
+    const phoneInput = document.getElementById('q-se-phone');
+    const savedPhone = profile.phone || '';
+    if (phoneText) phoneText.textContent = savedPhone || '—';
+    if (phoneInput) phoneInput.value = savedPhone;
     // Show prompt if no phone
     const prompt = document.getElementById('q-profile-prompt');
-    if (prompt && !profile.phone) prompt.classList.remove('hidden');
+    if (prompt && !savedPhone) prompt.classList.remove('hidden');
   } catch (e) { /* silent */ }
 }
 
+function openPhoneEdit() {
+  const display = document.getElementById('q-se-phone-display');
+  const edit = document.getElementById('q-se-phone-edit');
+  const input = document.getElementById('q-se-phone');
+  if (display) display.style.display = 'none';
+  if (edit) edit.style.display = '';
+  if (input) {
+    // Pre-fill with current displayed value
+    const currentText = document.getElementById('q-se-phone-text')?.textContent;
+    if (currentText && currentText !== '—') input.value = currentText;
+    input.focus();
+    input.select();
+  }
+}
+
+function closePhoneEdit() {
+  const display = document.getElementById('q-se-phone-display');
+  const edit = document.getElementById('q-se-phone-edit');
+  if (display) display.style.display = 'flex';
+  if (edit) edit.style.display = 'none';
+}
+
 async function saveProfilePhone() {
-  const phone = document.getElementById('q-profile-phone')?.value?.trim();
-  if (!phone) return;
-  const res = await fetch('/api/user-profile', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone })
-  });
-  const data = await res.json();
-  document.getElementById('q-se-phone').value = data.phone || phone;
-  document.getElementById('q-profile-prompt')?.classList.add('hidden');
+  const phone = (document.getElementById('q-profile-phone')?.value?.trim()) ||
+                (document.getElementById('q-se-phone')?.value?.trim());
+  if (!phone) { showAlert('Please enter a phone number to save.', { type: 'warning', title: 'No Number' }); return; }
+  const btn = document.getElementById('q-save-profile');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    const res = await fetch('/api/user-profile', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone })
+    });
+    const data = await res.json();
+    const savedPhone = data.phone || phone;
+    // Update the display span
+    const phoneText = document.getElementById('q-se-phone-text');
+    if (phoneText) phoneText.textContent = savedPhone;
+    // Update the hidden input value for the quote
+    const phoneInput = document.getElementById('q-se-phone');
+    if (phoneInput) phoneInput.value = savedPhone;
+    // Switch back to display mode
+    closePhoneEdit();
+    document.getElementById('q-profile-prompt')?.classList.add('hidden');
+    showAlert('Phone number saved!', { type: 'success', title: 'Saved' });
+    updatePreview();
+  } catch (e) {
+    showAlert('Could not save: ' + e.message, { type: 'error', title: 'Save Failed' });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
 }
 
 // -- Main Init ----------------------------------------------
@@ -4388,6 +4739,19 @@ function setupQuoteGenerator() {
 
   // Sync badges exactly every 15s to catch out-of-band updates across tabs
   setInterval(updateNavCounters, 15000);
+
+  // ── Return-to-draft after session expiry ──────────────────
+  const pendingDraftKey = localStorage.getItem('returnToDraft');
+  if (pendingDraftKey) {
+    localStorage.removeItem('returnToDraft');
+    // Navigate to drafts tab and show a notification
+    setTimeout(() => {
+      document.getElementById('qtab-drafts')?.click();
+      if (typeof showToast === 'function') {
+        showToast('📄 Your draft was auto-saved before your session expired. Find it in the Drafts tab.', 'info');
+      }
+    }, 800);
+  }
 }
 
 // Hook into DOMContentLoaded (app.js already calls it, so we hook in)

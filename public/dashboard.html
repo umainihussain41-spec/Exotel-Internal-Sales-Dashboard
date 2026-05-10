@@ -925,61 +925,6 @@
                         <!-- LEFT: Form Panel -->
                         <div class="quote-form-panel" id="q-form-panel">
 
-                            <!-- AI Voice Quote Banner (easter egg: type shwarp anywhere on the page to reveal) -->
-                            <div class="q-ai-banner hidden" id="q-ai-banner">
-                                <div class="q-ai-banner-content">
-                                    <div class="q-ai-icon">
-                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-                                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                                            <line x1="12" y1="19" x2="12" y2="23"></line>
-                                            <line x1="8" y1="23" x2="16" y2="23"></line>
-                                        </svg>
-                                    </div>
-                                    <div style="flex: 1;">
-                                        <div
-                                            style="font-weight: 700; font-size: 1.05rem; background: linear-gradient(90deg, #6366f1, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-                                            Generate with Voice AI</div>
-                                    </div>
-                                    <button class="btn btn-primary" id="btn-ai-voice"
-                                        style="background: linear-gradient(90deg, #6366f1, #8b5cf6); border: none; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round" style="margin-right: 6px;">
-                                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-                                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                                            <line x1="12" y1="19" x2="12" y2="23"></line>
-                                            <line x1="8" y1="23" x2="16" y2="23"></line>
-                                        </svg>
-                                        ✦ Activate AI
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- AI Listening Inline Strip -->
-                            <div id="ai-listening-overlay" class="hidden">
-                                <div class="ai-listening-modal">
-                                    <div class="ai-ripple-container" style="width:40px;height:40px;flex-shrink:0;">
-                                        <div class="ai-ripple" style="width:36px;height:36px;"></div>
-                                        <div class="ai-ripple" style="width:36px;height:36px;"></div>
-                                        <div class="ai-mic-active" style="width:36px;height:36px;">
-                                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white"
-                                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-                                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                                                <line x1="12" y1="19" x2="12" y2="23"></line>
-                                                <line x1="8" y1="23" x2="16" y2="23"></line>
-                                            </svg>
-                                        </div>
-                                    </div>
-                                    <h3>Listening...</h3>
-                                    <p id="ai-listening-text">Say something like "Quote for Acme, 5 Dabbler users..."
-                                    </p>
-                                    <button id="btn-stop-ai-voice">&#9209; Stop &amp; Parse</button>
-                                </div>
-                            </div>
 
                             <!-- Profile Prompt (shown if phone not set) -->
                             <div class="q-profile-prompt hidden" id="q-profile-prompt">
@@ -1045,19 +990,29 @@
                                         <span class="q-non-editable" id="q-se-email">-</span>
                                     </div>
                                 </div>
-                                <div class="q-field-row">
+                                <div class="q-field-row" id="q-se-phone-row">
                                     <span class="q-field-label">Mobile</span>
                                     <div class="q-field-value">
-                                        <div class="q-input-wrapper">
-                                            <input type="tel" class="q-input" id="q-se-phone" disabled
-                                                placeholder="+91 XXXXXXXXXX">
-                                            <button class="q-lock-btn" data-target="q-se-phone" title="Edit"><svg
-                                                    width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                                    stroke-linejoin="round">
-                                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                                                </svg></button>
+                                        <!-- Read mode: shows saved number + pencil edit button -->
+                                        <div id="q-se-phone-display" style="display:flex;align-items:center;gap:8px;">
+                                            <span class="q-non-editable" id="q-se-phone-text" style="flex:1;">—</span>
+                                            <button onclick="openPhoneEdit()" title="Edit mobile number"
+                                                style="background:none;border:none;cursor:pointer;color:#64748b;padding:4px;border-radius:6px;display:flex;align-items:center;" 
+                                                onmouseover="this.style.color='#0284c7';this.style.background='#e0f2fe'" 
+                                                onmouseout="this.style.color='#64748b';this.style.background='none'">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                            </button>
+                                        </div>
+                                        <!-- Edit mode: compact inline form -->
+                                        <div id="q-se-phone-edit" style="display:none;margin-top:6px;">
+                                            <input type="tel" id="q-se-phone" placeholder="+91 XXXXXXXXXX"
+                                                style="width:100%;padding:6px 10px;border:1.5px solid #0284c7;border-radius:8px;font-size:0.85rem;outline:none;box-sizing:border-box;">
+                                            <div style="display:flex;gap:6px;margin-top:6px;">
+                                                <button onclick="saveProfilePhone()" id="q-save-profile"
+                                                    class="btn btn-primary" style="flex:1;padding:5px 0;font-size:0.8rem;">Save</button>
+                                                <button onclick="closePhoneEdit()"
+                                                    class="btn" style="flex:1;padding:5px 0;font-size:0.8rem;background:#f1f5f9;color:#475569;">Cancel</button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1080,8 +1035,8 @@
                                 </div>
                                 <div class="q-client-grid">
                                     <div>
-                                        <label class="q-field-label">Company Name <span
-                                                class="required">*</span></label>
+                                        <label class="q-field-label">Company Name
+                                                <span style="font-size:0.75rem; color:#94a3b8; font-weight:400;">(optional)</span></label>
                                         <input type="text" class="q-input" id="q-client-company"
                                             style="margin-top:4px; width:100%;" placeholder="e.g. Acme Pvt. Ltd.">
                                     </div>
@@ -1107,13 +1062,6 @@
                             <!-- Multi-SKU Toggle -->
                             <div
                                 style="margin-bottom: 12px; display: flex; align-items: center; justify-content: flex-end; gap: 16px;">
-                                <label
-                                    style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; color:#475569; cursor:pointer;">
-                                    <input type="checkbox" id="toggle-compare-mode"
-                                        onchange="window.toggleCompareMode(this.checked)"
-                                        style="accent-color:#0284c7; width:16px; height:16px;">
-                                    Enable Compare Mode
-                                </label>
                                 <label
                                     style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; color:#475569; cursor:pointer;">
                                     <input type="checkbox" id="toggle-multi-sku-mode"
@@ -1542,6 +1490,36 @@
                     message</label>
                 <textarea id="feedback-message" class="feedback-modal-textarea"
                     placeholder="Describe your experience, report a bug, or suggest a feature…"></textarea>
+
+                <!-- Screenshot attachment zone -->
+                <div id="feedback-drop-zone"
+                    style="margin-top:12px; border:2px dashed #cbd5e1; border-radius:10px; padding:16px; text-align:center; cursor:pointer; transition:all 0.2s; background:#f8fafc;"
+                    ondragover="event.preventDefault(); this.style.background='#e0f2fe'; this.style.borderColor='#0284c7';"
+                    ondragleave="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';"
+                    ondrop="window._feedbackHandleDrop(event)">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8"
+                        stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:6px;">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <p style="margin:0; font-size:0.8rem; color:#64748b;">
+                        <strong style="color:#0284c7; cursor:pointer;" onclick="document.getElementById('feedback-file-input').click()">Click to upload</strong>
+                        or drag &amp; drop a screenshot<br>
+                        <span style="font-size:0.72rem; color:#94a3b8;">You can also paste with Ctrl+V · PNG, JPG, GIF, WEBP</span>
+                    </p>
+                    <input type="file" id="feedback-file-input" accept="image/*" style="display:none;"
+                        onchange="window._feedbackHandleFile(this.files[0])">
+                </div>
+
+                <!-- Screenshot preview -->
+                <div id="feedback-screenshot-preview" style="display:none; margin-top:10px; position:relative;">
+                    <img id="feedback-screenshot-img" src="" alt="Screenshot"
+                        style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid #e2e8f0; object-fit:contain;">
+                    <button onclick="window._feedbackClearScreenshot()"
+                        style="position:absolute; top:4px; right:4px; background:#ef4444; border:none; color:#fff; border-radius:50%; width:22px; height:22px; cursor:pointer; font-size:0.85rem; line-height:1; display:flex; align-items:center; justify-content:center;"
+                        title="Remove screenshot">×</button>
+                </div>
             </div>
             <!-- Footer -->
             <div class="feedback-modal-footer">
@@ -1689,8 +1667,8 @@
     </div>
 
 
-    <script src="app.js?v=10"></script>
-    <script src="quote-generator.js?v=16"></script>
+    <script src="app.js?v=23"></script>
+    <script src="quote-generator.js?v=29"></script>
     <!-- LIVE MONITOR DISABLED: <script src="live-monitor.js"></script> -->
     <!-- Small script to hide TOPBAR logo when NOT home state (since sidebar is visible) -->
     <script>

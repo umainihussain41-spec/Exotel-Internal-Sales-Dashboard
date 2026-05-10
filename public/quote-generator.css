@@ -326,7 +326,40 @@
     align-items: flex-start;
     gap: 10px;
     text-align: left;
+    position: relative;
 }
+
+.sku-compare-btn {
+    position: absolute;
+    top: 7px;
+    right: 7px;
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    border: 1.5px solid #e2e8f0;
+    background: rgba(255,255,255,0.9);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #94a3b8;
+    z-index: 3;
+    padding: 0;
+    transition: all 0.15s ease;
+}
+.sku-compare-btn:hover {
+    background: #eff6ff;
+    color: #0284c7;
+    border-color: #bae6fd;
+    transform: none;
+}
+.sku-compare-btn.active {
+    background: #0284c7;
+    color: #fff;
+    border-color: #0284c7;
+    box-shadow: 0 2px 8px rgba(2,132,199,0.3);
+}
+
 
 .sku-option:hover {
     border-color: #7dd3fc;
@@ -389,6 +422,63 @@
 .sku-entity-tag.veeno {
     background: #fce7f3;
     color: #be185d;
+}
+
+/* ── SKU Form Section Headers ── */
+.q-form-section-header {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #0284c7;
+    padding: 10px 0 5px 0;
+    border-top: 1px solid #e0f2fe;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.q-form-section-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e0f2fe;
+}
+.q-form-section-header:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 2px;
+}
+
+/* ── Yes/No Toggle Button Group ── */
+.q-toggle-group {
+    display: inline-flex;
+    border-radius: 7px;
+    overflow: hidden;
+    border: 1.5px solid #e2e8f0;
+}
+.q-toggle-opt {
+    flex: 1;
+    padding: 4px 16px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border: none;
+    background: #f8fafc;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+}
+.q-toggle-opt:not(:last-child) {
+    border-right: 1.5px solid #e2e8f0;
+}
+.q-toggle-opt.active {
+    background: #0284c7;
+    color: #fff;
+}
+.q-toggle-opt:hover:not(.active) {
+    background: #e0f2fe;
+    color: #0284c7;
 }
 
 /* ── Tier Selector ── */

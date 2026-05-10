@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
+const nodemailer = require('nodemailer');
 const dotenv = require('dotenv');
 const session = require('express-session');
 const passport = require('passport');
@@ -145,7 +146,7 @@ function addLog(action, status, details, userEmail) {
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
 app.use(cors());
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true })); // Exotel webhooks send form-encoded
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
@@ -155,7 +156,7 @@ app.use(session({
     rolling: true,
     cookie: {
         secure: false,
-        maxAge: 30 * 60 * 1000
+        maxAge: 120 * 60 * 1000  // 2 hours
     }
 }));
 
@@ -706,16 +707,207 @@ app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => 
 });
 
 // ─── Developer Feedback ──────────────────────────────────────────────────────
-app.post('/api/feedback', ensureAuthenticated, (req, res) => {
+// Gemini key rotation helper (reuses the same pool as the AI quote parser)
+function getGeminiKeysForFeedback() {
+    const fallbacks = ['AIzaSyAxM1nG9fnwAx3pGT7i4PwGbqI5cC09AwQ', 'AIzaSyAMTxuUeDhjh9a9PI4g3fJI_n5A70L5ekI'];
+    const keys = [];
+    if (process.env.GEMINI_API_KEY) keys.push(process.env.GEMINI_API_KEY);
+    keys.push(...fallbacks);
+    return [...new Set(keys)];
+}
+
+async function analyseFeedbackWithGemini(rawMessage, submitterEmail) {
+    // Frontend appends screenshot as: \n\n[SCREENSHOT_ATTACHED]\n<dataURL>
+    const MARKER = '\n\n[SCREENSHOT_ATTACHED]\n';
+    const markerIdx = rawMessage.indexOf(MARKER);
+    const feedbackText = markerIdx !== -1 ? rawMessage.substring(0, markerIdx) : rawMessage;
+    const screenshotDataUrl = markerIdx !== -1 ? rawMessage.substring(markerIdx + MARKER.length) : null;
+
+    const keys = getGeminiKeysForFeedback();
+    let lastErr;
+    for (const key of keys) {
+        try {
+            const genAI = new GoogleGenerativeAI(key);
+            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+            const prompt = `You are a product feedback analyst for Exotel's Internal Sales Dashboard.
+An SE (sales engineer) submitted the following feedback:
+
+"${feedbackText}"
+
+Submitted by: ${submitterEmail}
+${screenshotDataUrl ? '\nA screenshot has been attached — analyse it along with the text.' : ''}
+
+Provide a concise analysis in this exact format:
+
+*📋 Summary*
+[2-3 sentence summary of what the SE is reporting${screenshotDataUrl ? ', referencing what is visible in the screenshot' : ''}]
+
+*🔧 Recommended Actions*
+[Bullet list of specific actions the product/dev team should take]
+
+*⚡ Priority*
+[Low / Medium / High — with one-line reason]`;
+
+            // Build multimodal parts array
+            const parts = [{ text: prompt }];
+            if (screenshotDataUrl) {
+                const matches = screenshotDataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+                if (matches) {
+                    parts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+                }
+            }
+
+            const result = await model.generateContent(parts);
+            return result.response.text();
+        } catch (err) {
+            lastErr = err;
+        }
+    }
+    throw lastErr || new Error('All Gemini keys failed');
+}
+
+async function uploadScreenshotToPublicHost(dataUrl) {
+    try {
+        const matches = dataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+        if (!matches) return null;
+        const mimeType = matches[1];
+        const imageBuffer = Buffer.from(matches[2], 'base64');
+        const ext = mimeType.split('/')[1] || 'png';
+        // Build multipart body manually (no extra deps needed)
+        const boundary = '----FeedbackBoundary' + Date.now().toString(36);
+        const CRLF = '\r\n';
+        const header = Buffer.from(
+            `--${boundary}${CRLF}` +
+            `Content-Disposition: form-data; name="file"; filename="screenshot.${ext}"${CRLF}` +
+            `Content-Type: ${mimeType}${CRLF}` +
+            CRLF
+        );
+        const footer = Buffer.from(`${CRLF}--${boundary}--${CRLF}`);
+        const body = Buffer.concat([header, imageBuffer, footer]);
+        const resp = await axios.post('https://0x0.st', body, {
+            headers: {
+                'Content-Type': `multipart/form-data; boundary=${boundary}`,
+                'Content-Length': body.length
+            },
+            timeout: 10000
+        });
+        return resp.data.trim(); // e.g. https://0x0.st/Hx7K.png
+    } catch (e) {
+        console.warn('[FEEDBACK] Screenshot upload failed:', e.message);
+        return null;
+    }
+}
+
+async function postToGoogleChat(message, imageUrl) {
+    const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
+    if (!webhookUrl) { console.warn('[FEEDBACK] GOOGLE_CHAT_WEBHOOK_URL not set — skipping Google Chat notification'); return; }
+    if (imageUrl) {
+        // Use cards_v2 format to embed the image
+        const payload = {
+            cardsV2: [{
+                cardId: 'feedback-card',
+                card: {
+                    sections: [{
+                        widgets: [
+                            { textParagraph: { text: message } },
+                            { image: { imageUrl, altText: 'Attached Screenshot' } }
+                        ]
+                    }]
+                }
+            }]
+        };
+        await axios.post(webhookUrl, payload);
+    } else {
+        await axios.post(webhookUrl, { text: message });
+    }
+}
+
+async function sendFeedbackEmail(subject, body) {
+    const user = process.env.FEEDBACK_GMAIL_USER;
+    const pass = process.env.FEEDBACK_GMAIL_APP_PASSWORD;
+    if (!user || !pass) { console.warn('[FEEDBACK] FEEDBACK_GMAIL_USER or FEEDBACK_GMAIL_APP_PASSWORD not set — skipping email'); return; }
+    const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user, pass }
+    });
+    await transporter.sendMail({
+        from: `"Exotel Dashboard" <${user}>`,
+        to: 'hussain.umaini@exotel.com',
+        subject,
+        text: body
+    });
+}
+
+app.post('/api/feedback', ensureAuthenticated, async (req, res) => {
     const email = req.user?.emails?.[0]?.value;
     const { message } = req.body;
     if (!message) return res.status(400).json({ error: 'Message required' });
     const now = new Date().toISOString();
     try {
         db.prepare(`INSERT INTO dev_feedback (user_email, message, created_at) VALUES (?, ?, ?)`).run(email, message, now);
-        res.json({ success: true });
+        res.json({ success: true }); // respond immediately — analysis runs in background
     } catch (e) {
-        res.status(500).json({ error: 'Failed to submit feedback' });
+        return res.status(500).json({ error: 'Failed to submit feedback' });
+    }
+
+    // ── Background: Gemini analysis + Google Chat + Email ─────────────────────
+    setImmediate(async () => {
+        console.log('[FEEDBACK] Background analysis started for:', email);
+        try {
+            // Strip screenshot from display — keep only the human-written text
+            const MARKER = '\n\n[SCREENSHOT_ATTACHED]\n';
+            const markerIdx = message.indexOf(MARKER);
+            const cleanText = markerIdx !== -1 ? message.substring(0, markerIdx) : message;
+            const hasScreenshot = markerIdx !== -1;
+
+            console.log('[FEEDBACK] Calling Gemini...');
+            const analysis = await analyseFeedbackWithGemini(message, email);
+            console.log('[FEEDBACK] Gemini analysis OK:', analysis.slice(0, 80));
+
+            const screenshotNote = hasScreenshot ? '\n_(Screenshot attached — analysed by Gemini)_' : '';
+            let chatMsg = `*📬 New Dashboard Feedback from ${email}*\n\n*Original Feedback:*\n_${cleanText}_${screenshotNote}\n\n${analysis}`;
+            // Google Chat hard limit: 4096 chars
+            if (chatMsg.length > 4000) chatMsg = chatMsg.substring(0, 3950) + '\n\n_[Analysis truncated — see email for full report]_';
+            console.log('[FEEDBACK] Posting to Google Chat...');
+            // Upload screenshot for display in chat if present
+            let screenshotPublicUrl = null;
+            if (hasScreenshot) {
+                const MARKER2 = '\n\n[SCREENSHOT_ATTACHED]\n';
+                const idx2 = message.indexOf(MARKER2);
+                const dataUrl = idx2 !== -1 ? message.substring(idx2 + MARKER2.length) : null;
+                if (dataUrl) {
+                    console.log('[FEEDBACK] Uploading screenshot to public host...');
+                    screenshotPublicUrl = await uploadScreenshotToPublicHost(dataUrl);
+                    console.log('[FEEDBACK] Screenshot URL:', screenshotPublicUrl || 'upload failed');
+                }
+            }
+            await postToGoogleChat(chatMsg, screenshotPublicUrl)
+                .then(() => console.log('[FEEDBACK] Google Chat ✓'))
+                .catch(e => console.error('[FEEDBACK] Google Chat error:', e.response?.data || e.message));
+
+            const emailScreenshotNote = hasScreenshot ? '\n[Screenshot was attached and analysed by Gemini]\n' : '';
+            const emailBody = `New feedback submitted by: ${email}\nTime: ${now}\n\nFeedback:\n${cleanText}${emailScreenshotNote}\n\n--- AI Analysis ---\n${analysis}`;
+            console.log('[FEEDBACK] Sending email...');
+            await sendFeedbackEmail(`[Dashboard Feedback] from ${email}`, emailBody)
+                .then(() => console.log('[FEEDBACK] Email ✓'))
+                .catch(e => console.error('[FEEDBACK] Email error:', e.message));
+        } catch (err) {
+            console.error('[FEEDBACK] Fatal error in background job:', err.message);
+        }
+    });
+});
+
+// Test endpoint — visit in browser to verify Google Chat webhook works
+app.get('/api/admin/test-feedback-notif', ensureAuthenticated, ensureAdmin, async (req, res) => {
+    const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
+    if (!webhookUrl) return res.json({ ok: false, error: 'GOOGLE_CHAT_WEBHOOK_URL not set in .env' });
+    try {
+        await axios.post(webhookUrl, { text: '*🧪 Test notification from Exotel Dashboard* — Google Chat webhook is working!' });
+        res.json({ ok: true, message: 'Message sent to Google Chat successfully' });
+    } catch (e) {
+        const detail = e.response?.data || e.message;
+        console.error('[TEST] Google Chat webhook error:', detail);
+        res.json({ ok: false, error: detail });
     }
 });
 

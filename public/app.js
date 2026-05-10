@@ -100,6 +100,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.addEventListener('drop', (e) => {
         e.preventDefault();
     }, false);
+
+    // ── Session Expiry Warning ─────────────────────────────────
+    // Warn the SE 5 min before the 2-hour session ends so they can save drafts
+    (function setupSessionWarning() {
+        const SESSION_MS   = 120 * 60 * 1000; // 2 hours (match server)
+        const WARN_BEFORE  = 5  * 60 * 1000;  // warn at 5 min remaining
+        const WARN_BEFORE2 = 1  * 60 * 1000;  // second warn at 1 min remaining
+
+        let warnTimer1, warnTimer2;
+
+        function scheduleWarnings() {
+            clearTimeout(warnTimer1);
+            clearTimeout(warnTimer2);
+
+            warnTimer1 = setTimeout(() => {
+                showToast(
+                    '⏰ Your session expires in <strong>5 minutes</strong>. Save your work or keep interacting to stay logged in.',
+                    'warning'
+                );
+            }, SESSION_MS - WARN_BEFORE);
+
+            warnTimer2 = setTimeout(() => {
+                showToast(
+                    '🔴 Session expiring in <strong>1 minute</strong>! Please save your draft now.',
+                    'error'
+                );
+            }, SESSION_MS - WARN_BEFORE2);
+        }
+
+        // Start the warning clock
+        scheduleWarnings();
+
+        // Any fetch to the server resets the rolling session — reset our client clock too
+        const _origFetch = window.fetch;
+        window.fetch = function(...args) {
+            const result = _origFetch.apply(this, args);
+            // Only reset on same-origin calls (our own API)
+            const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+            if (!url.startsWith('http')) scheduleWarnings();
+            return result;
+        };
+    })();
 });
 
 async function checkUser() {
@@ -1651,6 +1693,46 @@ function renderAdminLogs() {
 // ==========================================
 // Feedback System
 // ==========================================
+let _feedbackScreenshotData = null; // base64 data URL
+
+window._feedbackHandleFile = function(file) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        _feedbackScreenshotData = e.target.result;
+        const preview = document.getElementById('feedback-screenshot-preview');
+        const img = document.getElementById('feedback-screenshot-img');
+        if (preview && img) {
+            img.src = _feedbackScreenshotData;
+            preview.style.display = 'block';
+        }
+        // Reset drop zone styling
+        const dz = document.getElementById('feedback-drop-zone');
+        if (dz) { dz.style.background = '#f0fdf4'; dz.style.borderColor = '#86efac'; }
+    };
+    reader.readAsDataURL(file);
+};
+
+window._feedbackHandleDrop = function(e) {
+    e.preventDefault();
+    const dz = document.getElementById('feedback-drop-zone');
+    if (dz) { dz.style.background = '#f8fafc'; dz.style.borderColor = '#cbd5e1'; }
+    const file = e.dataTransfer?.files?.[0];
+    if (file) window._feedbackHandleFile(file);
+};
+
+window._feedbackClearScreenshot = function() {
+    _feedbackScreenshotData = null;
+    const preview = document.getElementById('feedback-screenshot-preview');
+    const img = document.getElementById('feedback-screenshot-img');
+    const fileInput = document.getElementById('feedback-file-input');
+    if (preview) preview.style.display = 'none';
+    if (img) img.src = '';
+    if (fileInput) fileInput.value = '';
+    const dz = document.getElementById('feedback-drop-zone');
+    if (dz) { dz.style.background = '#f8fafc'; dz.style.borderColor = '#cbd5e1'; }
+};
+
 function setupFeedbackSystem() {
     const modal = document.getElementById('feedback-modal');
     const btnOpen = document.getElementById('btn-open-feedback');
@@ -1664,6 +1746,7 @@ function setupFeedbackSystem() {
     const openModal = () => {
         modal.classList.remove('hidden');
         textarea.value = '';
+        window._feedbackClearScreenshot();
         textarea.focus();
     };
     const closeModal = () => modal.classList.add('hidden');
@@ -1671,6 +1754,18 @@ function setupFeedbackSystem() {
     btnOpen?.addEventListener('click', openModal);
     btnClose?.addEventListener('click', closeModal);
     btnCancel?.addEventListener('click', closeModal);
+
+    // Ctrl+V paste support (captures image from clipboard)
+    modal.addEventListener('paste', (e) => {
+        const items = e.clipboardData?.items || [];
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) window._feedbackHandleFile(file);
+                break;
+            }
+        }
+    });
 
     btnSubmit?.addEventListener('click', async () => {
         const message = textarea.value.trim();
@@ -1682,11 +1777,17 @@ function setupFeedbackSystem() {
         btnSubmit.disabled = true;
         btnSubmit.textContent = 'Sending...';
 
+        // Build payload: include screenshot as base64 if attached
+        let fullMessage = message;
+        if (_feedbackScreenshotData) {
+            fullMessage += '\n\n[SCREENSHOT_ATTACHED]\n' + _feedbackScreenshotData;
+        }
+
         try {
             const res = await fetch('/api/feedback', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message })
+                body: JSON.stringify({ message: fullMessage })
             });
 
             if (res.ok) {
@@ -1745,8 +1846,15 @@ async function fetchDevFeedback() {
                 : diffDays < 7 ? `${diffDays}d ago`
                 : date.toLocaleDateString();
 
-            const initial = (item.user_email || '?')[0].toUpperCase();
-            const hue = [...(item.user_email || '')].reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
+            const raw = item.message || '';
+            // Derive avatar initial and hue from email
+            const emailStr = item.user_email || 'U';
+            const initial = emailStr.charAt(0).toUpperCase();
+            const hue = Math.abs(emailStr.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % 360;
+            // Split off screenshot if present
+            const screenshotMatch = raw.indexOf('\n\n[SCREENSHOT_ATTACHED]\n');
+            const displayMsg = screenshotMatch !== -1 ? raw.substring(0, screenshotMatch) : raw;
+            const screenshotData = screenshotMatch !== -1 ? raw.substring(screenshotMatch + '\n\n[SCREENSHOT_ATTACHED]\n'.length) : null;
 
             const card = document.createElement('div');
             card.className = 'fb-card';
@@ -1757,7 +1865,8 @@ async function fetchDevFeedback() {
                         <span class="fb-card-email">${sanitizeHTML(item.user_email)}</span>
                         <span class="fb-card-time">${relTime}</span>
                     </div>
-                    <p class="fb-card-message">${sanitizeHTML(item.message)}</p>
+                    <p class="fb-card-message">${sanitizeHTML(displayMsg)}</p>
+                    ${screenshotData ? `<img src="${screenshotData}" alt="Screenshot" style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid #e2e8f0; margin-top:8px; object-fit:contain; cursor:zoom-in;" onclick="openImgLightbox(this.src)" title="Click to view full size">`  : ''}
                 </div>
                 <button class="fb-card-delete btn-icon" onclick="deleteFeedback(${item.id})" title="Delete">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -1784,3 +1893,50 @@ window.deleteFeedback = async function(id) {
     }
 };
 
+
+// ── Image Lightbox ────────────────────────────────────────────
+function openImgLightbox(src) {
+    // Remove any existing lightbox
+    document.getElementById('img-lightbox')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'img-lightbox';
+    overlay.style.cssText = [
+        'position:fixed', 'inset:0', 'z-index:9999',
+        'background:rgba(0,0,0,0.88)',
+        'display:flex', 'align-items:center', 'justify-content:center',
+        'cursor:zoom-out', 'padding:24px', 'box-sizing:border-box'
+    ].join(';');
+
+    const img = document.createElement('img');
+    img.src = src;
+    img.alt = 'Screenshot';
+    img.style.cssText = [
+        'max-width:90vw', 'max-height:90vh',
+        'border-radius:12px',
+        'box-shadow:0 8px 48px rgba(0,0,0,0.6)',
+        'object-fit:contain',
+        'cursor:default'
+    ].join(';');
+    img.onclick = (e) => e.stopPropagation();
+
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '×';
+    closeBtn.style.cssText = [
+        'position:absolute', 'top:16px', 'right:20px',
+        'background:rgba(255,255,255,0.15)', 'border:none',
+        'color:#fff', 'font-size:2rem', 'line-height:1',
+        'width:40px', 'height:40px', 'border-radius:50%',
+        'cursor:pointer', 'display:flex', 'align-items:center', 'justify-content:center'
+    ].join(';');
+    closeBtn.onclick = () => overlay.remove();
+
+    overlay.appendChild(img);
+    overlay.appendChild(closeBtn);
+    overlay.onclick = () => overlay.remove();
+    document.body.appendChild(overlay);
+
+    // Close on Escape
+    const onKey = (e) => { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); } };
+    document.addEventListener('keydown', onKey);
+}
