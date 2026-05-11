@@ -1006,6 +1006,75 @@ function getSkuTncHtml(item) {
     `;
   }
 
+  if (item.sku_key === 'voice_exotel_campaigns') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Call Charges</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>This is a <strong>single-leg billing</strong> plan — only one call leg is charged per connected call minute.</li>
+            <li>Ideal for outbound bulk/campaign calling where the agent leg is not billed separately.</li>
+            <li>Call attempts (unanswered or failed) may also be chargeable depending on the campaign setup.</li>
+            <li>Call rate applies per minute of actual connected duration.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Rentals for 5/11 months include: User logins, Virtual numbers, Call recordings, Analytics.</li>
+            <li>Agreement validity: 1 year from the start date.</li>
+            <li>Rates may change as per TRAI regulations with a 30-day notice.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Channels</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Unlimited channels offered from a shared pool with ~130% buffer over prior month's usage.</li>
+            <li>No separate PRI line charges.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments &amp; Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid model; usage is debited against available balance.</li>
+            <li>Unused balance is carried forward. Minimum recharge: ₹500.</li>
+            <li>Payment receipt issued on the date of payment.</li>
+            <li>Tax invoices issued monthly for actual usage.</li>
+            <li>Rental invoices raised in the following month.</li>
+            <li>Details: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs. Payment Receipt</a></li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST &amp; TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>If GST unregistered, submit a declaration on company letterhead:<br><em>"This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit."</em></li>
+            <li>TDS deduction: u/s 194J @2% (if applicable).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Virtual Numbers</strong>
+          <ul style="margin:2px 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Outgoing calls display Exotel virtual landline numbers from supported circles.</li>
+            <li>VNs remain Exotel's property; ownership cannot be transferred.</li>
+            <li>If discontinued by the provider, Exotel will replace it with an alternate VN.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following via the Exotel Dashboard:</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN Card</li>
+            <li>Certificate of Incorporation / Owner's Passport</li>
+            <li>Company Address Proof (recent postpaid bill, rental agreement, or bank statement)</li>
+            <li>Director's passport-size photo</li>
+            <li>Accepted formats: PNG, GIF, JPEG, PDF</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Proposal is valid for 30 days from the date of issue.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential and proprietary information of Exotel Techcom Private Limited. It is intended solely for the recipient. Any unauthorized sharing, use, or reproduction is strictly prohibited.
+      </div>
+    `;
+  }
+
   return null;
 }
 
@@ -2386,7 +2455,11 @@ function updatePreview() {
 
     if (skuKey0 === 'voice_exotel_std') {
       tableRows += cmpRow('Plan Details', [], true);
-      tableRows += cmpRow('Validity', colData.map(({ getVal }) => getVal('validity') + ' Months'));
+      tableRows += cmpRow('Validity', colData.map(({ getVal, item }) => {
+        const base = parseFloat(getVal('validity') ?? 0);
+        const extra = parseFloat(item.values['extra_validity'] ?? 0);
+        return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
+      }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
       tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
@@ -2397,7 +2470,11 @@ function updatePreview() {
       tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
       tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
       tableRows += cmpRow('Call Credits & Charges', [], true);
-      tableRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
+      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
+        const base = getSN('credits');
+        const extra = parseFloat(item.values['extra_credits'] ?? 0);
+        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
+      }));
       tableRows += cmpRow('Incoming Call Charges', colData.map(({ getSN }) => fmtP(getSN('incoming'))));
       tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
 
@@ -2425,7 +2502,11 @@ function updatePreview() {
       }
     } else if (skuKey0 === 'voice_veeno_std') {
       tableRows += cmpRow('Plan Details', [], true);
-      tableRows += cmpRow('Validity', colData.map(({ getVal }) => getVal('validity') + ' Months'));
+      tableRows += cmpRow('Validity', colData.map(({ getVal, item }) => {
+        const base = parseFloat(getVal('validity') ?? 0);
+        const extra = parseFloat(item.values['extra_validity'] ?? 0);
+        return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
+      }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
       tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
@@ -2436,10 +2517,13 @@ function updatePreview() {
       tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
       tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
       tableRows += cmpRow('Call Credits & Charges', [], true);
-      tableRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
+      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
+        const base = getSN('credits');
+        const extra = parseFloat(item.values['extra_credits'] ?? 0);
+        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
+      }));
       tableRows += cmpRow('Incoming Call Charges', colData.map(() => FREE));
       tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
-
     } else if (skuKey0 === 'sip_veeno') {
       tableRows += cmpRow('Plan Details', [], true);
       tableRows += cmpRow('Validity', colData.map(({ getVal }) => getVal('validity') + ' Months'));
@@ -3108,20 +3192,20 @@ window.printQuote = async function () {
      body { background: white !important; margin: 0 !important; padding: 0 !important; font-size: 10px !important; -webkit-print-color-adjust: exact; }
 
      /* Strip screen paper styling */
-     #quote-document { width: 100% !important; min-height: auto !important; margin: 0 !important; border: none !important; box-shadow: none !important; }
+     #quote-document { width: 100% !important; min-height: auto !important; margin: 0 !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
 
      /* Precise vector rendering */
      * { text-rendering: geometricPrecision !important; -webkit-font-smoothing: antialiased !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
      /* ── Compact header ────────────────────────────────────────── */
-     .quote-doc-header { padding: 8px 0 !important; margin-bottom: 6px !important; }
+     .quote-doc-header { padding: 8px 0 !important; margin-bottom: 6px !important; break-inside: avoid !important; page-break-inside: avoid !important; }
      .quote-doc-logo { max-height: 44px !important; }
      .quote-number-badge { font-size: 0.75rem !important; padding: 3px 8px !important; }
      .quote-doc-title { font-size: 1rem !important; margin: 4px 0 !important; }
      .quote-intro-text { font-size: 0.72rem !important; line-height: 1.4 !important; margin: 4px 0 !important; }
 
-     /* ── Participant grid ──────────────────────────────────────── */
-     .quote-participant-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-bottom: 6px !important; }
+     /* ── Participant grid: keep 2-col box together ─────────────── */
+     .quote-participant-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; margin-bottom: 6px !important; break-inside: avoid !important; page-break-inside: avoid !important; }
      .quote-participant-box { padding: 6px 10px !important; }
      .quote-participant-box .label { font-size: 0.65rem !important; }
      .quote-participant-box .value { font-size: 0.8rem !important; }
@@ -3129,11 +3213,11 @@ window.printQuote = async function () {
 
      /* ── Doc sections ──────────────────────────────────────────── */
      .quote-doc-section { margin-top: 8px !important; padding: 0 !important; }
-     .quote-doc-section-title { font-size: 0.78rem !important; padding: 4px 8px !important; margin-bottom: 6px !important; }
+     .quote-doc-section-title { font-size: 0.78rem !important; padding: 4px 8px !important; margin-bottom: 6px !important; break-after: avoid !important; page-break-after: avoid !important; }
 
-     /* ── SKU grid ──────────────────────────────────────────────── */
-     .quote-skus-grid { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important; gap: 8px !important; margin-top: 8px !important; }
-     .quote-doc-section.sku-card { display: flex !important; height: auto !important; margin-top: 0 !important; page-break-inside: auto; break-inside: auto; }
+     /* ── SKU grid: BLOCK layout — no height-fill, no blank gaps ── */
+     .quote-skus-grid { display: block !important; margin-top: 8px !important; }
+     .quote-doc-section.sku-card { display: block !important; height: auto !important; min-height: 0 !important; margin-top: 8px !important; flex: none !important; }
      .quote-doc-section.sku-card .quote-sku-table { flex-grow: unset !important; }
 
      /* ── SKU table rows ────────────────────────────────────────── */
@@ -3147,10 +3231,11 @@ window.printQuote = async function () {
      .quote-total-row { padding: 3px 6px !important; font-size: 0.75rem !important; }
      .quote-total-row.grand-total { font-size: 0.85rem !important; }
 
-     /* ── T&C: ALWAYS starts on page 2 ─────────────────────────── */
-     .quote-doc-section:has(.quote-tnc) { page-break-before: always !important; break-before: page !important; }
+     /* ── T&C — flows and breaks naturally, no forced jumps ─────── */
      .quote-tnc { font-size: 0.7rem !important; line-height: 1.45 !important; }
      .quote-tnc li { margin-bottom: 3px !important; }
+     /* Section header rows never orphaned at bottom of a page */
+     .section-header-row { break-after: avoid !important; page-break-after: avoid !important; }
 
      /* ── Print header/footer collapse ─────────────────────────── */
      .print-master-header, .print-master-footer { height: 0 !important; overflow: hidden !important; }
