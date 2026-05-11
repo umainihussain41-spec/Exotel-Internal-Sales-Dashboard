@@ -2128,6 +2128,7 @@ function updatePreview() {
   const contact = document.getElementById('q-client-contact')?.value || '';
   const clientEmail = document.getElementById('q-client-email')?.value || '';
   const clientPhone = document.getElementById('q-client-phone')?.value || '';
+  const tenantId = document.getElementById('q-client-tenantid')?.value || '';
   const seName = document.getElementById('q-se-name')?.textContent || '';
   const seEmail = document.getElementById('q-se-email')?.textContent || '';
   const sePhone = (document.getElementById('q-se-phone-text')?.textContent || '').replace(/—/g, '').trim()
@@ -2485,7 +2486,7 @@ function updatePreview() {
         <div class="quote-doc-section-title">Parties</div>
         <div class="quote-participant-grid">
           <div class="quote-participant-box"><div class="label">Prepared By (${firstSku.entity})</div><div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div><div class="sub">${sanitize(seEmail)}</div>${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}</div>
-          <div class="quote-participant-box"><div class="label">Prepared For (Client)</div><div class="value">${sanitize(company)}</div>${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''} ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''} ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''}</div>
+          <div class="quote-participant-box"><div class="label">Prepared For (Client)</div><div class="value">${sanitize(company)}</div>${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''} ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''} ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''} ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}</div>
         </div>
       </div>
 
@@ -3041,6 +3042,7 @@ function updatePreview() {
           ${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''}
           ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''}
           ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''}
+          ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}
         </div>
       </div>
     </div>
@@ -3241,6 +3243,7 @@ async function generateQuote() {
       contact: document.getElementById('q-client-contact')?.value,
       email: document.getElementById('q-client-email')?.value,
       phone: document.getElementById('q-client-phone')?.value,
+      tenantId: document.getElementById('q-client-tenantid')?.value || '',
     },
     se: {
       name: document.getElementById('q-se-name')?.textContent,
@@ -3278,6 +3281,7 @@ async function generateQuote() {
           contact:   document.getElementById('q-client-contact')?.value?.trim() || '',
           clientEmail: document.getElementById('q-client-email')?.value?.trim() || '',
           clientPhone: document.getElementById('q-client-phone')?.value?.trim() || '',
+          tenantId:  document.getElementById('q-client-tenantid')?.value?.trim() || '',
           quoteNumber: QG.quoteNumber,
           savedAt: new Date().toISOString(),
         };
@@ -3328,6 +3332,7 @@ async function saveDraft(e, silent = false) {
       contact: document.getElementById('q-client-contact')?.value,
       email: document.getElementById('q-client-email')?.value,
       phone: document.getElementById('q-client-phone')?.value,
+      tenantId: document.getElementById('q-client-tenantid')?.value || '',
     }
   };
 
@@ -3565,10 +3570,11 @@ window.previewHistoricalVersion = function (vId) {
 
   setTimeout(() => {
     // Set Client Fields
-    ['company', 'contact', 'email', 'phone'].forEach(k => {
+    ['company', 'contact', 'email', 'phone', 'tenantid'].forEach(k => {
+      const clientKey = k === 'tenantid' ? 'tenantId' : k;
       const el = document.getElementById('q-client-' + k);
-      if (el && data.client?.[k]) {
-        el.value = data.client[k];
+      if (el && data.client?.[clientKey]) {
+        el.value = data.client[clientKey];
         el.disabled = true; // Historical is read-only
         el.style.backgroundColor = '#f1f5f9';
       }
@@ -3648,6 +3654,7 @@ window.printHistoricalQuote = async function (id) {
       contact: document.getElementById('q-client-contact')?.value,
       email: document.getElementById('q-client-email')?.value,
       phone: document.getElementById('q-client-phone')?.value,
+      tenantId: document.getElementById('q-client-tenantid')?.value || '',
       qNum: document.getElementById('q-quote-number')?.textContent,
       date: document.getElementById('q-date')?.textContent
     };
@@ -3676,6 +3683,7 @@ window.printHistoricalQuote = async function (id) {
     if (document.getElementById('q-client-contact')) document.getElementById('q-client-contact').value = data.client?.contact || '';
     if (document.getElementById('q-client-email')) document.getElementById('q-client-email').value = data.client?.email || '';
     if (document.getElementById('q-client-phone')) document.getElementById('q-client-phone').value = data.client?.phone || '';
+    if (document.getElementById('q-client-tenantid')) document.getElementById('q-client-tenantid').value = data.client?.tenantId || '';
     if (document.getElementById('q-quote-number')) document.getElementById('q-quote-number').textContent = q.quote_number;
     if (document.getElementById('q-date')) document.getElementById('q-date').textContent = new Date(q.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -3696,6 +3704,7 @@ window.printHistoricalQuote = async function (id) {
       if (document.getElementById('q-client-contact')) document.getElementById('q-client-contact').value = bkup.contact || '';
       if (document.getElementById('q-client-email')) document.getElementById('q-client-email').value = bkup.email || '';
       if (document.getElementById('q-client-phone')) document.getElementById('q-client-phone').value = bkup.phone || '';
+      if (document.getElementById('q-client-tenantid')) document.getElementById('q-client-tenantid').value = bkup.tenantId || '';
       if (document.getElementById('q-quote-number')) document.getElementById('q-quote-number').textContent = bkup.qNum;
       if (document.getElementById('q-date')) document.getElementById('q-date').textContent = bkup.date;
 
@@ -3759,9 +3768,10 @@ window.viewQuote = async function (id) {
 
     setTimeout(() => {
       // Set Client Fields
-      ['company', 'contact', 'email', 'phone'].forEach(k => {
+      ['company', 'contact', 'email', 'phone', 'tenantid'].forEach(k => {
+        const clientKey = k === 'tenantid' ? 'tenantId' : k;
         const el = document.getElementById('q-client-' + k);
-        if (el && data.client?.[k]) el.value = data.client[k];
+        if (el && data.client?.[clientKey]) el.value = data.client[clientKey];
       });
 
       // Set SKU Fields
@@ -3872,9 +3882,10 @@ window.resumeDraft = async function (id) {
     }
     // Fill client fields
     setTimeout(() => {
-      ['company', 'contact', 'email', 'phone'].forEach(k => {
+      ['company', 'contact', 'email', 'phone', 'tenantid'].forEach(k => {
+        const clientKey = k === 'tenantid' ? 'tenantId' : k;
         const el = document.getElementById('q-client-' + k);
-        if (el && data.client?.[k]) el.value = data.client[k];
+        if (el && data.client?.[clientKey]) el.value = data.client[clientKey];
       });
       // Restore field values
       if (data.fields) {
@@ -4143,7 +4154,7 @@ function resetQuoteForm() {
   if (cfgArea) cfgArea.innerHTML = '';
 
   // Clear client fields
-  ['q-client-company', 'q-client-contact', 'q-client-email', 'q-client-phone'].forEach(id => {
+  ['q-client-company', 'q-client-contact', 'q-client-email', 'q-client-phone', 'q-client-tenantid'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = '';
   });
@@ -4677,7 +4688,7 @@ function setupQuoteGenerator() {
   });
 
   // Client field live preview update
-  ['q-client-company', 'q-client-contact', 'q-client-email', 'q-client-phone'].forEach(id => {
+  ['q-client-company', 'q-client-contact', 'q-client-email', 'q-client-phone', 'q-client-tenantid'].forEach(id => {
     document.getElementById(id)?.addEventListener('input', updatePreview);
   });
   document.getElementById('q-se-phone')?.addEventListener('input', updatePreview);
@@ -4710,8 +4721,7 @@ function setupQuoteGenerator() {
   // Admin tabs
   fetch('/api/admin/check').then(r => r.json()).then(d => {
     QG.isAdmin = d.isAdmin;
-    // Always show the request button to everyone
-    document.getElementById('q-btn-sku-request')?.classList.remove('hidden');
+    // Request New SKU button is intentionally kept hidden for all users
 
     if (d.isAdmin) {
       document.getElementById('qtab-allquotes')?.classList.remove('hidden');
