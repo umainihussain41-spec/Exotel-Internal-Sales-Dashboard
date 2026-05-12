@@ -66,7 +66,12 @@ function getSkuTncHtml(item) {
   const fields = getSkuFields(item.sku_key, item.tier);
   const getVal = (id) => item.values[id] ?? fields.find(x => x.id === id)?.value ?? 0;
 
-  if (item.sku_key === 'voice_exotel_std') {
+  let tncKey = item.sku_key;
+  if (tncKey === 'startup') {
+    tncKey = STARTUP_PARENT_MAP['startup_' + (item.tier || 'voice')] || 'voice_exotel_std';
+  }
+
+  if (tncKey === 'voice_exotel_std') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Call Charges</strong>
@@ -171,7 +176,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'voice_exotel_user') {
+  if (tncKey === 'voice_exotel_user') {
     const uc = getVal('user_charge');
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
@@ -312,7 +317,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'voice_exotel_tfn') {
+  if (tncKey === 'voice_exotel_tfn') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Toll-Free Number (TFN) – Incoming Only</strong>
@@ -390,7 +395,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'voice_exotel_stream') {
+  if (tncKey === 'voice_exotel_stream') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Exotel Voice Streaming – Product Overview</strong>
@@ -517,7 +522,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'sms_exotel') {
+  if (tncKey === 'sms_exotel') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Chain Binding & DLT Compliance</strong>
@@ -579,7 +584,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'whatsapp_exotel') {
+  if (tncKey === 'whatsapp_exotel') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Per-Message Pricing Policy</strong>
@@ -696,7 +701,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'rcs_exotel') {
+  if (tncKey === 'rcs_exotel') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Voice Services</strong>
@@ -753,7 +758,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'voice_veeno_std' || item.sku_key === 'voice_veeno_user') {
+  if (tncKey === 'voice_veeno_std' || tncKey === 'voice_veeno_user') {
     const uc = getVal('user_charge');
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
@@ -890,7 +895,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'sip_veeno') {
+  if (tncKey === 'sip_veeno') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Important Terms</strong>
@@ -985,7 +990,7 @@ function getSkuTncHtml(item) {
     `;
   }
 
-  if (item.sku_key === 'voice_exotel_campaigns') {
+  if (tncKey === 'voice_exotel_campaigns') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Call Charges</strong>
