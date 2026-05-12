@@ -393,6 +393,11 @@
     background: #fce7f3;
 }
 
+.sku-startup .sku-option-icon {
+    background: #dcfce7;
+    color: #059669;
+}
+
 .sku-option-label {
     font-size: 0.85rem;
     font-weight: 600;
@@ -422,6 +427,11 @@
 .sku-entity-tag.veeno {
     background: #fce7f3;
     color: #be185d;
+}
+
+.sku-entity-tag.startup {
+    background: #dcfce7;
+    color: #059669;
 }
 
 /* ── SKU Form Section Headers ── */

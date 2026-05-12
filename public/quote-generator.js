@@ -45,13 +45,15 @@ const SKUS = [
   { key: 'sms_exotel', label: 'SMS Plan', sub: 'Exotel SMS', entity: 'Exotel', icon: I_MSG, hasTiers: false },
   { key: 'whatsapp_exotel', label: 'WhatsApp Plan', sub: 'Exotel WA', entity: 'Exotel', icon: I_WA, hasTiers: false },
   { key: 'rcs_exotel', label: 'RCS Plan', sub: 'Exotel RCS', entity: 'Exotel', icon: I_DIAMOND, hasTiers: false },
+  
+  // ── Startup Plan (single SKU, sub-product via tier selector) ─────
+  { key: 'startup', label: 'Startup Plan', sub: 'Free Trial Bundle', entity: 'Exotel', theme: 'startup', icon: I_PHONE, hasTiers: true, isStartup: true },
+
   { key: 'voice_veeno_std', label: 'Voice STD', sub: 'Minute Based', entity: 'Veeno', icon: I_PHONE, hasTiers: false },
   { key: 'voice_veeno_user', label: 'Voice User', sub: 'User Based', entity: 'Veeno', icon: I_USERS, hasTiers: false },
   { key: 'sip_veeno', label: 'SIP Lines', sub: 'WebRTC / Browser', entity: 'Veeno', icon: I_MONITOR, hasTiers: true },
   { key: 'num_1400', label: '1400 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
   { key: 'num_1600', label: '1600 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
-  // ── Startup Plan (single SKU, sub-product via tier selector) ─────
-  { key: 'startup', label: 'Startup Plan', sub: 'Free Trial Bundle', entity: 'Exotel', icon: I_PHONE, hasTiers: true, isStartup: true },
 ];
 
 // Tier defaults
@@ -1719,14 +1721,15 @@ function renderSkuSelector() {
     const cmpBtn = canCmp
       ? `<button class="sku-compare-btn${isCmpActive ? ' active' : ''}" title="Compare mode" onclick="event.stopPropagation(); window.enableCompareFor('${s.key}')">${CMP_ICON}</button>`
       : '';
+    const theme = s.theme || s.entity.toLowerCase();
     return `
-    <div class="sku-option sku-${s.entity.toLowerCase()}${QG.currentSku === s.key ? ' selected' : ''}" data-sku="${s.key}" onclick="selectSku('${s.key}')">
+    <div class="sku-option sku-${theme}${QG.currentSku === s.key ? ' selected' : ''}" data-sku="${s.key}" onclick="selectSku('${s.key}')">
       ${cmpBtn}
       <div class="sku-option-icon">${s.icon}</div>
       <div>
         <div class="sku-option-label">${sanitize(s.label)}</div>
         <div class="sku-option-sub">${sanitize(s.sub)}</div>
-        <span class="sku-entity-tag ${s.entity.toLowerCase()}">${s.entity}</span>
+        <span class="sku-entity-tag ${theme}">${s.entity}</span>
       </div>
     </div>`;
   }).join('');
