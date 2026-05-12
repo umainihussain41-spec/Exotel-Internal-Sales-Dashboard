@@ -313,42 +313,31 @@ function getSkuTncHtml(item) {
   if (item.sku_key === 'voice_exotel_tfn') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
-        <li style="margin-bottom:8px;"><strong>Important Terms</strong>
-          <div style="margin:4px 0 2px 0;">The proposed solution will enable the client to:</div>
-          <ul style="margin:0 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Receive domestic incoming calls on mobile/landline numbers.</li>
-            <li>Intelligently route calls with API integrations.</li>
-            <li>Access detailed call logs and call statuses.</li>
-            <li>Record all calls.</li>
-            <li>Configure multi-level IVR systems.</li>
-            <li>Integrate with CRM platforms via APIs.</li>
+        <li style="margin-bottom:8px;"><strong>Toll-Free Number (TFN) – Incoming Only</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>TFN numbers are designated for <strong>incoming calls only</strong>. Outgoing calls are not supported on Toll-Free Numbers.</li>
+            <li>Callers across India can reach the TFN at no cost to themselves; charges are borne by the business account.</li>
+            <li>Incoming calls are charged per minute as per the agreed rate.</li>
           </ul>
         </li>
-        <li style="margin-bottom:8px;"><strong>Outgoing Calls & Virtual Numbers</strong>
+        <li style="margin-bottom:8px;"><strong>Intelligent Call Routing &amp; Features</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>For outgoing (two-leg) calls, a Virtual Landline Number can be procured at ₹499 per number per month.</li>
-            <li>Outbound calls will be charged for both legs (customer and agent) based on local/STD usage.</li>
-            <li>Exotel provides Virtual Landline Numbers (VNs) in the following circles: Delhi/NCR, Gujarat, Mumbai, Maharashtra, Karnataka, Tamil Nadu, Andhra Pradesh, West Bengal, Rajasthan, Madhya Pradesh, and Kerala.</li>
-            <li>VNs remain the property of Exotel, are non-transferable, and cannot be ported. If discontinued by a provider, Exotel will replace the number with an alternate VN.</li>
+            <li>Intelligent call routing with API integrations.</li>
+            <li>Detailed call logs and call statuses.</li>
+            <li>Call recording and analytics.</li>
+            <li>Multi-level IVR systems.</li>
+            <li>CRM/ERP integration APIs.</li>
           </ul>
         </li>
-        <li style="margin-bottom:8px;"><strong>Spam & Whitelisting</strong>
+        <li style="margin-bottom:8px;"><strong>Pricing &amp; Rental</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>A fresh VN is allocated during onboarding.</li>
-            <li>If the number is flagged as spam, Exotel will not be responsible, as this depends on customer usage.</li>
-            <li>Customers are advised to purchase Truecaller and Airtel Whitelisting services to prevent spam tagging.</li>
-            <li>A minimum 6-month commitment is required for any allocated VN.</li>
+            <li>Rental charges cover: User logins, TFN number(s), Call recordings, Analytics.</li>
+            <li>Unlimited channels are shared across clients. No separate PRI line costs are charged.</li>
           </ul>
         </li>
-        <li style="margin-bottom:8px;"><strong>Pricing & Rental</strong>
+        <li style="margin-bottom:8px;"><strong>Billing &amp; Payments</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Rental charges (5/11 months, as applicable) cover: User logins, Virtual Number(s), Call recordings, Analytics.</li>
-            <li>Unlimited channels are shared across clients, with ~130% buffer over average usage. No separate PRI line costs are charged.</li>
-          </ul>
-        </li>
-        <li style="margin-bottom:8px;"><strong>Billing & Payments</strong>
-          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Prepaid model: Balance is deducted for usage. Minimum recharge: ₹500. Unused balance carries forward.</li>
+            <li>Prepaid model: Balance is deducted for incoming call usage. Minimum recharge: ₹500. Unused balance carries forward.</li>
             <li>Invoices:<br>
               ○ Payment receipt issued on the date of payment.<br>
               ○ Tax invoices issued on the 1st of each month for usage in the previous month.<br>
@@ -358,30 +347,18 @@ function getSkuTncHtml(item) {
             <li>No extra charges for call recordings or analytics.</li>
           </ul>
         </li>
-        <li style="margin-bottom:8px;"><strong>GST & TDS</strong>
+        <li style="margin-bottom:8px;"><strong>GST &amp; TDS</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>All prices are exclusive of 18% GST.</li>
             <li>If GST-unregistered, a declaration on company letterhead is required:<br><em>“This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit.”</em></li>
             <li>TDS: Deductible u/s 194J @2% (as per GoI Ministry of Finance press release, 13 May 2020).</li>
           </ul>
         </li>
-        <li style="margin-bottom:8px;"><strong>Incoming Customer Numbers</strong>
+        <li style="margin-bottom:8px;"><strong>TFN Ownership &amp; Policy</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>For customer-facing mobile numbers, procure a Jio/Airtel SIM from supported circles and set up call forwarding to the Exotel VN.</li>
-            <li>Displaying Exotel’s VN directly as the customer-facing number is not recommended, since Exotel does not provide ownership.</li>
-          </ul>
-        </li>
-        <li style="margin-bottom:8px;"><strong>SMS Services</strong>
-          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>SMS is charged per submission.</li>
-            <li>DLT registration is mandatory (BSNL DLT not supported).</li>
-            <li>Additional operator DLT scrubbing charge: ₹0.025 per SMS (effective 1 Sept 2020).</li>
-            <li>This is for Outgoing calls: TRAI restricts calls to DND numbers. For transactional usage, the following are required:<br>
-              ○ Use-case documentation.<br>
-              ○ CRM lead screenshot (showing name, URL, number).<br>
-              ○ Signed/stamped company letterhead with the declaration:<br>
-              <em>“[Company Name], known as [Account SID], is using Exotel to make transactional calls to its registered users only. In case of violation, [Company Name] will provide opt-in proof within 24 hours. We agree to the terms of service: Exotel TOS.”</em>
-            </li>
+            <li>TFN numbers remain the property of Exotel and are non-transferable.</li>
+            <li>If discontinued by the telecom provider, Exotel will replace the number with an alternate TFN.</li>
+            <li>A minimum commitment of 6 months is required for any allocated TFN.</li>
           </ul>
         </li>
         <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
@@ -1207,11 +1184,15 @@ function getSkuFields(skuKey, tier) {
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
-        { id: 'num_numbers', label: 'No. of Numbers', value: 1, locked: false },
-        { id: 'number_cost', label: 'Number Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
+        { id: 'num_numbers', label: 'No. of TFN Numbers', value: 1, locked: false },
+        { id: 'number_cost', label: 'TFN Number Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
+        { id: 'add_vn', label: 'Add Virtual Landline Numbers?', type: 'boolean', value: 0 },
+        { id: 'free_numbers', label: 'Free Virtual Landline Numbers', value: 1, locked: false, note: 'VN Add-on' },
+        { id: 'num_paid_numbers', label: 'No. of Extra Virtual Landline Numbers', value: 0, locked: false, note: 'VN Add-on' },
+        { id: 'extra_number', label: 'Extra Virtual Landline Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299, note: 'VN Add-on' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 39000 },
-        { id: 'outgoing', label: 'Outgoing (p/min)', value: 190, locked: true, stopType: 'lower', stopVal: 150 },
+        { id: 'incoming', label: 'Incoming Call Charge (p/min)', value: 190, locked: true, stopType: 'lower', stopVal: 150 },
       ];
     case 'voice_exotel_stream':
       return [
@@ -1234,7 +1215,9 @@ function getSkuFields(skuKey, tier) {
         { id: 'rental', label: 'Account Rental (₹/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
-        { id: 'number_cost', label: 'Number (₹/month)', value: 499, locked: true, note: 'Can be waived' },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'SMS Credits (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 5000 },
         { id: 'sms_cost', label: 'SMS Cost (p/sms)', value: 21, locked: true, stopType: 'lower', stopVal: 16 },
       ];
@@ -1243,7 +1226,9 @@ function getSkuFields(skuKey, tier) {
         { id: 'rental', label: 'Account Rental (₹/month)', value: 4000, locked: true, stopType: 'lower', stopVal: 1000 },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
-        { id: 'number_cost', label: 'Number (₹/month)', value: 499, locked: true, note: 'Can be waived' },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'WA Credits (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 5000 },
         { id: 'wa_utility', label: 'Utility Msg (p/msg)', value: 11, locked: true, nonEditable: true },
         { id: 'wa_promo', label: 'Promotional Msg (p/msg)', value: 86, locked: true, nonEditable: true },
@@ -1947,7 +1932,7 @@ function renderSkuForm(skuKey, tier) {
         </div>
       </div>
       
-      ${fields.some(f => f.note?.includes('Add-on')) ? `
+      ${fields.some(f => f.note?.includes('Add-on') && f.note !== 'VN Add-on') ? `
       <div style="padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; font-size: 0.85rem; margin-bottom: 12px; border-radius: 6px;">
         <strong>Add-ons:</strong>
         ${fields.some(f => f.note === 'SMS Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-sms-addon_${item.id}" ${item.values['sms_cost'] ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> SMS</label>` : ''}
@@ -1974,6 +1959,8 @@ function renderSkuForm(skuKey, tier) {
               toggleGroup.querySelectorAll('.q-toggle-opt').forEach(b =>
                 b.classList.toggle('active', parseInt(b.dataset.val, 10) === val)
               );
+              // Re-run addon visibility whenever any boolean field changes (e.g. add_vn)
+              window.toggleAddons(item.id, k, t);
               updatePreview();
             });
           });
@@ -2066,6 +2053,19 @@ window.toggleAddons = function (itemId, skuKey, tier) {
         item.values['wa_api'] = fields.find(f => f.id === 'wa_api')?.value;
       }
     }
+    if (addonType === 'VN Add-on') {
+      const showVn = item.values['add_vn'] === 1;
+      row.style.display = showVn ? 'flex' : 'none';
+      if (!showVn) {
+        delete item.values['free_numbers'];
+        delete item.values['num_paid_numbers'];
+        delete item.values['extra_number'];
+      } else if (item.values['free_numbers'] === undefined) {
+        item.values['free_numbers'] = fields.find(f => f.id === 'free_numbers')?.value;
+        item.values['num_paid_numbers'] = fields.find(f => f.id === 'num_paid_numbers')?.value;
+        item.values['extra_number'] = fields.find(f => f.id === 'extra_number')?.value;
+      }
+    }
   });
 
   if (QG.activeItemId === itemId) syncActiveAliases();
@@ -2121,7 +2121,7 @@ function renderFieldsGrouped(fields, item) {
     num_months: 'Plan Overview',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
-    num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan',
+    num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
@@ -2887,14 +2887,26 @@ function updatePreview() {
       tableHTML += stdRow('Free Users', fuTfnDisplay);
       tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
 
-      tableHTML += secRow('Number Plan');
-      tableHTML += stdRow('No. of Numbers', numNums);
-      tableHTML += stdRow('Number Cost', `${fmtRupee(numCost)} ${perUnit('/number/month')}`);
+      tableHTML += secRow('TFN Number Plan');
+      tableHTML += stdRow('No. of TFN Numbers', numNums);
+      tableHTML += stdRow('TFN Number Cost', `${fmtRupee(numCost)} ${perUnit('/number/month')}`);
       tableHTML += indRow('Calculation', `${numNums} number(s) × ${numMonths2} months × ${fmtRupee(numCost)} = <strong>${fmtRupee(totalNumCost)}</strong>`);
 
+      const tfnVnEnabled = item.values['add_vn'] === 1;
+      if (tfnVnEnabled) {
+        tableHTML += secRow('Virtual Landline Number Plan');
+        tableHTML += stdRow('Free Virtual Landline Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+        tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
+        const tfnPaidVNs = getSafeNum('num_paid_numbers') || 0;
+        if (tfnPaidVNs > 0) {
+          const tfnVnCost = getSafeNum('extra_number');
+          tableHTML += stdRow('Extra Numbers', `${tfnPaidVNs} Number(s)`);
+          tableHTML += indRow('Calculation', `${tfnPaidVNs} numbers × ${numMonths2} months × ${fmtRupee(tfnVnCost)} = <strong>${fmtRupee(tfnPaidVNs * numMonths2 * tfnVnCost)}</strong>`);
+        }
+      }
       tableHTML += secRow('Call Credits & Charges');
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
-      tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+      tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
 
     } else if (sk === 'voice_exotel_stream') {
       const numChs = getSafeNum('num_channels') || 0;
@@ -2980,13 +2992,19 @@ function updatePreview() {
       const isRentalWaived = rentalVal === 0;
       tableHTML += stdRow('Account Rental', isRentalWaived ? null : (fmtRupee(rentalVal) + '/month'), isRentalWaived);
       tableHTML += stdRow('Setup Charges', null, true);
-      if (!isRentalWaived) {
-        tableHTML += stdRow('No. of Months', getVal('num_months'));
-      }
+      tableHTML += stdRow('No. of Months', getVal('num_months'));
+
       tableHTML += secRow('Number Plan');
-      const smsNumCost = getSafeNum('number_cost');
-      const isSmsNumWaived = smsNumCost === 0;
-      tableHTML += stdRow('Number Cost', isSmsNumWaived ? null : (fmtRupee(smsNumCost) + '/month'), isSmsNumWaived);
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
+      const smsPaidNums = getSafeNum('num_paid_numbers') || 0;
+      if (smsPaidNums > 0) {
+        const smsNumMonths = getSafeNum('num_months') || 0;
+        const smsExtraCost = getSafeNum('extra_number');
+        tableHTML += stdRow('Extra Numbers', `${smsPaidNums} Number(s)`);
+        tableHTML += indRow('Calculation', `${smsPaidNums} numbers × ${smsNumMonths} months × ${fmtRupee(smsExtraCost)} = <strong>${fmtRupee(smsPaidNums * smsNumMonths * smsExtraCost)}</strong>`);
+      }
+
       tableHTML += secRow('SMS Credits & Rates');
       tableHTML += stdRow('SMS Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('SMS Cost', fmtPaiseMsg(getSafeNum('sms_cost')));
@@ -2997,13 +3015,19 @@ function updatePreview() {
       const isWaRentalWaived = waRentalVal === 0;
       tableHTML += stdRow('Account Rental', isWaRentalWaived ? null : (`${fmtRupee(waRentalVal)} per month`), isWaRentalWaived);
       tableHTML += stdRow('Setup Charges', null, true);
-      if (!isWaRentalWaived) {
-        tableHTML += stdRow('No. of Months', getVal('num_months'));
-      }
+      tableHTML += stdRow('No. of Months', getVal('num_months'));
+
       tableHTML += secRow('Number Plan');
-      const waNumCost = getSafeNum('number_cost');
-      const isWaNumWaived = waNumCost === 0;
-      tableHTML += stdRow('Number Cost', isWaNumWaived ? null : (`${fmtRupee(waNumCost)} per month`), isWaNumWaived);
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
+      const waPaidNums = getSafeNum('num_paid_numbers') || 0;
+      if (waPaidNums > 0) {
+        const waNumMonths = getSafeNum('num_months') || 0;
+        const waExtraCost = getSafeNum('extra_number');
+        tableHTML += stdRow('Extra Numbers', `${waPaidNums} Number(s)`);
+        tableHTML += indRow('Calculation', `${waPaidNums} numbers × ${waNumMonths} months × ${fmtRupee(waExtraCost)} = <strong>${fmtRupee(waPaidNums * waNumMonths * waExtraCost)}</strong>`);
+      }
+
       tableHTML += secRow('WhatsApp Credits & Rates');
       tableHTML += stdRow('WA Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Utility Message Cost', fmtPaiseMsg(getSafeNum('wa_utility')));
@@ -4842,6 +4866,38 @@ function setupQuoteGenerator() {
   initQuoteNumber();
   updatePreview();
   updateNavCounters();
+
+  // Up/Down arrow keys navigate between focusable fields instead of
+  // incrementing/decrementing number input values
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    const active = e.target;
+    if (!active || !active.matches('input.q-input, select.q-input, textarea.q-input')) return;
+    e.preventDefault();
+
+    // Collect all visible, enabled inputs inside the quote applet
+    const applet = document.getElementById('quote-applet') || document;
+    const focusable = Array.from(
+      applet.querySelectorAll('input.q-input:not([disabled]):not([readonly]), select.q-input:not([disabled]), textarea.q-input:not([disabled])')
+    ).filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    });
+
+    const idx = focusable.indexOf(active);
+    if (idx === -1) return;
+    const next = e.key === 'ArrowDown'
+      ? focusable[idx + 1]
+      : focusable[idx - 1];
+    if (next) {
+      next.focus();
+      // Place cursor at end for text inputs
+      if (next.type !== 'number') {
+        const len = next.value.length;
+        next.setSelectionRange(len, len);
+      }
+    }
+  }, true);
 
   // Set dirty flag when any field changes
   document.getElementById('quote-applet')?.addEventListener('input', () => {

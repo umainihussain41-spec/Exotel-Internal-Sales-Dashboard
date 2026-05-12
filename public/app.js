@@ -102,45 +102,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     }, false);
 
     // ── Session Expiry Warning ─────────────────────────────────
-    // Warn the SE 5 min before the 2-hour session ends so they can save drafts
+    // Warns the SE 5 min and 1 min before session ends at 11:59 PM tonight
     (function setupSessionWarning() {
-        const SESSION_MS   = 120 * 60 * 1000; // 2 hours (match server)
-        const WARN_BEFORE  = 5  * 60 * 1000;  // warn at 5 min remaining
-        const WARN_BEFORE2 = 1  * 60 * 1000;  // second warn at 1 min remaining
+        const WARN_BEFORE  = 5 * 60 * 1000; // warn 5 min before expiry
+        const WARN_BEFORE2 = 1 * 60 * 1000; // second warn 1 min before expiry
 
         let warnTimer1, warnTimer2;
 
-        function scheduleWarnings() {
+        function scheduleWarnings(sessionMs) {
             clearTimeout(warnTimer1);
             clearTimeout(warnTimer2);
 
-            warnTimer1 = setTimeout(() => {
-                showToast(
-                    '⏰ Your session expires in <strong>5 minutes</strong>. Save your work or keep interacting to stay logged in.',
-                    'warning'
-                );
-            }, SESSION_MS - WARN_BEFORE);
+            const delay1 = sessionMs - WARN_BEFORE;
+            const delay2 = sessionMs - WARN_BEFORE2;
 
-            warnTimer2 = setTimeout(() => {
-                showToast(
-                    '🔴 Session expiring in <strong>1 minute</strong>! Please save your draft now.',
-                    'error'
-                );
-            }, SESSION_MS - WARN_BEFORE2);
+            if (delay1 > 0) {
+                warnTimer1 = setTimeout(() => {
+                    showToast(
+                        '⏰ Your session expires at <strong>11:59 PM</strong> tonight — save your work before then.',
+                        'warning'
+                    );
+                }, delay1);
+            }
+
+            if (delay2 > 0) {
+                warnTimer2 = setTimeout(() => {
+                    showToast(
+                        '🔴 Session ending in <strong>1 minute</strong>! Please save your draft now.',
+                        'error'
+                    );
+                }, delay2);
+            }
         }
 
-        // Start the warning clock
-        scheduleWarnings();
-
-        // Any fetch to the server resets the rolling session — reset our client clock too
-        const _origFetch = window.fetch;
-        window.fetch = function(...args) {
-            const result = _origFetch.apply(this, args);
-            // Only reset on same-origin calls (our own API)
-            const url = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
-            if (!url.startsWith('http')) scheduleWarnings();
-            return result;
-        };
+        // Fetch the real TTL from the server (ms until 11:59 PM tonight)
+        fetch('/api/session-ttl')
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+                const msLeft = data?.msLeft || 0;
+                if (msLeft > 0) scheduleWarnings(msLeft);
+            })
+            .catch(() => {
+                // Fallback: compute locally
+                const now = new Date();
+                const eod = new Date(now);
+                eod.setHours(23, 59, 59, 0);
+                const msLeft = Math.max(eod - now, 0);
+                if (msLeft > 0) scheduleWarnings(msLeft);
+            });
     })();
 });
 

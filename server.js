@@ -149,19 +149,37 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true })); // Exotel webhooks send form-encoded
 app.use(express.static(path.join(__dirname, 'public')));
+// Returns milliseconds from now until 11:59:59 PM tonight (local server time)
+function msTillEndOfDay() {
+    const now = new Date();
+    const eod = new Date(now);
+    eod.setHours(23, 59, 59, 0);
+    return Math.max(eod - now, 60 * 1000); // at least 1 minute
+}
+
 app.use(session({
     secret: process.env.SESSION_SECRET || 'exotel-secret-key-123',
     resave: false,
     saveUninitialized: false,
-    rolling: true,
+    rolling: false,          // session expires at fixed end-of-day, not rolling
     cookie: {
         secure: false,
-        maxAge: 120 * 60 * 1000  // 2 hours
+        maxAge: msTillEndOfDay() // set once at server start; close enough for a day boundary
     }
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+// ─── Session TTL endpoint ────────────────────────────────────────────────────
+// Returns how many milliseconds remain until the session expires (11:59 PM today)
+app.get('/api/session-ttl', ensureAuthenticated, (req, res) => {
+    const now = new Date();
+    const eod = new Date(now);
+    eod.setHours(23, 59, 59, 0);
+    const msLeft = Math.max(eod - now, 0);
+    res.json({ msLeft, expiresAt: eod.toISOString() });
+});
 
 // ─── Passport Google OAuth ───────────────────────────────────────────────────
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
