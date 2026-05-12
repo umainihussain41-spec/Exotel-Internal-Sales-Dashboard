@@ -62,6 +62,16 @@ const TIER_DEFAULTS = {
 };
 
 // ── Terms & Conditions (Full SKU Definitions) ──────────────────────────────
+const STARTUP_PARENT_MAP = {
+  startup_voice: 'voice_exotel_std',
+  startup_stream: 'voice_exotel_stream',
+  startup_tfn: 'voice_exotel_tfn',
+  startup_sms: 'sms_exotel',
+  startup_whatsapp: 'whatsapp_exotel',
+  startup_rcs: 'rcs_exotel',
+  startup_campaigns: 'voice_exotel_campaigns',
+};
+
 function getSkuTncHtml(item) {
   const fields = getSkuFields(item.sku_key, item.tier);
   const getVal = (id) => item.values[id] ?? fields.find(x => x.id === id)?.value ?? 0;
@@ -2917,15 +2927,6 @@ function updatePreview() {
     const sk = item.sku_key;
 
     // Startup plan mapping: render using parent SKU's format
-    const STARTUP_PARENT_MAP = {
-      startup_voice: 'voice_exotel_std',
-      startup_stream: 'voice_exotel_stream',
-      startup_tfn: 'voice_exotel_tfn',
-      startup_sms: 'sms_exotel',
-      startup_whatsapp: 'whatsapp_exotel',
-      startup_rcs: 'rcs_exotel',
-      startup_campaigns: 'voice_exotel_campaigns',
-    };
     // If sk is 'startup', resolve via item.tier
     const resolvedStartupKey = sk === 'startup' ? ('startup_' + (item.tier || 'voice')) : sk;
     const isStartup = sk === 'startup' || !!STARTUP_PARENT_MAP[sk];
