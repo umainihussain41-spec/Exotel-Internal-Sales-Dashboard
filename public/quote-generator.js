@@ -1119,6 +1119,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -1142,6 +1143,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         // No free users - charged from first user, non-waiveable
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         {
           id: 'user_charge', label: 'User Charge (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000,
           note: 'Non-waiveable. Charged from user 1.'
@@ -1168,6 +1170,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'user_charge', label: 'User Charge (₹/user/month)', value: 2000, locked: true, stopType: 'lower', stopVal: 1600 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
@@ -1182,6 +1185,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
         {
           id: 'user_charge', label: 'User Charge (₹/user/month)', value: 2000, locked: true, stopType: 'lower', stopVal: 2000,
@@ -1201,6 +1205,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'num_numbers', label: 'No. of Numbers', value: 1, locked: false },
         { id: 'number_cost', label: 'Number Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
@@ -1268,6 +1273,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t2.free_users ?? 'Unlimited', locked: true, stopType: t2.users_stop ? 'upper' : null, stopVal: t2.users_stop },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'free_numbers', label: 'Free Numbers', value: t2.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, nonEditable: true },
@@ -1302,6 +1308,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -2112,7 +2119,7 @@ function renderFieldsGrouped(fields, item) {
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
     channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
     num_months: 'Plan Overview',
-    num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan',
+    num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan',
@@ -2464,7 +2471,7 @@ function updatePreview() {
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
       tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
       tableRows += cmpRow('Plan', [], true);
-      tableRows += cmpRow('Free Users', colData.map(({ getVal }) => { const fu = getVal('free_users'); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : fu + ' Users (Free)'; }));
+      tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
       tableRows += cmpRow('Extra User Cost', colData.map(({ getSN }) => fmtR(getSN('extra_user_cost')) + perUnit('/user/month')), false, true);
       tableRows += cmpRow('Numbers', [], true);
       tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
@@ -2511,7 +2518,7 @@ function updatePreview() {
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
       tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
       tableRows += cmpRow('User Plan', [], true);
-      tableRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users')));
+      tableRows += cmpRow('No. of Users', colData.map(({ getVal, item }) => { const nu = parseInt(getVal('num_users')) || 0; const eu = parseInt(item.values['extra_users'] ?? 0); return eu > 0 ? `${eu} Free, ${nu} Charged` : nu; }));
       tableRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + perUnit('/user/month')));
       tableRows += cmpRow('Numbers', [], true);
       tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
@@ -2531,7 +2538,7 @@ function updatePreview() {
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
       tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
       tableRows += cmpRow('User Plan', [], true);
-      tableRows += cmpRow('Free Users', colData.map(({ getVal }) => { const fu = getVal('free_users'); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : fu + ' Users (Free)'; }));
+      tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
       tableRows += cmpRow('Numbers', [], true);
       tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
       tableRows += cmpRow('Extra Number Cost', colData.map(() => fmtR(499) + perUnit('/number/month')), false, true);
@@ -2687,7 +2694,9 @@ function updatePreview() {
 
       tableHTML += secRow('User Plan');
       const fu = getVal('free_users');
-      tableHTML += stdRow('Free Users', fu === null || fu === 'Unlimited' ? 'Unlimited (Included)' : fu + ' Users (Free)');
+      const fuExtra = getSafeNum('extra_users') || 0;
+      const fuDisplay = (fu === null || fu === 'Unlimited') ? 'Unlimited (Included)' : (fuExtra > 0 ? `${fu} + ${fuExtra} Users (Free)` : fu + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuDisplay);
       tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
 
       tableHTML += secRow('Number Plan');
@@ -2739,7 +2748,11 @@ function updatePreview() {
       tableHTML += stdRow('Channels', 'Unlimited');
 
       tableHTML += secRow('User Plan');
-      tableHTML += stdRow('No. of Users', numUsers);
+      const vStdExtraUsers = getSafeNum('extra_users') || 0;
+      const vStdUserLabel = vStdExtraUsers > 0
+        ? `${vStdExtraUsers} Free, ${numUsers} Charged`
+        : numUsers;
+      tableHTML += stdRow('No. of Users', vStdUserLabel);
       tableHTML += stdRow('User Charge', `${fmtRupee(uCharge)} ${perUnit('/user/month')}`);
       tableHTML += indRow('Calculation', `${numUsers} users × ${validity} months × ${fmtRupee(uCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
 
@@ -2782,7 +2795,9 @@ function updatePreview() {
 
       tableHTML += secRow('User Plan');
       const fu2 = getVal('free_users');
-      tableHTML += stdRow('Free Users', fu2 === null || fu2 === 'Unlimited' ? 'Unlimited (Included)' : fu2 + ' Users (Free)');
+      const fu2Extra = getSafeNum('extra_users') || 0;
+      const fu2Display = (fu2 === null || fu2 === 'Unlimited') ? 'Unlimited (Included)' : (fu2Extra > 0 ? `${fu2} + ${fu2Extra} Users (Free)` : fu2 + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fu2Display);
       tableHTML += indRow('Extra User Cost', `${fmtRupee(199)} ${perUnit('/user/month')}`);
 
       tableHTML += secRow('Number Plan');
@@ -2827,7 +2842,11 @@ function updatePreview() {
       tableHTML += stdRow('Channels', 'Unlimited');
 
       tableHTML += secRow('User Plan');
-      tableHTML += stdRow('No. of Users', numUsers);
+      const userExtraFree = getSafeNum('extra_users') || 0;
+      const userLabel = userExtraFree > 0
+        ? `${userExtraFree} Free, ${numUsers} Charged`
+        : numUsers;
+      tableHTML += stdRow('No. of Users', userLabel);
       tableHTML += stdRow('No. of Months', numMonths);
       tableHTML += stdRow('User Charge', `${fmtRupee(userCharge)} ${perUnit('/user/month')}`);
       tableHTML += indRow('Calculation', `${numUsers} users × ${numMonths} months × ${fmtRupee(userCharge)} = <strong>${fmtRupee(totalUserCost)}</strong>`);
@@ -2863,7 +2882,9 @@ function updatePreview() {
 
       tableHTML += secRow('User Plan');
       const fuTfn = getVal('free_users');
-      tableHTML += stdRow('Free Users', fuTfn === null || fuTfn === 'Unlimited' ? 'Unlimited (Included)' : fuTfn + ' Users (Free)');
+      const fuTfnExtra = getSafeNum('extra_users') || 0;
+      const fuTfnDisplay = (fuTfn === null || fuTfn === 'Unlimited') ? 'Unlimited (Included)' : (fuTfnExtra > 0 ? `${fuTfn} + ${fuTfnExtra} Users (Free)` : fuTfn + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuTfnDisplay);
       tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
 
       tableHTML += secRow('Number Plan');
@@ -2933,7 +2954,9 @@ function updatePreview() {
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('Channels', 'Unlimited');
       const fuCamp = getVal('free_users');
-      tableHTML += stdRow('Free Users', fuCamp === null || fuCamp === 'Unlimited' ? 'Unlimited (Included)' : fuCamp + ' Users (Free)');
+      const fuCampExtra = getSafeNum('extra_users') || 0;
+      const fuCampDisplay = (fuCamp === null || fuCamp === 'Unlimited') ? 'Unlimited (Included)' : (fuCampExtra > 0 ? `${fuCamp} + ${fuCampExtra} Users (Free)` : fuCamp + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuCampDisplay);
 
       tableHTML += secRow('Number Plan');
       tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
