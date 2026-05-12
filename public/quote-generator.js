@@ -50,6 +50,8 @@ const SKUS = [
   { key: 'sip_veeno', label: 'SIP Lines', sub: 'WebRTC / Browser', entity: 'Veeno', icon: I_MONITOR, hasTiers: true },
   { key: 'num_1400', label: '1400 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
   { key: 'num_1600', label: '1600 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
+  // ── Startup Plan (single SKU, sub-product via tier selector) ─────
+  { key: 'startup', label: 'Startup Plan', sub: 'Free Trial Bundle', entity: 'Exotel', icon: I_PHONE, hasTiers: true, isStartup: true },
 ];
 
 // Tier defaults
@@ -1307,6 +1309,109 @@ function getSkuFields(skuKey, tier) {
     case 'voice_veeno_campaigns':
       return [];
 
+    // ── Startup Plan wrapper (delegates to startup_* by tier) ───────
+    case 'startup': {
+      const validSubs = ['voice','stream','tfn','sms','whatsapp','rcs','campaigns'];
+      const sub = validSubs.includes(tier) ? tier : 'voice';
+      return getSkuFields('startup_' + sub, 'dabbler');
+    }
+    case 'startup_voice':
+      return [
+        { id: 'validity', label: 'Validity (months)', value: 6, locked: true, nonEditable: true },
+        { id: 'rental', label: 'Account Rental (₹)', value: 4999, locked: true, nonEditable: true, waived: true },
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'free_users', label: 'Free Users', value: 3, locked: false },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
+        { id: 'credits', label: 'Call Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'single_leg', label: 'Single Leg Charge (p/min)', value: 60, locked: false },
+        { id: 'incoming', label: 'Incoming (Single Leg) (p/min)', value: 60, locked: false },
+        { id: 'outgoing', label: 'Outgoing (Double Leg) (p/min)', value: 120, locked: false },
+      ];
+    case 'startup_stream':
+      return [
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'num_channels', label: 'No. of Channels', value: 2, locked: false },
+        { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: false },
+        { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
+        { id: 'credits', label: 'Call Credits (₹)', value: 3000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: false },
+        { id: 'incoming', label: 'Incoming Call Charge (p/min)', value: 20, locked: false },
+        { id: 'failed_calls', label: 'Failed Calls (p/min)', value: 5, locked: false },
+      ];
+    case 'startup_tfn':
+      return [
+        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'free_users', label: 'Free Users', value: 3, locked: false },
+        { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
+        { id: 'num_numbers', label: 'No. of TFN Numbers', value: 1, locked: false },
+        { id: 'number_cost', label: 'TFN Number Cost (₹/number/month)', value: 1500, locked: false },
+        { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
+        { id: 'credits', label: 'Call Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'incoming', label: 'Incoming Call Charge (p/min)', value: 190, locked: false },
+      ];
+    case 'startup_sms':
+      return [
+        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
+        { id: 'credits', label: 'SMS Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'extra_number', label: 'SMS Cost (p/msg)', value: 21, locked: false },
+      ];
+    case 'startup_whatsapp':
+      return [
+        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
+        { id: 'credits', label: 'WA Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'wa_utility', label: 'WhatsApp Utility (p/msg)', value: 21, locked: true, nonEditable: true },
+        { id: 'wa_promo', label: 'WhatsApp Promo (p/msg)', value: 86, locked: true, nonEditable: true },
+        { id: 'wa_api', label: 'WhatsApp API Charge (p/msg)', value: 6, locked: false },
+      ];
+    case 'startup_rcs':
+      return [
+        { id: 'brand_fee', label: 'Brand Registration Fee (₹)', value: 8500, locked: true, nonEditable: true, waived: true },
+        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
+        { id: 'number_cost', label: 'Number Cost (₹/month)', value: 0, locked: false },
+        { id: 'credits', label: 'RCS Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'rcs_biz', label: 'Business Messaging (p/msg)', value: 15, locked: false },
+        { id: 'rcs_rich', label: 'Rich Media Messaging (p/msg)', value: 25, locked: false },
+        { id: 'rcs_reply', label: 'User Reply Charge (p/msg)', value: 10, locked: false },
+      ];
+    case 'startup_campaigns':
+      return [
+        { id: 'validity', label: 'Validity (months)', value: 1, locked: false },
+        { id: 'rental', label: 'Account Rental (₹)', value: 4999, locked: true, nonEditable: true, waived: true },
+        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'free_users', label: 'Free Users', value: 3, locked: false },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
+        { id: 'credits', label: 'Call Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'call_rate', label: 'Campaign Rate (p/min)', value: 60, locked: false },
+      ];
+
     default: return [];
   }
 }
@@ -1718,9 +1823,63 @@ function updateEntityBadge(entity) {
 }
 
 // ── Tier selector ──────────────────────────────────────────
+const STARTUP_SUB_LABELS = {
+  voice:     { label: 'Voice STD',     sub: 'Minute Based' },
+  stream:    { label: 'Web Streaming', sub: 'WebSocket / Bot' },
+  tfn:       { label: 'Toll-Free',     sub: 'TFN' },
+  sms:       { label: 'SMS',           sub: 'Messaging' },
+  whatsapp:  { label: 'WhatsApp',      sub: 'Messaging' },
+  rcs:       { label: 'RCS',           sub: 'Messaging' },
+  campaigns: { label: 'Campaigns',     sub: 'Single-leg' },
+};
+
 function renderTierSelector() {
   const area = document.getElementById('sku-config-area');
-  area.innerHTML = `
+  const isStartupSku = QG.currentSku === 'startup';
+
+  if (isStartupSku) {
+    const validSubs = Object.keys(STARTUP_SUB_LABELS);
+    if (!validSubs.includes(QG.currentTier)) {
+      QG.currentTier = 'voice';
+      const item = getActiveItem();
+      if (item) item.tier = 'voice';
+    }
+    area.innerHTML = `
+      <div class="q-card sku-tier-card" style="padding:16px 20px;">
+        <div class="q-card-header" style="margin-bottom:12px;">
+          <div class="q-card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            Select Product for Startup Plan
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+          ${Object.entries(STARTUP_SUB_LABELS).map(([key, info]) => `
+            <button onclick="selectTier('${key}')"
+              style="display:flex; align-items:center; justify-content:center;
+                     padding:10px 6px; border-radius:8px; cursor:pointer; font-family:inherit;
+                     border: 2px solid ${QG.currentTier === key ? '#0284c7' : '#e2e8f0'};
+                     background: ${QG.currentTier === key ? '#f0f9ff' : '#f8fafc'};
+                     box-shadow: ${QG.currentTier === key ? '0 0 0 3px #bae6fd' : 'none'};
+                     font-size:0.85rem; font-weight:600;
+                     color:${QG.currentTier === key ? '#0284c7' : '#475569'};
+                     transition:all 0.15s ease; white-space:nowrap;">${info.label}
+            </button>`
+          ).join('')}
+        </div>
+        <div id="startup-budget-bar-wrap" style="margin-top:12px; padding-top:10px; border-top:1px solid #e0f2fe;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:0.78rem; font-weight:600; color:#475569;">Credit Budget</span>
+            <span id="startup-budget-label" style="font-size:0.78rem; font-weight:700; color:#0284c7;">&#8377;0 / &#8377;6,000</span>
+          </div>
+          <div style="height:6px; background:#e2e8f0; border-radius:4px; overflow:hidden;">
+            <div id="startup-budget-fill" style="height:100%; width:0%; background:#0284c7; border-radius:4px; transition:width 0.3s ease, background 0.3s ease;"></div>
+          </div>
+          <p id="startup-budget-warning" style="display:none; margin:6px 0 0; font-size:0.75rem; color:#dc2626; font-weight:600;">&#9888; Credit limit exceeded. Max allowed is &#8377;6,000.</p>
+        </div>
+      </div>
+    `;
+  } else {
+    area.innerHTML = `
     <div class="q-card sku-tier-card">
       <div class="q-card-header">
         <div class="q-card-title">
@@ -1735,6 +1894,7 @@ function renderTierSelector() {
       </div>
     </div>
   `;
+  }
   renderSkuForm(QG.currentSku, QG.currentTier);
 }
 
@@ -1744,8 +1904,13 @@ function selectTier(tier) {
   item.values = {};
   QG.currentTier = tier;
   QG.skuValues = item.values;
-  document.querySelectorAll('.tier-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().startsWith(tier)));
-  renderSkuForm(QG.currentSku, tier);
+  if (QG.currentSku === 'startup') {
+    // Re-render the whole product selector so the active button updates
+    renderTierSelector();
+  } else {
+    document.querySelectorAll('.tier-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().startsWith(tier)));
+    renderSkuForm(QG.currentSku, tier);
+  }
 }
 
 // ── SKU Form Render ────────────────────────────────────────
@@ -2189,7 +2354,74 @@ async function logStopLockOverride(field, val) {
 }
 
 // -- Live Preview Renderer ----------------------------------
+// ── Startup Budget Meter ────────────────────────────────────────
+function calcStartupTotal() {
+  const item = getActiveItem();
+  if (!item) return 0;
+  const v = item.values;
+  const sub = item.tier || 'voice';
+  const g = (k, def = 0) => parseFloat(v[k] ?? def) || 0;
+
+  switch ('startup_' + sub) {
+    case 'startup_voice':
+      // credits + paid extra numbers over validity
+      return g('credits')
+        + g('num_paid_numbers') * g('extra_number', 499) * g('validity', 6);
+
+    case 'startup_stream':
+      // channels × cost × months + credits
+      return g('num_channels', 2) * g('channel_cost', 1500) * g('num_months', 1)
+        + g('credits');
+
+    case 'startup_tfn':
+      // TFN numbers × cost × months + credits + paid extra numbers
+      return g('num_numbers', 1) * g('number_cost', 1500) * g('num_months', 1)
+        + g('credits')
+        + g('num_paid_numbers') * g('extra_number', 499) * g('num_months', 1);
+
+    case 'startup_sms':
+      // credits + paid extra numbers × cost × months
+      return g('credits')
+        + g('num_paid_numbers') * g('extra_number', 499) * g('num_months', 1);
+
+    case 'startup_whatsapp':
+      // credits + paid extra numbers × cost × months
+      return g('credits')
+        + g('num_paid_numbers') * g('extra_number', 499) * g('num_months', 1);
+
+    case 'startup_rcs':
+      // number_cost × months + credits
+      return g('number_cost', 0) * g('num_months', 1)
+        + g('credits');
+
+    case 'startup_campaigns':
+      // credits + paid extra numbers × cost × validity
+      return g('credits')
+        + g('num_paid_numbers') * g('extra_number', 499) * g('validity', 1);
+
+    default:
+      return g('credits');
+  }
+}
+
+window.updateStartupBudget = function () {
+  const fill = document.getElementById('startup-budget-fill');
+  const label = document.getElementById('startup-budget-label');
+  const warning = document.getElementById('startup-budget-warning');
+  if (!fill || !label) return;
+  const used = calcStartupTotal();
+  const cap = 6000;
+  const pct = Math.min((used / cap) * 100, 100);
+  const over = used > cap;
+  fill.style.width = pct + '%';
+  fill.style.background = over ? '#dc2626' : pct > 80 ? '#f59e0b' : '#0284c7';
+  label.style.color = over ? '#dc2626' : pct > 80 ? '#b45309' : '#0284c7';
+  label.innerHTML = `&#8377;${Math.round(used).toLocaleString('en-IN')} / &#8377;6,000`;
+  if (warning) warning.style.display = over ? 'block' : 'none';
+};
+
 function updatePreview() {
+  if (QG.currentSku === 'startup') window.updateStartupBudget();
   const doc = document.getElementById('quote-document');
   if (!doc) return;
   const validItems = QG.skuItems.filter(i => i.sku_key);
@@ -2678,11 +2910,28 @@ function updatePreview() {
 
     let tableHTML = '';
     const sk = item.sku_key;
+
+    // Startup plan mapping: render using parent SKU's format
+    const STARTUP_PARENT_MAP = {
+      startup_voice: 'voice_exotel_std',
+      startup_stream: 'voice_exotel_stream',
+      startup_tfn: 'voice_exotel_tfn',
+      startup_sms: 'sms_exotel',
+      startup_whatsapp: 'whatsapp_exotel',
+      startup_rcs: 'rcs_exotel',
+      startup_campaigns: 'voice_exotel_campaigns',
+    };
+    // If sk is 'startup', resolve via item.tier
+    const resolvedStartupKey = sk === 'startup' ? ('startup_' + (item.tier || 'voice')) : sk;
+    const isStartup = sk === 'startup' || !!STARTUP_PARENT_MAP[sk];
+    const effectiveSk = STARTUP_PARENT_MAP[resolvedStartupKey] || (STARTUP_PARENT_MAP[sk]) || sk;
+
     const isEditingThisItem = (item.id === QG.activeItemId);
     const showSms = isEditingThisItem ? document.getElementById('toggle-sms-addon_' + QG.activeItemId)?.checked : !!getVal('sms_cost');
     const showWa = isEditingThisItem ? document.getElementById('toggle-wa-addon_' + QG.activeItemId)?.checked : !!getVal('wa_api');
 
-    if (sk === 'voice_exotel_std') {
+    // Startup banner header (renders before the SKU-format rows)
+    if (effectiveSk === 'voice_exotel_std') {
       tableHTML += secRow('Plan Details');
       const baseValidityE = parseFloat(getVal('validity')) || 0;
       const extraValidityE = getSafeNum('extra_validity') || 0;
@@ -2729,7 +2978,7 @@ function updatePreview() {
           tableHTML += stdRow('WhatsApp API Charge', fmtPaiseMsg(getSafeNum('wa_api')));
         }
       }
-    } else if (sk === 'voice_veeno_std') {
+    } else if (effectiveSk === 'voice_veeno_std') {
       const numUsers = getSafeNum('num_users') || 0;
       const uCharge = getSafeNum('user_charge') || 1000;
       const validity = parseFloat(getVal('validity')) || 0;
@@ -2785,7 +3034,7 @@ function updatePreview() {
       tableHTML += stdRow('Incoming Call Charges', incomingV === 0 ? FREE : fmtPaise(incomingV));
       tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
 
-    } else if (sk === 'sip_veeno') {
+    } else if (effectiveSk === 'sip_veeno') {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Validity', getVal('validity') + ' Months');
       const rentalSip = getSafeNum('rental');
@@ -2826,7 +3075,7 @@ function updatePreview() {
       tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
       tableHTML += stdRow('Attempt Charges', '5p / failed call');
 
-    } else if (sk === 'voice_exotel_user' || sk === 'voice_veeno_user') {
+    } else if (effectiveSk === 'voice_exotel_user' || sk === 'voice_veeno_user') {
       const isVeeno = sk === 'voice_veeno_user';
       const numUsers = getSafeNum('num_users') || 0;
       const numMonths = getSafeNum('num_months') || 0;
@@ -2868,7 +3117,7 @@ function updatePreview() {
         tableHTML += indRow('Calculation', `${didNums} DID(s) × ${numMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotal)}</strong>`);
       }
 
-    } else if (sk === 'voice_exotel_tfn') {
+    } else if (effectiveSk === 'voice_exotel_tfn') {
       const numNums = getSafeNum('num_numbers') || 0;
       const numMonths2 = getSafeNum('num_months') || 0;
       const numCost = getSafeNum('number_cost') || 0;
@@ -2908,7 +3157,7 @@ function updatePreview() {
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
 
-    } else if (sk === 'voice_exotel_stream') {
+    } else if (effectiveSk === 'voice_exotel_stream') {
       const numChs = getSafeNum('num_channels') || 0;
       const numMos = getSafeNum('num_months') || 0;
       const chCost = getSafeNum('channel_cost') || 0;
@@ -2950,7 +3199,7 @@ function updatePreview() {
         tableHTML += indRow('Calculation', `${paidNumsStr} × ${numMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsStr * numMos * getSafeNum('extra_number'))}</strong>`);
       }
 
-    } else if (sk === 'voice_exotel_campaigns' || sk === 'voice_veeno_campaigns') {
+    } else if (effectiveSk === 'voice_exotel_campaigns' || sk === 'voice_veeno_campaigns') {
       const campValidity = parseFloat(getVal('validity')) || 0;
       const campRate = getSafeNum('call_rate') || 0;
       const campBaseCredits = getSafeNum('credits');
@@ -2986,7 +3235,7 @@ function updatePreview() {
       tableHTML += stdRow('Call Credits', campCreditDisplay);
       tableHTML += stdRow('Campaign Call Charges', fmtPaise(campRate));
 
-    } else if (sk === 'sms_exotel') {
+    } else if (effectiveSk === 'sms_exotel') {
       tableHTML += secRow('Plan Details');
       const rentalVal = getSafeNum('rental');
       const isRentalWaived = rentalVal === 0;
@@ -3009,7 +3258,7 @@ function updatePreview() {
       tableHTML += stdRow('SMS Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('SMS Cost', fmtPaiseMsg(getSafeNum('sms_cost')));
 
-    } else if (sk === 'whatsapp_exotel') {
+    } else if (effectiveSk === 'whatsapp_exotel') {
       tableHTML += secRow('Plan Details');
       const waRentalVal = getSafeNum('rental');
       const isWaRentalWaived = waRentalVal === 0;
@@ -3034,7 +3283,7 @@ function updatePreview() {
       tableHTML += stdRow('Promotional Message Cost', fmtPaiseMsg(getSafeNum('wa_promo')));
       tableHTML += stdRow('API Charge (per msg)', fmtPaiseMsg(getSafeNum('wa_api')));
 
-    } else if (sk === 'rcs_exotel') {
+    } else if (effectiveSk === 'rcs_exotel') {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Brand Registration Fee', fmtRupee(getSafeNum('brand_fee')));
       tableHTML += stdRow('Account Rental', W);
@@ -3050,7 +3299,7 @@ function updatePreview() {
       tableHTML += stdRow('Rich Media Messaging', fmtPaiseMsg(getSafeNum('rcs_rich')));
       tableHTML += stdRow('User Reply Charge', fmtPaiseMsg(getSafeNum('rcs_reply')));
 
-    } else if (sk === 'num_1400' || sk === 'num_1600') {
+    } else if (effectiveSk === 'num_1400' || sk === 'num_1600') {
       const numRental = getSafeNum('rental') || 0;
       const numMosN = getSafeNum('num_months') || 0;
       const numChsN = getSafeNum('num_channels') || 0;
@@ -3072,6 +3321,21 @@ function updatePreview() {
       tableHTML += secRow('Call Credits & Charges');
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+
+    } else if (sk.startsWith('startup_')) {
+      // ── Startup Plan: all rows shown as complimentary ────────
+      tableHTML += `<tr><td colspan="2" style="padding:8px 14px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-weight:700; font-size:0.88rem; border-radius:4px 4px 0 0;">
+        🌱  Complimentary Startup Bundle &mdash; ₹0 to client
+      </td></tr>`;
+      fields.forEach(f => {
+        const val = item.values[f.id] ?? f.value;
+        tableHTML += `<tr style="background:#f0fdf4;">
+          <td style="padding:7px 14px; font-size:0.85rem; color:#374151; border-bottom:1px solid #bbf7d0; width:45%;">${sanitize(cleanLabel(f.label))}</td>
+          <td style="padding:7px 14px; font-size:0.85rem; color:#374151; border-bottom:1px solid #bbf7d0;">${f.waived ? '<span style="color:#16a34a;font-weight:600;">Waived</span>' : `<strong>${val}</strong>`}</td>
+        </tr>`;
+      });
+      tableHTML += `<tr style="background:#dcfce7;"><td style="padding:8px 14px; font-size:0.85rem; font-weight:700; color:#15803d;">Total Cost to Client</td>
+        <td style="padding:8px 14px; font-size:0.9rem; font-weight:700; color:#15803d;">Complimentary (₹0)</td></tr>`;
 
     } else {
       fields.forEach(f => {
@@ -3108,7 +3372,7 @@ function updatePreview() {
     const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
     if (didNumbers > 0) subtotal += didNumbers * 1500 * months;
 
-    grandSubtotal += subtotal;
+    grandSubtotal += isStartup ? 0 : subtotal;
 
     const tierLabel = sku.hasTiers && item.tier
       ? ' - ' + item.tier.charAt(0).toUpperCase() + item.tier.slice(1)
@@ -4934,3 +5198,4 @@ if (document.readyState === 'loading') {
 } else {
   setupQuoteGenerator();
 }
+
