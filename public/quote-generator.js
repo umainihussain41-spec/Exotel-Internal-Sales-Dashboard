@@ -1343,7 +1343,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'credits', label: 'Call Credits (₹)', value: 3000, locked: false, stopType: 'upper', stopVal: 6000 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: false },
         { id: 'incoming', label: 'Incoming Call Charge (p/min)', value: 20, locked: false },
-        { id: 'failed_calls', label: 'Failed Calls (p/min)', value: 5, locked: false },
+        { id: 'attempt', label: 'Failed Calls (p/min)', value: 5, locked: false },
       ];
     case 'startup_tfn':
       return [
@@ -1354,8 +1354,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'num_numbers', label: 'No. of TFN Numbers', value: 1, locked: false },
         { id: 'number_cost', label: 'TFN Number Cost (₹/number/month)', value: 1500, locked: false },
-        { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
-        { id: 'credits', label: 'Call Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
+        { id: 'num_months', label: 'No. of Months', value: 2, locked: false },
+        { id: 'credits', label: 'Call Credits (₹)', value: 3000, locked: false, stopType: 'upper', stopVal: 6000 },
         { id: 'incoming', label: 'Incoming Call Charge (p/min)', value: 190, locked: false },
       ];
     case 'startup_sms':
@@ -3597,6 +3597,15 @@ async function generateQuote() {
   const firstSku = SKUS.find(s => s.key === validItems[0].sku_key);
 
   const company = document.getElementById('q-client-company')?.value?.trim() || '';
+
+  // Strict validation: Startup Plan cannot exceed 6000 total (no manager override allowed)
+  if (QG.currentSku === 'startup') {
+    const total = window.calcStartupTotal ? window.calcStartupTotal() : 0;
+    if (total > 6000) {
+      showAlert(`Startup Plan budget exceeded! Total is ₹${Math.round(total).toLocaleString('en-IN')}, but maximum allowed is ₹6,000. Please reduce credits or paid additions before generating.`, { type: 'error', title: 'Hard Stop: Budget Exceeded' });
+      return;
+    }
+  }
 
   const violations = [];
   for (const item of validItems) {
