@@ -351,7 +351,7 @@ function getSkuTncHtml(item) {
         <li style="margin-bottom:8px;"><strong>Pricing &amp; Rental</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Rental charges cover: User logins, TFN number(s), Call recordings, Analytics.</li>
-            <li>Unlimited channels are shared across clients. No separate PRI line costs are charged.</li>
+            <li>CPM plan: First 200 minutes/day are included; usage beyond 200 mins/day is additionally chargeable. No separate PRI line costs are charged.</li>
           </ul>
         </li>
         <li style="margin-bottom:8px;"><strong>Billing &amp; Payments</strong>
@@ -1022,7 +1022,7 @@ function getSkuTncHtml(item) {
         </li>
         <li style="margin-bottom:8px;"><strong>Channels</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Unlimited channels offered from a shared pool with ~130% buffer over prior month's usage.</li>
+            <li>CPM plan: First 200 minutes/day are included; usage beyond 200 mins/day is additionally chargeable.</li>
             <li>No separate PRI line charges.</li>
           </ul>
         </li>
@@ -1113,7 +1113,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, nonEditable: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
@@ -1136,7 +1136,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: 11, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000, note: 'Flat rate, non-waiveable' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         // No free users - charged from first user, non-waiveable
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
@@ -1164,7 +1164,7 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
@@ -1179,7 +1179,7 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
@@ -1199,7 +1199,7 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
@@ -1275,7 +1275,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: t2.validity, locked: true, nonEditable: true },
         { id: 'rental', label: 'Account Rental (₹)', value: t2.rental, locked: true, nonEditable: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t2.free_users ?? 'Unlimited', locked: true, stopType: t2.users_stop ? 'upper' : null, stopVal: t2.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'free_numbers', label: 'Free Numbers', value: t2.free_numbers, locked: false },
@@ -1310,7 +1310,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, nonEditable: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
@@ -1337,7 +1337,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: 6, locked: true, nonEditable: true },
         { id: 'rental', label: 'Account Rental (₹)', value: 4999, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
@@ -1366,7 +1366,7 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'num_numbers', label: 'No. of TFN Numbers', value: 1, locked: false },
@@ -1416,7 +1416,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: 1, locked: false },
         { id: 'rental', label: 'Account Rental (₹)', value: 4999, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'Channels', value: 'Unlimited', locked: true, nonEditable: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
@@ -1712,7 +1712,7 @@ function renderSkuSelector() {
     ? SKUS.filter(s => s.entity === QG.lockedEntity || s.entity === 'Both')
     : SKUS.filter(s => !s.hidden);
 
-  const compareCapable = ['voice_exotel_std', 'voice_exotel_user', 'voice_veeno_std', 'voice_veeno_user'];
+  const compareCapable = ['voice_exotel_std', 'voice_exotel_user', 'voice_veeno_std', 'voice_veeno_user', 'sip_veeno'];
   const CMP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 4 7 4"/><polyline points="7 20 17 20"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><polyline points="11 8 7 12 11 16"/><polyline points="13 8 17 12 13 16"/></svg>`;
 
   grid.innerHTML = filtered.map(s => {
@@ -2530,7 +2530,7 @@ function updatePreview() {
         return `${fmtR(r)}/month × ${v} months = ${fmtR(r * v)}`;
       }));
       uRows += cmpRow('Setup Charges', colData.map(() => W_CMP));
-      uRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
+      uRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       uRows += cmpRow('User Plan', [], true);
       uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
       uRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + '/user/month'));
@@ -2576,7 +2576,7 @@ function updatePreview() {
       uRows += cmpRow('Plan Details', [], true);
       uRows += cmpRow('Account Rental', colData.map(() => W_CMP));
       uRows += cmpRow('Setup Charges', colData.map(() => W_CMP));
-      uRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
+      uRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       uRows += cmpRow('User Plan', [], true);
       uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
       uRows += cmpRow('No. of Months', colData.map(({ getVal }) => getVal('num_months') + ' Months'));
@@ -2719,7 +2719,7 @@ function updatePreview() {
       }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
-      tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
+      tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('Plan', [], true);
       tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
       tableRows += cmpRow('Extra User Cost', colData.map(({ getSN }) => fmtR(getSN('extra_user_cost')) + perUnit('/user/month')), false, true);
@@ -2766,7 +2766,7 @@ function updatePreview() {
       }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
-      tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
+      tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('User Plan', [], true);
       tableRows += cmpRow('No. of Users', colData.map(({ getVal, item }) => { const nu = parseInt(getVal('num_users')) || 0; const eu = parseInt(item.values['extra_users'] ?? 0); return eu > 0 ? `${eu} Free, ${nu} Charged` : nu; }));
       tableRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + perUnit('/user/month')));
@@ -2783,21 +2783,34 @@ function updatePreview() {
       tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
     } else if (skuKey0 === 'sip_veeno') {
       tableRows += cmpRow('Plan Details', [], true);
-      tableRows += cmpRow('Validity', colData.map(({ getVal }) => getVal('validity') + ' Months'));
+      tableRows += cmpRow('Validity', colData.map(({ getVal, item }) => {
+        const base = parseFloat(getVal('validity') ?? 0);
+        const extra = parseFloat(item.values['extra_validity'] ?? 0);
+        return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
+      }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
-      tableRows += cmpRow('Channels', colData.map(() => 'Unlimited'));
+      tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('User Plan', [], true);
       tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
+      tableRows += cmpRow('Extra User Cost', colData.map(() => fmtR(199) + perUnit('/user/month')), false, true);
       tableRows += cmpRow('Numbers', [], true);
       tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
       tableRows += cmpRow('Extra Number Cost', colData.map(() => fmtR(499) + perUnit('/number/month')), false, true);
       tableRows += cmpRow('Call Credits & Charges', [], true);
-      tableRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
+      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
+        const base = getSN('credits');
+        const extra = parseFloat(item.values['extra_credits'] ?? 0);
+        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
+      }));
       tableRows += cmpRow('Incoming Call Charges', colData.map(({ getSN }) => fmtP(getSN('incoming'))));
       tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => fmtP(getSN('outgoing'))));
-      tableRows += cmpRow('Attempt Charges', colData.map(() => '5p / failed call'));
+      tableRows += cmpRow('Attempt Charges', colData.map(({ getSN }) => {
+        const a = getSN('attempt');
+        return a === 0 ? FREE : (a >= 100 ? '₹' + (a/100).toFixed(2) + '/failed call' : a + 'p / failed call');
+      }));
     }
+
 
     // Totals row
     tableRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;color:#0f172a;">Subtotal (excl. GST)</td>${subtotals.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
@@ -2948,7 +2961,7 @@ function updatePreview() {
       const rentalStd = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
       tableHTML += stdRow('Setup Charges', null, true);
-      tableHTML += stdRow('Channels', 'Unlimited');
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const fu = getVal('free_users');
@@ -3003,7 +3016,7 @@ function updatePreview() {
       tableHTML += stdRow('Account Rental', rVal === 0 ? W : `${fmtRupee(rVal)} ${perUnit('/month')}`);
       tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
       tableHTML += stdRow('Setup Charges', null, true);
-      tableHTML += stdRow('Channels', 'Unlimited');
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const vStdExtraUsers = getSafeNum('extra_users') || 0;
@@ -3049,7 +3062,7 @@ function updatePreview() {
       const rentalSip = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalSip === 0 ? null : fmtRupee(rentalSip), rentalSip === 0);
       tableHTML += stdRow('Setup Charges', null, true);
-      tableHTML += stdRow('Channels', 'Unlimited');
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const fu2 = getVal('free_users');
@@ -3097,7 +3110,7 @@ function updatePreview() {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Account Rental', W);
       tableHTML += stdRow('Setup Charges', null, true);
-      tableHTML += stdRow('Channels', 'Unlimited');
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const userExtraFree = getSafeNum('extra_users') || 0;
@@ -3135,7 +3148,7 @@ function updatePreview() {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Account Rental', W);
       tableHTML += stdRow('Setup Charges', null, true);
-      tableHTML += stdRow('Channels', 'Unlimited');
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       tableHTML += stdRow('No. of Months', numMonths2);
 
       tableHTML += secRow('User Plan');
@@ -3222,7 +3235,7 @@ function updatePreview() {
       tableHTML += stdRow('Validity', campValidity + ' Months');
       tableHTML += stdRow('Account Rental', W);
       tableHTML += stdRow('Setup Charges', null, true);
-      tableHTML += stdRow('Channels', 'Unlimited');
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       const fuCamp = getVal('free_users');
       const fuCampExtra = getSafeNum('extra_users') || 0;
       const fuCampDisplay = (fuCamp === null || fuCamp === 'Unlimited') ? 'Unlimited (Included)' : (fuCampExtra > 0 ? `${fuCamp} + ${fuCampExtra} Users (Free)` : fuCamp + ' Users (Free)');
