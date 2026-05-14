@@ -1225,6 +1225,9 @@ function getSkuFields(skuKey, tier) {
         { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
         { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 5, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'free_users', label: 'Free Users', value: 3, locked: true, stopType: 'upper', stopVal: 5 },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
@@ -3206,6 +3209,22 @@ function updatePreview() {
       tableHTML += stdRow('Channel Cost', `${fmtRupee(chCost)} ${perUnit('/channel/month')}`);
       tableHTML += indRow('Calculation', `${numChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
 
+      tableHTML += secRow('User Plan');
+      const fuStr = getVal('free_users');
+      const fuStrExtra = getSafeNum('extra_users') || 0;
+      const fuStrDisplay = (fuStr === null || fuStr === 'Unlimited') ? 'Unlimited (Included)' : (fuStrExtra > 0 ? `${fuStr} + ${fuStrExtra} Users (Free)` : fuStr + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuStrDisplay);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      tableHTML += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
+      const paidNumsStr = getSafeNum('num_paid_numbers') || 0;
+      if (paidNumsStr > 0) {
+        tableHTML += stdRow('Extra Numbers', `${paidNumsStr} Number(s)`);
+        tableHTML += indRow('Calculation', `${paidNumsStr} numbers × ${numMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsStr * numMos * getSafeNum('extra_number'))}</strong>`);
+      }
+
       tableHTML += secRow('Call Credits & Charges');
       const streamBaseCredits = getSafeNum('credits');
       const streamExtraCredits = getSafeNum('extra_credits') || 0;
@@ -3221,14 +3240,6 @@ function updatePreview() {
           ? '\u20b9' + (attemptVal / 100).toFixed(2) + ' / failed call'
           : attemptVal + 'p / failed call';
         tableHTML += stdRow('Attempt Charges', attemptDisplay);
-      }
-
-      const paidNumsStr = getSafeNum('num_paid_numbers') || 0;
-      if (paidNumsStr > 0) {
-        tableHTML += secRow('Number Plan');
-        tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
-        tableHTML += stdRow('Extra Numbers', `${paidNumsStr} Number(s)`);
-        tableHTML += indRow('Calculation', `${paidNumsStr} × ${numMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsStr * numMos * getSafeNum('extra_number'))}</strong>`);
       }
 
     } else if (effectiveSk === 'voice_exotel_campaigns' || sk === 'voice_veeno_campaigns') {
