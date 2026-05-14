@@ -161,10 +161,10 @@ app.use(session({
     secret: process.env.SESSION_SECRET || 'exotel-secret-key-123',
     resave: false,
     saveUninitialized: false,
-    rolling: false,          // session expires at fixed end-of-day, not rolling
+    rolling: true,           // refresh cookie on each request
     cookie: {
-        secure: false,
-        maxAge: msTillEndOfDay() // set once at server start; close enough for a day boundary
+        secure: false,       // set to true if using HTTPS
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
 
