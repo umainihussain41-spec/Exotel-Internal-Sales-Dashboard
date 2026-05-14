@@ -1656,6 +1656,16 @@ window.removeSkuItem = function (itemId) {
   QG.lockedEntity = remaining.length > 0 ? SKUS.find(s => s.key === remaining[0].sku_key)?.entity || null : null;
   renderSkuItemManager();
   renderSkuSelector();
+  
+  const cfgArea = document.getElementById('sku-config-area');
+  if (cfgArea && QG.currentSku) {
+    if (SKUS.find(s => s.key === QG.currentSku)?.hasTiers && !QG.compareMode) {
+      renderTierSelector();
+    } else {
+      renderSkuForm(QG.currentSku, QG.currentTier);
+    }
+  }
+  
   updatePreview();
 };
 
