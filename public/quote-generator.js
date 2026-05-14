@@ -1611,7 +1611,7 @@ function renderSkuItemManager() {
           ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1}${sku ? ' · ' + sku.entity : ''}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
         </div>
         ${sku ? `<span style="padding:2px 7px;border-radius:20px;font-size:0.68rem;font-weight:700;background:${entityBg};color:${entityColor};">${sku.entity}</span>` : ''}
-        ${QG.skuItems.length > 1 && !QG.compareMode ? `<button onclick="event.stopPropagation();window.removeSkuItem('${item.id}')" style="width:22px;height:22px;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;font-size:14px;line-height:1;" title="Remove">×</button>` : ''}
+        ${QG.skuItems.length > 1 ? `<button onclick="event.stopPropagation();window.removeSkuItem('${item.id}')" style="width:22px;height:22px;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;flex-shrink:0;font-size:14px;line-height:1;" title="Remove">×</button>` : ''}
       </div>`;
   }).join('');
 }
@@ -1805,7 +1805,7 @@ function selectSku(key) {
   if (QG.compareMode) {
     if (key === QG.currentSku && tierCompareSkus.includes(key)) {
       // Same tier-compare SKU — refresh tier compare
-      if (ctSelector) ctSelector.style.display = 'flex';
+      if (ctSelector) ctSelector.style.display = 'none'; // Keep hidden, rely on 'x' buttons
       window.updateCompareTiers();
       return;
     } else {
@@ -1943,7 +1943,7 @@ window.toggleCompareMode = function (enabled) {
 
   if (enabled) {
     if (tierCompareSkus.includes(QG.currentSku)) {
-      if (ctSelector) ctSelector.style.display = 'flex';
+      if (ctSelector) ctSelector.style.display = 'none'; // Keep hidden, rely on 'x' buttons
       window.updateCompareTiers();
       return; // updateCompareTiers handles the rest
     } else if (userCompareSkus.includes(QG.currentSku)) {
