@@ -2557,7 +2557,7 @@ function updatePreview() {
       if (anyPaidV) {
         uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
         uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
-          const p = getSN('num_paid_numbers'), v = parseFloat(getVal('validity')) || 0, c = getSN('extra_number');
+          const p = getSN('num_paid_numbers'), v = (parseFloat(getVal('validity')) || 0) + getSN('extra_validity'), c = getSN('extra_number');
           return p > 0 ? `${p} numbers × ${v} months × ${fmtR(c)} = ${fmtR(p*v*c)}` : '';
         }));
       }
@@ -2576,7 +2576,7 @@ function updatePreview() {
       const veenoSubs = colData.map(({ getSN, getVal }) => {
         const u = getSN('num_users'), v = parseFloat(getVal('validity')) || 0, c = getSN('user_charge');
         const r = getSN('rental') * v;
-        const nums = getSN('num_paid_numbers') * getSN('extra_number') * v;
+        const nums = getSN('num_paid_numbers') * getSN('extra_number') * (v + getSN('extra_validity'));
         const did = getSN('did_numbers') * 1500 * v;
         return getSN('credits') + r + (u * v * c) + nums + did;
       });
@@ -2604,7 +2604,7 @@ function updatePreview() {
       if (anyPaidNums) {
         uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
         uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
-          const p = getSN('num_paid_numbers'), m = getSN('num_months'), c = getSN('extra_number');
+          const p = getSN('num_paid_numbers'), m = getSN('num_months') + getSN('extra_validity'), c = getSN('extra_number');
           return p > 0 ? `${p} numbers × ${m} months × ${fmtR(c)} = ${fmtR(p*m*c)}` : '';
         }));
       }
@@ -2618,7 +2618,7 @@ function updatePreview() {
       }
       const userSubs = colData.map(({ getSN }) => {
         const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
-        const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
+        const nums = getSN('num_paid_numbers') * getSN('extra_number') * (m + getSN('extra_validity'));
         const did = getSN('did_numbers') * 1500 * m;
         return (u * m * c) + nums + did;
       });
@@ -2989,7 +2989,7 @@ function updatePreview() {
       const paidNumsE = getSafeNum('num_paid_numbers') || 0;
       if (paidNumsE > 0) {
         const extNumCostE = getSafeNum('extra_number');
-        const vMonthsE = parseFloat(getVal('validity')) || 0;
+        const vMonthsE = (parseFloat(getVal('validity')) || 0) + (getSafeNum('extra_validity') || 0);
         tableHTML += stdRow('Extra Numbers', `${paidNumsE} Number(s)`);
         tableHTML += indRow('Calculation', `${paidNumsE} numbers × ${vMonthsE} months × ${fmtRupee(extNumCostE)} = <strong>${fmtRupee(paidNumsE * vMonthsE * extNumCostE)}</strong>`);
       }
@@ -3047,8 +3047,9 @@ function updatePreview() {
         const paidNumsV = getSafeNum('num_paid_numbers') || 0;
         if (paidNumsV > 0) {
           const extNumCostV = getSafeNum('extra_number');
+          const effValV = validity + (getSafeNum('extra_validity') || 0);
           tableHTML += stdRow('Extra Numbers', `${paidNumsV} Number(s)`);
-          tableHTML += indRow('Calculation', `${paidNumsV} numbers × ${validity} months × ${fmtRupee(extNumCostV)} = <strong>${fmtRupee(paidNumsV * validity * extNumCostV)}</strong>`);
+          tableHTML += indRow('Calculation', `${paidNumsV} numbers × ${effValV} months × ${fmtRupee(extNumCostV)} = <strong>${fmtRupee(paidNumsV * effValV * extNumCostV)}</strong>`);
         }
       }
       if (didNums > 0) {
@@ -3093,8 +3094,9 @@ function updatePreview() {
         tableHTML += indRow('Extra Number Cost', `${fmtRupee(499)} ${perUnit('/number/month')}`);
         const paidNumsS = getSafeNum('num_paid_numbers') || 0;
         if (paidNumsS > 0) {
+          const effValS = vMonthsS + (getSafeNum('extra_validity') || 0);
           tableHTML += stdRow('Extra Numbers', `${paidNumsS} Number(s)`);
-          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${vMonthsS} months × ${fmtRupee(499)} = <strong>${fmtRupee(paidNumsS * vMonthsS * 499)}</strong>`);
+          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${effValS} months × ${fmtRupee(499)} = <strong>${fmtRupee(paidNumsS * effValS * 499)}</strong>`);
         }
       }
       const didNums2 = getSafeNum('did_numbers') || 0;
@@ -3141,8 +3143,9 @@ function updatePreview() {
         tableHTML += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
         const paidNumsU = getSafeNum('num_paid_numbers') || 0;
         if (paidNumsU > 0) {
+          const effValU = numMonths + (getSafeNum('extra_validity') || 0);
           tableHTML += stdRow('Extra Numbers', `${paidNumsU} Number(s)`);
-          tableHTML += indRow('Calculation', `${paidNumsU} numbers × ${numMonths} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsU * numMonths * getSafeNum('extra_number'))}</strong>`);
+          tableHTML += indRow('Calculation', `${paidNumsU} numbers × ${effValU} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsU * effValU * getSafeNum('extra_number'))}</strong>`);
         }
       }
       if (isVeeno && didNums > 0) {
@@ -3184,8 +3187,9 @@ function updatePreview() {
         const tfnPaidVNs = getSafeNum('num_paid_numbers') || 0;
         if (tfnPaidVNs > 0) {
           const tfnVnCost = getSafeNum('extra_number');
+          const tfnEffMonths = numMonths2 + (getSafeNum('extra_validity') || 0);
           tableHTML += stdRow('Extra Numbers', `${tfnPaidVNs} Number(s)`);
-          tableHTML += indRow('Calculation', `${tfnPaidVNs} numbers × ${numMonths2} months × ${fmtRupee(tfnVnCost)} = <strong>${fmtRupee(tfnPaidVNs * numMonths2 * tfnVnCost)}</strong>`);
+          tableHTML += indRow('Calculation', `${tfnPaidVNs} numbers × ${tfnEffMonths} months × ${fmtRupee(tfnVnCost)} = <strong>${fmtRupee(tfnPaidVNs * tfnEffMonths * tfnVnCost)}</strong>`);
         }
       }
       tableHTML += secRow('Call Credits & Charges');
@@ -3221,8 +3225,9 @@ function updatePreview() {
       tableHTML += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
       const paidNumsStr = getSafeNum('num_paid_numbers') || 0;
       if (paidNumsStr > 0) {
+        const streamNumMos = numMos + (getSafeNum('extra_validity') || 0);
         tableHTML += stdRow('Extra Numbers', `${paidNumsStr} Number(s)`);
-        tableHTML += indRow('Calculation', `${paidNumsStr} numbers × ${numMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsStr * numMos * getSafeNum('extra_number'))}</strong>`);
+        tableHTML += indRow('Calculation', `${paidNumsStr} numbers × ${streamNumMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsStr * streamNumMos * getSafeNum('extra_number'))}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Charges');
@@ -3267,8 +3272,9 @@ function updatePreview() {
       const campPaidNums = getSafeNum('num_paid_numbers') || 0;
       if (campPaidNums > 0) {
         const campNumCost = getSafeNum('extra_number');
+        const campEffValidity = campValidity + campExtraValidity;
         tableHTML += stdRow('Extra Numbers', `${campPaidNums} Number(s)`);
-        tableHTML += indRow('Calculation', `${campPaidNums} × ${campValidity} months × ${fmtRupee(campNumCost)} = <strong>${fmtRupee(campPaidNums * campValidity * campNumCost)}</strong>`);
+        tableHTML += indRow('Calculation', `${campPaidNums} × ${campEffValidity} months × ${fmtRupee(campNumCost)} = <strong>${fmtRupee(campPaidNums * campEffValidity * campNumCost)}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Campaign Rate');
@@ -3291,7 +3297,7 @@ function updatePreview() {
       tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
       const smsPaidNums = getSafeNum('num_paid_numbers') || 0;
       if (smsPaidNums > 0) {
-        const smsNumMonths = getSafeNum('num_months') || 0;
+        const smsNumMonths = (getSafeNum('num_months') || 0) + (getSafeNum('extra_validity') || 0);
         const smsExtraCost = getSafeNum('extra_number');
         tableHTML += stdRow('Extra Numbers', `${smsPaidNums} Number(s)`);
         tableHTML += indRow('Calculation', `${smsPaidNums} numbers × ${smsNumMonths} months × ${fmtRupee(smsExtraCost)} = <strong>${fmtRupee(smsPaidNums * smsNumMonths * smsExtraCost)}</strong>`);
@@ -3314,7 +3320,7 @@ function updatePreview() {
       tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
       const waPaidNums = getSafeNum('num_paid_numbers') || 0;
       if (waPaidNums > 0) {
-        const waNumMonths = getSafeNum('num_months') || 0;
+        const waNumMonths = (getSafeNum('num_months') || 0) + (getSafeNum('extra_validity') || 0);
         const waExtraCost = getSafeNum('extra_number');
         tableHTML += stdRow('Extra Numbers', `${waPaidNums} Number(s)`);
         tableHTML += indRow('Calculation', `${waPaidNums} numbers × ${waNumMonths} months × ${fmtRupee(waExtraCost)} = <strong>${fmtRupee(waPaidNums * waNumMonths * waExtraCost)}</strong>`);
@@ -3411,7 +3417,7 @@ function updatePreview() {
     if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
     const numPaidNums = parseFloat(item.values['num_paid_numbers'] ?? 0);
     const extraNumCost = getSafeNum('extra_number');
-    if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * months;
+    if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSafeNum('extra_validity') || 0));
     const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
     if (didNumbers > 0) subtotal += didNumbers * 1500 * months;
 
