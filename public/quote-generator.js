@@ -3815,7 +3815,30 @@ async function loadMyQuotes() {
     const mine = quotes.filter(q => q.status !== 'deleted');
     document.getElementById('my-quotes-count').textContent = mine.length;
     if (!mine.length) { container.innerHTML = `<div class="q-empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"></rect><line x1="3" y1="9" x2="21" y2="9"></line><line x1="9" y1="21" x2="9" y2="9"></line></svg><h3>No quotes yet</h3><p>Generated quotes will appear here.</p></div>`; return; }
-    container.innerHTML = mine.map(q => renderQuoteCard(q, false)).join('');
+    
+    window._myQuotes = mine;
+    
+    const applyMyFilters = () => {
+      const q = document.getElementById('my-quotes-search')?.value?.toLowerCase() || '';
+      
+      const filtered = window._myQuotes.filter(quote => {
+        let companyMatch = false;
+        try { companyMatch = (JSON.parse(quote.quote_data)?.client?.company || '').toLowerCase().includes(q); } catch(e){}
+        return quote.quote_number.toLowerCase().includes(q) || companyMatch;
+      });
+      
+      if (!filtered.length) {
+        container.innerHTML = `<div class="q-empty-state"><h3>No matching quotes found</h3></div>`;
+      } else {
+        container.innerHTML = filtered.map(quote => renderQuoteCard(quote, false)).join('');
+      }
+    };
+    
+    applyMyFilters();
+    
+    const searchInput = document.getElementById('my-quotes-search');
+    if (searchInput) searchInput.oninput = applyMyFilters;
+    
   } catch (e) { container.innerHTML = '<p style="color:#ef4444;padding:24px;">Failed to load quotes.</p>'; }
 }
 

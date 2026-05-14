@@ -1293,16 +1293,21 @@
                         <div
                             style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                             <h2 style="margin:0;">My Quotes</h2>
-                            <button class="btn btn-secondary" id="q-btn-refresh-quotes">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                    <polyline points="1 20 1 14 7 14"></polyline>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
-                                    </path>
-                                </svg>
-                                Refresh
-                            </button>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <input type="text" id="my-quotes-search"
+                                    placeholder="Search by quote #, company..."
+                                    style="width:260px; padding:8px 12px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.88rem;">
+                                <button class="btn btn-secondary" id="q-btn-refresh-quotes">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 4 23 10 17 10"></polyline>
+                                        <polyline points="1 20 1 14 7 14"></polyline>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
+                                        </path>
+                                    </svg>
+                                    Refresh
+                                </button>
+                            </div>
                         </div>
                         <div id="my-quotes-list">
                             <div class="q-empty-state">
