@@ -4334,6 +4334,26 @@ window.viewQuote = async function (id) {
       QG.activeItemId = data.sku_items[0].id;
       QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       syncActiveAliases();
+
+      // Hydrate missing field defaults for every item immediately.
+      // Saved quotes only store values the user explicitly changed; any untouched
+      // field is absent from item.values. Without this, getSafeNum/getVal fall back
+      // to field.value inside the renderer — but only AFTER renderSkuForm has run.
+      // For other users or slower machines updatePreview fires before renderSkuForm,
+      // causing all-zero values and a blank section in the preview (e.g. Web Streaming).
+      QG.skuItems.forEach(item => {
+        if (!item.sku_key) return;
+        const resolvedKey = item.sku_key === 'startup'
+          ? ('startup_' + (item.tier || 'voice'))
+          : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        fields.forEach(f => {
+          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
+            item.values[f.id] = f.value;
+          }
+        });
+      });
+
       renderSkuItemManager();
       renderSkuSelector();
       if (QG.currentSku) {
@@ -4449,6 +4469,17 @@ window.resumeDraft = async function (id) {
       QG.activeItemId = data.sku_items[0].id;
       QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       syncActiveAliases();
+      // Hydrate missing field defaults (same fix as viewQuote)
+      QG.skuItems.forEach(item => {
+        if (!item.sku_key) return;
+        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        fields.forEach(f => {
+          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
+            item.values[f.id] = f.value;
+          }
+        });
+      });
       renderSkuItemManager();
       renderSkuSelector();
       if (QG.currentSku) {
