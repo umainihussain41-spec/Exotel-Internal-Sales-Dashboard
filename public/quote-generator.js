@@ -2271,10 +2271,17 @@ function renderSkuForm(skuKey, tier) {
       });
     }, 0);
 
-    // Block scroll-to-change on all text inputs in this card (Mac trackpad fix)
+    // Block scroll-to-change only when the input is actively focused.
+    // Without this guard, wheel events over unfocused inputs were swallowed,
+    // preventing the parent panel from scrolling.
     setTimeout(() => {
       card.querySelectorAll('.q-input').forEach(inp => {
-        inp.addEventListener('wheel', (e) => { e.preventDefault(); }, { passive: false });
+        inp.addEventListener('wheel', (e) => {
+          if (inp.hasAttribute('data-focused')) {
+            e.preventDefault(); // only steal scroll when user is editing the field
+          }
+          // otherwise: let the event bubble up to the scrollable panel
+        }, { passive: false });
         inp.addEventListener('focus', () => { inp.setAttribute('data-focused', '1'); });
         inp.addEventListener('blur',  () => { inp.removeAttribute('data-focused'); });
       });
