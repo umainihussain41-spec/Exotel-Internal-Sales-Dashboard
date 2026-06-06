@@ -3107,7 +3107,7 @@ function updatePreview() {
         <div class="quote-doc-section-title">Parties</div>
         <div class="quote-participant-grid">
           <div class="quote-participant-box"><div class="label">Prepared By (${firstSku.entity})</div><div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div><div class="sub">${sanitize(seEmail)}</div>${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}</div>
-          <div class="quote-participant-box"><div class="label">Prepared For (Client)</div><div class="value">${sanitize(company)}</div>${contact ? `<div class="sub">${sanitize(contact)}</div>' : ''} ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>' : ''} ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>' : ''} ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>' : ''}</div>
+          <div class="quote-participant-box"><div class="label">Prepared For (Client)</div><div class="value">${sanitize(company)}</div>${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''} ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''} ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''} ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}</div>
         </div>
       </div>
 
