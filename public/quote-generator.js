@@ -2890,7 +2890,13 @@ function updatePreview() {
       </div>
     </div>
     <div class="quote-doc-title">Commercial Proposal: ${validItems[0].sku_key === 'voice_veeno_std' ? 'Veeno Voice STD' : 'User Plan'} Comparison</div>
-    <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:18px;">Prepared For: ${sanitize(company)}</p>
+    <div class="quote-doc-section" style="margin-top:16px;margin-bottom:4px;">
+      <div class="quote-doc-section-title">Parties</div>
+      <div class="quote-participant-grid">
+        <div class="quote-participant-box"><div class="label">Prepared By (${firstSku.entity})</div><div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div><div class="sub">${sanitize(seEmail)}</div>${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}</div>
+        <div class="quote-participant-box"><div class="label">Prepared For (Client)</div><div class="value">${sanitize(company)}</div>${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''} ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''} ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''} ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}</div>
+      </div>
+    </div>
     <div class="quote-doc-section" style="margin-top:24px;">
       <div style="overflow-x:auto;">
       <table class="quote-sku-table" style="table-layout:auto;">
