@@ -18,7 +18,7 @@ const QG = {
   draftKey: null,
   _dirty: false,
   // ── Multi-SKU state ─────────────────────────────────
-  skuItems: [],            // array of { id, sku_key, tier, values, stopLockOverrides }
+  skuItems: [],            // array of { id, sku_key, tier, values, stopLockOverrides, customName, eliteEnabled }
   activeItemId: null,      // id of item currently being edited
   lockedEntity: null,      // 'Exotel' | 'Veeno' | null - entity of first SKU selected
   compareMode: false,
@@ -58,10 +58,15 @@ const SKUS = [
 
 // Tier defaults
 const TIER_DEFAULTS = {
-  dabbler: { validity: 5, rental: 4999, free_users: 3, users_stop: 5, free_numbers: 1, credits: 5000, single_leg: 60, stop_single: 52 },
-  believer: { validity: 11, rental: 10499, free_users: 6, users_stop: 8, free_numbers: 2, credits: 9500, single_leg: 55, stop_single: 52 },
-  influencer: { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 }
+  dabbler:    { validity: 5,  rental: 4999,  free_users: 3,    users_stop: 5,    free_numbers: 1,  credits: 5000,  single_leg: 60, stop_single: 52 },
+  believer:   { validity: 11, rental: 10499, free_users: 6,    users_stop: 8,    free_numbers: 2,  credits: 9500,  single_leg: 55, stop_single: 52 },
+  influencer: { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 },
+  elite:      { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 },
 };
+// SKUs that support a custom plan name rename
+const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno'];
+// Standard display names for tiers (can be overridden per-item via item.customName)
+const TIER_DISPLAY_NAMES = { dabbler: 'Dabbler', believer: 'Believer', influencer: 'Influencer', elite: 'Elite' };
 
 // ── Terms & Conditions (Full SKU Definitions) ──────────────────────────────
 const STARTUP_PARENT_MAP = {
@@ -1138,7 +1143,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'Call Credits (₹)', value: t.credits, locked: true, stopType: 'lower', stopVal: t.credits },
         { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
@@ -1165,9 +1170,10 @@ function getSkuFields(skuKey, tier) {
         },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         // DID option instead of landline
         { id: 'did_numbers', label: 'DID Numbers (optional)', value: 0, locked: false, note: '₹1,500/DID/month' },
+        { id: 'did_cost', label: 'DID Rate (₹/DID/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 4000 },
         { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
@@ -1190,7 +1196,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'user_charge', label: 'User Charge (₹/user/month)', value: 2000, locked: true, stopType: 'lower', stopVal: 1600 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Paid Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Paid Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Paid Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
       ];
 
     // ── Veeno User-based (₹2,000/user, no free users) ───────────────
@@ -1208,9 +1214,10 @@ function getSkuFields(skuKey, tier) {
         },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         // DID option
         { id: 'did_numbers', label: 'DID Numbers (optional)', value: 0, locked: false, note: '₹1,500/DID/month' },
+        { id: 'did_cost', label: 'DID Rate (₹/DID/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
       ];
 
@@ -1227,7 +1234,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'add_vn', label: 'Add Virtual Landline Numbers?', type: 'boolean', value: 0 },
         { id: 'free_numbers', label: 'Free Virtual Landline Numbers', value: 1, locked: false, note: 'VN Add-on' },
         { id: 'num_paid_numbers', label: 'No. of Extra Virtual Landline Numbers', value: 0, locked: false, note: 'VN Add-on' },
-        { id: 'extra_number', label: 'Extra Virtual Landline Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299, note: 'VN Add-on' },
+        { id: 'extra_number', label: 'Extra Virtual Landline Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299, note: 'VN Add-on' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 39000 },
         { id: 'incoming', label: 'Incoming Call Charge (p/min)', value: 190, locked: true, stopType: 'lower', stopVal: 150 },
@@ -1249,7 +1256,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
       ];
     case 'sms_exotel':
       return [
@@ -1258,7 +1265,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'SMS Credits (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 5000 },
         { id: 'sms_cost', label: 'SMS Cost (p/sms)', value: 21, locked: true, stopType: 'lower', stopVal: 16 },
       ];
@@ -1269,7 +1276,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'WA Credits (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 5000 },
         { id: 'wa_utility', label: 'Utility Msg (p/msg)', value: 11, locked: true, nonEditable: true },
         { id: 'wa_promo', label: 'Promotional Msg (p/msg)', value: 86, locked: true, nonEditable: true },
@@ -1302,9 +1309,10 @@ function getSkuFields(skuKey, tier) {
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'free_numbers', label: 'Free Numbers', value: t2.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, nonEditable: true },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         // DID option
         { id: 'did_numbers', label: 'DID Numbers (optional)', value: 0, locked: false, note: '₹1,500/DID/month' },
+        { id: 'did_cost', label: 'DID Rate (₹/DID/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: t2.credits, locked: true, stopType: 'lower', stopVal: t2.credits },
         { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
@@ -1338,7 +1346,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
-        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: true, stopType: 'lower', stopVal: 299 },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'Call Credits (₹)', value: t.credits, locked: true, stopType: 'lower', stopVal: t.credits },
         { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
         { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
@@ -1477,7 +1485,7 @@ function getSkuFields(skuKey, tier) {
 
 // ── Multi-SKU Helpers ──────────────────────────────────────
 function _makeItem(id) {
-  return { id, sku_key: null, tier: 'dabbler', values: {}, stopLockOverrides: [] };
+  return { id, sku_key: null, tier: 'dabbler', values: {}, stopLockOverrides: [], customName: '' };
 }
 
 function initSkuItems() {
@@ -1637,29 +1645,105 @@ function renderSkuItemManager() {
     if (hint) hint.textContent = 'Choose the product plan for this quote. The logo and entity will switch automatically.';
   }
 
-  // Item rows — X button is a sibling of the row div (not a child) to prevent
-  // propagation races where switchActiveItem re-renders the DOM before removeSkuItem fires.
+  // Item rows — inline rename: pencil click swaps label into an input in-place
+  if (!QG._renamingItemId) QG._renamingItemId = null;
+
   list.innerHTML = QG.skuItems.map((item, idx) => {
     const sku = SKUS.find(s => s.key === item.sku_key);
     const isActive = item.id === QG.activeItemId;
-    const label = sku ? `${sku.label}${item.sku_key && SKUS.find(s => s.key === item.sku_key)?.hasTiers ? ' · ' + (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)) : ''}` : 'Not configured';
+    const tierDisplayName = TIER_DISPLAY_NAMES[item.tier] || (item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : '');
+    const skuLabel = sku ? sku.label : '';
+    const hasTiers = !!(item.sku_key && SKUS.find(s => s.key === item.sku_key)?.hasTiers);
+    // Always show custom name when set; otherwise fall back to tier name (for tiered SKUs only)
+    const suffix = item.customName ? ' · ' + item.customName : (hasTiers && tierDisplayName ? ' · ' + tierDisplayName : '');
+    const fullLabel = sku ? `${skuLabel}${suffix}` : 'Not configured';
     const entityColor = sku?.entity === 'Veeno' ? '#be185d' : '#0369a1';
     const entityBg = sku?.entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
     const showRemove = QG.skuItems.length > 1;
+    const canRename = sku && CUSTOM_NAME_SKUS.includes(item.sku_key);
+    const hasCustomName = !!(item.customName);
+    const isRenaming = QG._renamingItemId === item.id;
+
+    // Placeholder for the rename input = default tier name (not custom)
+    const defaultName = TIER_DISPLAY_NAMES[item.tier] || (item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : skuLabel);
+
+    // Label area: input when renaming, text when not
+    const labelArea = isRenaming
+      ? `<input id="rename-inline-${item.id}"
+           type="text"
+           value="${(item.customName || '').replace(/"/g,'&quot;')}"
+           placeholder="${defaultName}"
+           onclick="event.stopPropagation()"
+           oninput="window.setItemCustomName('${item.id}', this.value)"
+           onblur="window.commitItemRename('${item.id}')"
+           onkeydown="if(event.key==='Enter'||event.key==='Escape'){event.preventDefault();window.commitItemRename('${item.id}')}"
+           style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};border:none;border-bottom:2px solid #0284c7;background:transparent;outline:none;font-family:inherit;width:100%;padding:0;"
+         >`
+      : `<div style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sku ? sanitize(fullLabel) : '<span style="color:#94a3b8;font-style:italic;">Not configured</span>'}</div>`;
+
     return `
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;">
-        <div class="sku-item-row ${isActive ? 'active' : ''}" onclick="window.switchActiveItem('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1.5px solid ${isActive ? '#0284c7' : '#e2e8f0'};background:${isActive ? '#f0f9ff' : '#fff'};transition:all 0.15s;flex:1;min-width:0;">
+        <div class="sku-item-row ${isActive ? 'active' : ''}" onclick="window.switchActiveItem('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1.5px solid ${isRenaming ? '#0284c7' : isActive ? '#0284c7' : '#e2e8f0'};background:${isActive ? '#f0f9ff' : '#fff'};transition:all 0.15s;flex:1;min-width:0;">
           <div style="width:8px;height:8px;border-radius:50%;background:${isActive ? '#0284c7' : '#cbd5e1'};flex-shrink:0;"></div>
           <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sku ? sanitize(label) : '<span style="color:#94a3b8;font-style:italic;">Not configured</span>'}</div>
-            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1}${sku ? ' · ' + sku.entity : ''}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
+            ${labelArea}
+            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1} · ${sku.entity}${hasCustomName && !isRenaming ? ' · <span style="color:#0284c7;">renamed</span>' : ''}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
           </div>
           ${sku ? `<span style="padding:2px 7px;border-radius:20px;font-size:0.68rem;font-weight:700;background:${entityBg};color:${entityColor};">${sku.entity}</span>` : ''}
         </div>
+        ${canRename ? `<button onclick="event.stopPropagation();window.openItemRename('${item.id}')" title="${isRenaming ? 'Finish renaming' : 'Rename plan'}" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'};color:${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;" onmouseover="this.style.background='#e0f2fe';this.style.color='#0284c7'" onmouseout="this.style.background='${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'}';this.style.color='${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '<div style="width:24px;flex-shrink:0;"></div>'}
         ${showRemove ? `<button onclick="window.removeSkuItem('${item.id}')" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-size:15px;line-height:1;transition:background 0.15s;" onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'" title="Remove item">×</button>` : '<div style="width:24px;flex-shrink:0;"></div>'}
       </div>`;
   }).join('');
+
+  // Auto-focus the inline input if we're in rename mode
+  if (QG._renamingItemId) {
+    const inp = document.getElementById('rename-inline-' + QG._renamingItemId);
+    if (inp) { inp.focus(); inp.select(); }
+  }
 }
+
+// ── Item rename helpers ─────────────────────────────────────
+window.openItemRename = function(itemId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  if (QG._renamingItemId === itemId) {
+    // Toggle off — commit and close
+    window.commitItemRename(itemId);
+    return;
+  }
+  QG._renamingItemId = itemId;
+  renderSkuItemManager();
+};
+
+window.commitItemRename = function(itemId) {
+  // Save whatever is currently in the input
+  const inp = document.getElementById('rename-inline-' + itemId);
+  if (inp) {
+    const item = QG.skuItems.find(i => i.id === itemId);
+    if (item) item.customName = inp.value.trim();
+  }
+  QG._renamingItemId = null;
+  renderSkuItemManager();
+  updatePreview();
+};
+
+window.setItemCustomName = function(itemId, name) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  item.customName = name;
+  updatePreview();
+};
+
+window.clearItemCustomName = function(itemId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  item.customName = '';
+  QG._renamingItemId = null;
+  renderSkuItemManager();
+  updatePreview();
+};
+
 
 window.addSkuItem = function () {
   const activeItem = getActiveItem();
@@ -1975,19 +2059,52 @@ function renderTierSelector() {
       </div>
     `;
   } else {
+    const item = getActiveItem();
+    const supportsElite = QG.currentSku === 'voice_exotel_std';
+    const eliteEnabled = supportsElite && item && item.eliteEnabled;
+    const supportsCustomName = CUSTOM_NAME_SKUS.includes(QG.currentSku);
+    const currentCustomName = (item && item.customName) || '';
+    const stdTiers = [
+      { key: 'dabbler',    label: 'Dabbler',    sub: '5 months'  },
+      { key: 'believer',   label: 'Believer',   sub: '11 months' },
+      { key: 'influencer', label: 'Influencer', sub: '11 months' },
+    ];
+    if (eliteEnabled) stdTiers.push({ key: 'elite', label: 'Elite', sub: '11 months' });
     area.innerHTML = `
     <div class="q-card sku-tier-card">
-      <div class="q-card-header">
+      <div class="q-card-header" style="flex-wrap:wrap;gap:8px;">
         <div class="q-card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
           Select Plan Tier
         </div>
+        ${supportsCustomName ? `
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:0.78rem;color:#64748b;font-weight:500;">Custom plan name:</span>
+          <input id="custom-plan-name-input"
+            type="text"
+            value="${currentCustomName.replace(/"/g,'&quot;')}"
+            placeholder="e.g. Growth Plan"
+            oninput="window.setCustomPlanName(this.value)"
+            style="padding:4px 8px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:0.82rem;width:150px;outline:none;font-family:inherit;"
+            onfocus="this.style.borderColor='#0284c7'"
+            onblur="this.style.borderColor='#cbd5e1'"
+          >
+          ${currentCustomName ? `<button onclick="window.clearCustomPlanName()" title="Reset to default name" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px;line-height:1;font-size:14px;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">&#x2715;</button>` : ''}
+        </div>` : ''}
       </div>
       <div class="tier-selector">
-        <button class="tier-btn ${QG.currentTier === 'dabbler' ? 'active' : ''}" onclick="selectTier('dabbler')">Dabbler<br><small style="font-weight:400;font-size:0.72rem;">5 months</small></button>
-        <button class="tier-btn ${QG.currentTier === 'believer' ? 'active' : ''}" onclick="selectTier('believer')">Believer<br><small style="font-weight:400;font-size:0.72rem;">11 months</small></button>
-        <button class="tier-btn ${QG.currentTier === 'influencer' ? 'active' : ''}" onclick="selectTier('influencer')">Influencer<br><small style="font-weight:400;font-size:0.72rem;">11 months</small></button>
+        ${stdTiers.map(t => `<button class="tier-btn ${QG.currentTier === t.key ? 'active' : ''}" onclick="selectTier('${t.key}')">${t.label}<br><small style="font-weight:400;font-size:0.72rem;">${t.sub}</small></button>`).join('')}
       </div>
+      ${supportsElite ? `
+      <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0;display:flex;align-items:center;gap:8px;">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
+          <input type="checkbox" id="toggle-elite-tier" ${eliteEnabled ? 'checked' : ''}
+            onchange="window.toggleEliteTier(this.checked)"
+            style="accent-color:#7c3aed;width:15px;height:15px;">
+          <span style="font-size:0.8rem;font-weight:600;color:#7c3aed;">&#9733; Enable Elite Plan</span>
+        </label>
+        <span style="font-size:0.75rem;color:#94a3b8;">(opt-in – similar to Influencer, fully customizable)</span>
+      </div>` : ''}
     </div>
   `;
   }
@@ -2006,8 +2123,44 @@ function selectTier(tier) {
   } else {
     document.querySelectorAll('.tier-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().startsWith(tier)));
     renderSkuForm(QG.currentSku, tier);
+    renderSkuItemManager();
   }
 }
+
+// Toggle the Elite 4th plan for Voice STD (Exotel)
+window.toggleEliteTier = function(enabled) {
+  const item = getActiveItem();
+  if (!item) return;
+  item.eliteEnabled = enabled;
+  // If disabling, switch away from elite tier
+  if (!enabled && item.tier === 'elite') {
+    item.tier = 'influencer';
+    item.values = {};
+    QG.currentTier = 'influencer';
+    QG.skuValues = item.values;
+  }
+  renderTierSelector();
+  renderSkuItemManager();
+  updatePreview();
+};
+
+// Set/clear custom plan name for the active item
+window.setCustomPlanName = function(name) {
+  const item = getActiveItem();
+  if (!item) return;
+  item.customName = name.trim();
+  renderSkuItemManager();
+  updatePreview();
+};
+
+window.clearCustomPlanName = function() {
+  const item = getActiveItem();
+  if (!item) return;
+  item.customName = '';
+  renderTierSelector();
+  renderSkuItemManager();
+  updatePreview();
+};
 
 // ── SKU Form Render ────────────────────────────────────────
 
@@ -2027,6 +2180,9 @@ window.toggleCompareMode = function (enabled) {
         const cb = document.getElementById('ct-' + t);
         if (cb) cb.checked = true;
       });
+      // Elite checkbox: don't auto-check unless already opted in
+      const eliteCb = document.getElementById('ct-elite');
+      if (eliteCb) eliteCb.checked = false;
       window.updateCompareTiers();
       return; // updateCompareTiers handles the rest
     } else if (userCompareSkus.includes(QG.currentSku)) {
@@ -2102,6 +2258,7 @@ window.updateCompareTiers = function () {
   if (document.getElementById('ct-dabbler')?.checked) selectedTiers.push('dabbler');
   if (document.getElementById('ct-believer')?.checked) selectedTiers.push('believer');
   if (document.getElementById('ct-influencer')?.checked) selectedTiers.push('influencer');
+  if (document.getElementById('ct-elite')?.checked) selectedTiers.push('elite');
 
   if (selectedTiers.length === 0) {
     selectedTiers.push('dabbler');
@@ -2194,7 +2351,9 @@ function renderSkuForm(skuKey, tier) {
         <div class="q-card-title">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
           ${sku?.label || 'Not Selected'}
-          ${t && sku?.hasTiers ? `<span class="sku-entity-tag ${sku.entity.toLowerCase()}" style="margin-left:6px;">${t.charAt(0).toUpperCase() + t.slice(1)}</span>` : ''}
+          ${item.customName
+            ? `<span class="sku-entity-tag" style="margin-left:6px;background:#e0f2fe;color:#0369a1;">${sanitize(item.customName)}</span>`
+            : (t && sku?.hasTiers ? `<span class="sku-entity-tag ${sku.entity.toLowerCase()}" style="margin-left:6px;">${t.charAt(0).toUpperCase() + t.slice(1)}</span>` : '')}
         </div>
       </div>
       
@@ -2604,17 +2763,17 @@ function updatePreview() {
     const subtotals = colData.map(({ item, getVal, getSN }) => {
       const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
       const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
-      const did = (getSN('did_numbers') || 0) * 1500 * m;
+      const did = (getSN('did_numbers') || 0) * (getSN('did_cost') || 1500) * m;
       return getSN('credits') + (u * m * c) + nums + did;
     });
 
-    const optionLabels = validItems.map((_, i) => `Option ${String.fromCharCode(65 + i)}`);
+    const optionLabels = validItems.map((item, i) => item.customName || `Option ${String.fromCharCode(65 + i)}`);
 
     // Recalculate subtotals without call credits (user SKU has no call credits)
     const userSubtotals = colData.map(({ getSN }) => {
       const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
       const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
-      const did = (getSN('did_numbers') || 0) * 1500 * m;
+      const did = (getSN('did_numbers') || 0) * (getSN('did_cost') || 1500) * m;
       return (u * m * c) + nums + did;
     });
 
@@ -2659,7 +2818,7 @@ function updatePreview() {
         uRows += cmpRow('DID Numbers', colData.map(({ getSN }) => { const d = getSN('did_numbers'); return d > 0 ? `${d} DID(s)` : '—'; }));
         uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
           const d = getSN('did_numbers'), v = parseFloat(getVal('validity')) || 0;
-          return d > 0 ? `${d} DIDs × ${v} months × ${fmtR(1500)} = ${fmtR(d*v*1500)}` : '';
+          return d > 0 ? `${d} DIDs × ${v} months × ${fmtR(getSN('did_cost') || 1500)} = ${fmtR(d*v*(getSN('did_cost')||1500))}` : '';
         }));
       }
       uRows += cmpRow('Call Credits & Charges', [], true);
@@ -2670,7 +2829,7 @@ function updatePreview() {
         const u = getSN('num_users'), v = parseFloat(getVal('validity')) || 0, c = getSN('user_charge');
         const r = getSN('rental') * v;
         const nums = getSN('num_paid_numbers') * getSN('extra_number') * (v + getSN('extra_validity'));
-        const did = getSN('did_numbers') * 1500 * v;
+        const did = getSN('did_numbers') * (getSN('did_cost') || 1500) * v;
         return getSN('credits') + r + (u * v * c) + nums + did;
       });
       uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${veenoSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
@@ -2706,13 +2865,13 @@ function updatePreview() {
         uRows += cmpRow('DID Numbers', colData.map(({ getSN }) => { const d = getSN('did_numbers'); return d > 0 ? `${d} DID(s)` : '—'; }));
         uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
           const d = getSN('did_numbers'), m = getSN('num_months');
-          return d > 0 ? `${d} DIDs × ${m} months × ${fmtR(1500)} = ${fmtR(d*m*1500)}` : '';
+          return d > 0 ? `${d} DIDs × ${m} months × ${fmtR(getSN('did_cost') || 1500)} = ${fmtR(d*m*(getSN('did_cost')||1500))}` : '';
         }));
       }
       const userSubs = colData.map(({ getSN }) => {
         const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
         const nums = getSN('num_paid_numbers') * getSN('extra_number') * (m + getSN('extra_validity'));
-        const did = getSN('did_numbers') * 1500 * m;
+        const did = getSN('did_numbers') * (getSN('did_cost') || 1500) * m;
         return (u * m * c) + nums + did;
       });
       uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${userSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
@@ -2730,7 +2889,7 @@ function updatePreview() {
         <div style="margin-top:2px;font-weight:600;color:#0284c7;">${firstSku.entity}</div>
       </div>
     </div>
-    <div class="quote-doc-title">Commercial Proposal — ${validItems[0].sku_key === 'voice_veeno_std' ? 'Veeno Voice STD' : 'User Plan'} Comparison</div>
+    <div class="quote-doc-title">Commercial Proposal: ${validItems[0].sku_key === 'voice_veeno_std' ? 'Veeno Voice STD' : 'User Plan'} Comparison</div>
     <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:18px;">Prepared For: ${sanitize(company)}</p>
     <div class="quote-doc-section" style="margin-top:24px;">
       <div style="overflow-x:auto;">
@@ -2755,7 +2914,8 @@ function updatePreview() {
     const skuKey0 = validItems[0].sku_key;
     const sku0 = SKUS.find(s => s.key === skuKey0);
     const tiers = validItems.map(i => i.tier);
-    const tierLabels = { dabbler: 'Dabbler', believer: 'Believer', influencer: 'Influencer' };
+    const tierLabels = Object.fromEntries(tiers.map(t => [t, (QG.skuItems.find(i=>i.tier===t)?.customName) || TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase()+t.slice(1))]));
+    void 0; // (tierLabels defined above)
     const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
     const fmtP = (v) => {
       if (v === null || v === undefined) return '-';
@@ -2802,7 +2962,7 @@ function updatePreview() {
       const extraVal = parseFloat(item.values['extra_validity'] ?? 0);
       if (numPaidNums && extraNumCost) sub += numPaidNums * extraNumCost * (months + extraVal);
       const didNums = parseFloat(item.values['did_numbers'] ?? 0);
-      if (didNums > 0) sub += didNums * 1500 * months;
+      if (didNums > 0) sub += didNums * (parseFloat(item.values['did_cost']) || 1500) * months;
       return sub;
     });
     const grandSub = subtotals.reduce((a, b) => a + b, 0);
@@ -2937,7 +3097,7 @@ function updatePreview() {
           <div style="margin-top:2px;font-weight:600;color:#0284c7;">${firstSku.entity}</div>
         </div>
       </div>
-      <div class="quote-doc-title">Commercial Proposal - Plan Comparison</div>
+      <div class="quote-doc-title">Commercial Proposal: Plan Comparison</div>
       <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:18px;">Prepared For: ${sanitize(company)}</p>
       <div class="quote-doc-section">
         <div class="quote-doc-section-title">Introduction</div>
@@ -2947,13 +3107,13 @@ function updatePreview() {
         <div class="quote-doc-section-title">Parties</div>
         <div class="quote-participant-grid">
           <div class="quote-participant-box"><div class="label">Prepared By (${firstSku.entity})</div><div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div><div class="sub">${sanitize(seEmail)}</div>${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}</div>
-          <div class="quote-participant-box"><div class="label">Prepared For (Client)</div><div class="value">${sanitize(company)}</div>${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''} ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''} ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''} ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}</div>
+          <div class="quote-participant-box"><div class="label">Prepared For (Client)</div><div class="value">${sanitize(company)}</div>${contact ? `<div class="sub">${sanitize(contact)}</div>' : ''} ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>' : ''} ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>' : ''} ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>' : ''}</div>
         </div>
       </div>
 
       <div class="quote-doc-section" style="margin-top:24px;">
         <div class="quote-doc-section-title" style="font-size:1.05rem;background:#f0f9ff;padding:10px 14px;border-radius:6px;margin-bottom:16px;border-left:4px solid #0284c7;">
-          ${sanitize(sku0.label)} - Side-by-Side Plan Comparison
+          ${sanitize(sku0.label)}: Side-by-Side Plan Comparison
         </div>
         <div style="overflow-x:auto;">
         <table class="quote-sku-table" style="table-layout:auto;">
@@ -3111,7 +3271,7 @@ function updatePreview() {
       const numUsers = getSafeNum('num_users') || 0;
       const uCharge = getSafeNum('user_charge') || 1000;
       const validity = parseFloat(getVal('validity')) || 0;
-      const DID_COST = 1500;
+      const DID_COST = getSafeNum('did_cost') || 1500;
       const didNums = getSafeNum('did_numbers') || 0;
       const removStd = getSafeNum('remove_std_numbers') || 0;
       const totalUserCostV = numUsers * validity * uCharge;
@@ -3226,7 +3386,7 @@ function updatePreview() {
       const totalUserCost = numUsers * numMonths * userCharge;
       const didNums = getSafeNum('did_numbers') || 0;
       const removStd = getSafeNum('remove_std_numbers') || 0;
-      const DID_COST = 1500;
+      const DID_COST = getSafeNum('did_cost') || 1500;
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Account Rental', W);
@@ -3480,7 +3640,7 @@ function updatePreview() {
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
       tableHTML += `<tr><td colspan="2" style="padding:8px 14px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-weight:700; font-size:0.88rem; border-radius:4px 4px 0 0;">
-        🌱  Complimentary Startup Bundle &mdash; ₹0 to client
+        🌱  Complimentary Startup Bundle - ₹0 to client
       </td></tr>`;
       fields.forEach(f => {
         const val = item.values[f.id] ?? f.value;
@@ -3525,12 +3685,12 @@ function updatePreview() {
     const extraNumCost = getSafeNum('extra_number');
     if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSafeNum('extra_validity') || 0));
     const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
-    if (didNumbers > 0) subtotal += didNumbers * 1500 * months;
+    if (didNumbers > 0) subtotal += didNumbers * (parseFloat(item.values['did_cost']) || 1500) * months;
 
     grandSubtotal += isStartup ? 0 : subtotal;
 
     const tierLabel = sku.hasTiers && item.tier
-      ? ' - ' + item.tier.charAt(0).toUpperCase() + item.tier.slice(1)
+      ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
       : '';
 
     allSectionsHTML += `
