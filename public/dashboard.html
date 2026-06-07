@@ -340,15 +340,27 @@
                         </h1>
                         <p style="margin-top:4px;">Review and manage suggestions submitted by users.</p>
                     </div>
-                    <button class="btn btn-secondary" id="btn-refresh-dev-feedback">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="23 4 23 10 17 10"></polyline>
-                            <polyline points="1 20 1 14 7 14"></polyline>
-                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                        </svg>
-                        Refresh Inbox
-                    </button>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <button class="btn btn-secondary" id="btn-refresh-dev-feedback">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            Refresh Inbox
+                        </button>
+                        <button class="btn btn-reset" id="btn-clear-dev-feedback" style="background:#dc2626; color:#fff; border:none; display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:6px; font-size:0.88rem; font-weight:600; cursor:pointer; transition: background 0.15s;" onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                            Clear All
+                        </button>
+                    </div>
                 </div>
                 <!-- Cards container -->
                 <div id="dev-feedback-cards" style="display:flex; flex-direction:column; gap:12px;"></div>
@@ -924,26 +936,7 @@
                             <span class="quote-tab-badge" id="all-quotes-count">0</span>
                             <span class="admin-badge" style="font-size:0.65rem;">Admin</span>
                         </button>
-                        <button class="quote-tab hidden" data-qtab="approvals" id="qtab-approvals">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                            </svg>
-                            Approvals
-                            <span class="quote-tab-badge" id="approvals-count">0</span>
-                            <span class="admin-badge" style="font-size:0.65rem;">Admin</span>
-                        </button>
-                        <button class="quote-tab hidden" data-qtab="sku-requests" id="qtab-skurequests">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                                <polyline points="17 8 12 3 7 8"></polyline>
-                                <line x1="12" y1="3" x2="12" y2="15"></line>
-                            </svg>
-                            Requested SKUs
-                            <span class="quote-tab-badge" id="sku-requests-count">0</span>
-                            <span class="admin-badge" style="font-size:0.65rem;">Admin</span>
-                        </button>
+
                     </div>
                 </div>
 
@@ -1216,15 +1209,6 @@
                                     </svg>
                                 </button>
                                 <div class="preview-actions" style="display: flex; gap: 12px; align-items: center;">
-                                    <button class="btn btn-secondary hidden" id="q-btn-sku-request">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                        Request New SKU
-                                    </button>
                                     <button class="btn btn-generate" id="q-btn-generate">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
@@ -1387,125 +1371,12 @@
                     </div>
                 </div>
 
-                <!-- APPROVALS TAB (admin) -->
-                <div class="quote-tab-content" id="qtab-content-approvals">
-                    <div style="padding: 24px 32px;">
-                        <div
-                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                            <div>
-                                <h2 style="margin:0;">Stop-Lock Overrides <span class="admin-badge">Admin</span></h2>
-                                <p style="margin:4px 0 0; font-size:0.83rem; color:#94a3b8;">Track all cases where
-                                    pricing went below thresholds.</p>
-                            </div>
-                            <button class="btn btn-secondary" id="q-btn-refresh-approvals">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                    <polyline points="1 20 1 14 7 14"></polyline>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
-                                    </path>
-                                </svg>
-                                Refresh
-                            </button>
-                        </div>
-                        <div id="approvals-list"></div>
-                    </div>
-                </div>
-
-                <!-- REQUESTED SKUS TAB (admin) -->
-                <div class="quote-tab-content" id="qtab-content-sku-requests">
-                    <div style="padding: 24px 32px;">
-                        <div
-                            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                            <div>
-                                <h2 style="margin:0;">Requested SKUs <span class="admin-badge">Admin</span></h2>
-                                <p style="margin:4px 0 0; font-size:0.83rem; color:#94a3b8;">Review new SKUs requested
-                                    by the sales team.</p>
-                            </div>
-                            <button class="btn btn-secondary" id="q-btn-refresh-sku-requests">
-                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <polyline points="23 4 23 10 17 10"></polyline>
-                                    <polyline points="1 20 1 14 7 14"></polyline>
-                                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15">
-                                    </path>
-                                </svg>
-                                Refresh
-                            </button>
-                        </div>
-                        <div id="sku-requests-list"></div>
-                    </div>
-                </div>
 
             </section>
         </main>
     </div>
 
-    <!-- Stop-Lock Approval Modal (global) -->
-    <div class="q-modal-overlay hidden" id="q-approval-modal">
-        <div class="q-modal">
-            <div class="q-modal-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z">
-                    </path>
-                    <line x1="12" y1="9" x2="12" y2="13"></line>
-                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                </svg>
-            </div>
-            <div class="q-modal-title">Manager Approval Required</div>
-            <div class="q-modal-body" id="q-modal-body-text">The following values exceed suggested thresholds. Please
-                ensure you have formal approval from your manager to proceed with this commercial setup.</div>
-            <div id="q-modal-violations-list"
-                style="margin-top:16px; margin-bottom:16px; max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px; padding:12px; background:#f8fafc; text-align: left;">
-                <!-- List will be injected here -->
-            </div>
-            <div style="font-size:0.75rem; color:#94a3b8; text-align:center; margin-top:14px; margin-bottom: 20px;">💬
-                Clicking confirm acknowledges you have received manager consent.</div>
-            <div class="q-modal-actions">
-                <button class="btn btn-reset" id="q-modal-cancel">Cancel</button>
-                <button class="btn btn-primary" id="q-modal-approve" style="background: #0284c7;">Confirm &
-                    Proceed</button>
-            </div>
-        </div>
-    </div>
 
-    <!-- SKU Request Modal -->
-    <div class="q-modal-overlay hidden" id="q-sku-request-modal">
-        <div class="q-modal" style="max-width:440px;">
-            <div class="q-modal-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                    stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="17 8 12 3 7 8"></polyline>
-                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                </svg>
-            </div>
-            <div class="q-modal-title">Request Missing SKU</div>
-            <div class="q-modal-body">Please provide the name of the SKU you need for your quote. Our team will verify
-                and add it.</div>
-
-            <div style="margin-top: 16px; text-align: left;">
-                <label
-                    style="font-size: 0.82rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px;">SKU
-                    Name *</label>
-                <input type="text" class="q-modal-input" id="q-sku-request-name"
-                    placeholder="e.g. WhatsApp Platform License">
-
-                <label
-                    style="font-size: 0.82rem; font-weight: 600; color: #475569; display: block; margin-bottom: 6px; margin-top: 12px;">Description
-                    (Optional)</label>
-                <textarea class="q-modal-input" id="q-sku-request-desc"
-                    placeholder="Specific pricing, parameters, or details..."
-                    style="min-height: 80px; resize: vertical; border-radius: 6px; border: 1px solid #cbd5e1; width: 100%; padding: 10px; font-family: inherit;"></textarea>
-            </div>
-
-            <div class="q-modal-actions mt-4" style="margin-top: 20px;">
-                <button class="btn btn-secondary" id="q-sku-request-cancel">Cancel</button>
-                <button class="btn btn-primary" id="q-sku-request-submit">Submit Request</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Give Feedback Modal (Global) -->
     <div id="feedback-modal" class="modal-overlay hidden">

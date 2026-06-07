@@ -149,14 +149,6 @@ app.use(cors());
 app.use(express.json({ limit: '15mb' }));
 app.use(express.urlencoded({ extended: true })); // Exotel webhooks send form-encoded
 app.use(express.static(path.join(__dirname, 'public')));
-// Returns milliseconds from now until 11:59:59 PM tonight (local server time)
-function msTillEndOfDay() {
-    const now = new Date();
-    const eod = new Date(now);
-    eod.setHours(23, 59, 59, 0);
-    return Math.max(eod - now, 60 * 1000); // at least 1 minute
-}
-
 app.use(session({
     secret: process.env.SESSION_SECRET || 'exotel-secret-key-123',
     resave: false,
@@ -164,22 +156,12 @@ app.use(session({
     rolling: true,           // refresh cookie on each request
     cookie: {
         secure: false,       // set to true if using HTTPS
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 100 * 365 * 24 * 60 * 60 * 1000 // 100 years (stay on forever)
     }
 }));
 
 app.use(passport.initialize());
 app.use(passport.session());
-
-// ─── Session TTL endpoint ────────────────────────────────────────────────────
-// Returns how many milliseconds remain until the session expires (11:59 PM today)
-app.get('/api/session-ttl', ensureAuthenticated, (req, res) => {
-    const now = new Date();
-    const eod = new Date(now);
-    eod.setHours(23, 59, 59, 0);
-    const msLeft = Math.max(eod - now, 0);
-    res.json({ msLeft, expiresAt: eod.toISOString() });
-});
 
 // ─── Passport Google OAuth ───────────────────────────────────────────────────
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
@@ -953,6 +935,19 @@ app.post('/api/admin/dev-feedback/:id/delete', ensureAuthenticated, ensureDevelo
     }
 });
 
+app.post('/api/admin/dev-feedback/clear-all', ensureAuthenticated, ensureDeveloper, (req, res) => {
+    const email = req.user?.emails?.[0]?.value || 'unknown';
+    console.log(`[FEEDBACK] Clear all requested by ${email}`);
+    try {
+        const info = db.prepare(`DELETE FROM dev_feedback`).run();
+        console.log(`[FEEDBACK] Clear all successful. Rows affected: ${info.changes}`);
+        res.json({ success: true, changes: info.changes });
+    } catch (e) {
+        console.error('[FEEDBACK] Error clearing dev_feedback:', e.message);
+        res.status(500).json({ error: 'Failed to clear all feedback: ' + e.message });
+    }
+});
+
 // ─── Live Call Monitor (LWB) ─────────────────────────────────────────────────
 // Reads Exotel credentials from .env:
 //   EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_ACCOUNT_SID, EXOTEL_SUBDOMAIN
@@ -1184,6 +1179,9 @@ Pick the best-matching skuKey using reasoning. Use ONLY these exact keys:
                         USE FOR: "voice bot", "IVR", "automated calling", "AI calling",
                         "bot plan", "WebSocket", "streaming", "conversational AI".
 
+  voice_exotel_voicebot → Voicebot plan for conversational bots and IVR.
+                        USE FOR: "voicebot", "voice bot", "automated voicebot", "AI agent".
+
   sms_exotel         → SMS messaging plan.
                         USE FOR: "SMS", "text messages", "OTP", "alerts", "notifications",
                         "bulk SMS", "transactional messages", "send texts".
@@ -1254,7 +1252,7 @@ USER-BASED FIELDS (voice_exotel_user, voice_veeno_user):
   "user charge / X per user"                             → key: "user_charge"
   "free numbers"                                         → key: "free_numbers"
   "paid numbers / extra numbers"                         → key: "num_paid_numbers"
-  "DID numbers / X DID lines"                            → key: "did_numbers"
+  "DID numbers / Mobile DID numbers / X DID lines / X Mobile DID lines" → key: "did_numbers"
 
 TFN FIELDS (voice_exotel_tfn):
   "number of numbers / X TFN numbers"                    → key: "num_numbers"
@@ -1263,17 +1261,19 @@ TFN FIELDS (voice_exotel_tfn):
   "extra user cost"                                      → key: "extra_user_cost"
   "outgoing rate"                                        → key: "outgoing"
 
-WEB STREAMING FIELDS (voice_exotel_stream) — channels are HERE not SIP:
+WEB STREAMING & VOICEBOT FIELDS (voice_exotel_stream, voice_exotel_voicebot) — channels are HERE not SIP:
   "number of channels / X channels"                      → key: "num_channels"
   "channel cost / X per channel"                         → key: "channel_cost"
   "incoming rate"                                        → key: "incoming"
   "outgoing rate"                                        → key: "outgoing"
+  "human handoff / agent handoff / voicebot to agent"    → key: "human_handoff" (set value to 1)
+  "volume / monthly volume / call volume / X minutes"    → key: "volume"
 
 SIP FIELDS (sip_veeno):
   "free users / X users free"                            → key: "free_users"
   "free numbers"                                         → key: "free_numbers"
   "extra paid numbers"                                   → key: "num_paid_numbers"
-  "DID numbers / X DID"                                  → key: "did_numbers"
+  "DID numbers / Mobile DID numbers / X DID / X Mobile DID" → key: "did_numbers"
   "incoming rate"                                        → key: "incoming"
   "outgoing rate"                                        → key: "outgoing"
 
@@ -1302,7 +1302,7 @@ EXAMPLES:
   "give 5 free numbers"                  → key: "free_numbers", value: 5
   "set the rental to 8000"              → key: "rental", value: 8000
   "10 channels" (streaming plan)         → key: "num_channels", value: 10
-  "3 DID lines" (SIP/user plan)          → key: "did_numbers", value: 3
+  "3 DID lines / 3 Mobile DID lines" (SIP/user plan)     → key: "did_numbers", value: 3
   "make validity 12 months"              → key: "num_months", value: 12
 
 === COMPARE MODE ===

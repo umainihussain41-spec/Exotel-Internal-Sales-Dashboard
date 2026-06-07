@@ -101,56 +101,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         e.preventDefault();
     }, false);
 
-    // ── Session Expiry Warning ─────────────────────────────────
-    // Warns the SE 5 min and 1 min before session ends at 11:59 PM tonight
-    (function setupSessionWarning() {
-        const WARN_BEFORE  = 5 * 60 * 1000; // warn 5 min before expiry
-        const WARN_BEFORE2 = 1 * 60 * 1000; // second warn 1 min before expiry
-
-        let warnTimer1, warnTimer2;
-
-        function scheduleWarnings(sessionMs) {
-            clearTimeout(warnTimer1);
-            clearTimeout(warnTimer2);
-
-            const delay1 = sessionMs - WARN_BEFORE;
-            const delay2 = sessionMs - WARN_BEFORE2;
-
-            if (delay1 > 0) {
-                warnTimer1 = setTimeout(() => {
-                    showToast(
-                        '⏰ Your session expires at <strong>11:59 PM</strong> tonight — save your work before then.',
-                        'warning'
-                    );
-                }, delay1);
-            }
-
-            if (delay2 > 0) {
-                warnTimer2 = setTimeout(() => {
-                    showToast(
-                        '🔴 Session ending in <strong>1 minute</strong>! Please save your draft now.',
-                        'error'
-                    );
-                }, delay2);
-            }
-        }
-
-        // Fetch the real TTL from the server (ms until 11:59 PM tonight)
-        fetch('/api/session-ttl')
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-                const msLeft = data?.msLeft || 0;
-                if (msLeft > 0) scheduleWarnings(msLeft);
-            })
-            .catch(() => {
-                // Fallback: compute locally
-                const now = new Date();
-                const eod = new Date(now);
-                eod.setHours(23, 59, 59, 0);
-                const msLeft = Math.max(eod - now, 0);
-                if (msLeft > 0) scheduleWarnings(msLeft);
-            });
-    })();
 });
 
 async function checkUser() {
@@ -1816,6 +1766,21 @@ function setupFeedbackSystem() {
 
 function setupDevFeedbackApplet() {
     document.getElementById('btn-refresh-dev-feedback')?.addEventListener('click', fetchDevFeedback);
+    document.getElementById('btn-clear-dev-feedback')?.addEventListener('click', async () => {
+        if (!await showConfirm('Are you sure you want to clear all feedback messages? This cannot be undone.', { title: 'Clear All Feedback', confirmText: 'Clear All', danger: true, type: 'warning' })) return;
+        try {
+            const res = await fetch('/api/admin/dev-feedback/clear-all', { method: 'POST' });
+            if (res.ok) {
+                fetchDevFeedback();
+                showAlert('All developer feedback messages cleared successfully!', { type: 'success', title: 'Inbox Cleared' });
+            } else {
+                const data = await res.json().catch(() => ({}));
+                showAlert('Failed to clear feedback messages: ' + (data.error || res.statusText || 'Unknown error'), { type: 'error', title: 'Error' });
+            }
+        } catch (e) {
+            showAlert('Failed to clear feedback messages: ' + e.message, { type: 'error', title: 'Error' });
+        }
+    });
 }
 
 async function fetchDevFeedback() {
