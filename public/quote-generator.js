@@ -5131,7 +5131,7 @@ window.confirmGenerateProforma = async function () {
       ? lineItems.map((li, i) => `
         <tr>
           <td class="center-align" style="vertical-align: top;">${i + 1}</td>
-          <td style="text-align: center; vertical-align: top; line-height: 1.4; padding: 15px;">
+          <td style="text-align: center; vertical-align: top; line-height: 1.3; padding: 6px 10px;">
             ${li.descLines.map(line => line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')).join('<br>')}
           </td>
           <td class="center-align" style="vertical-align: top;">1</td>
@@ -5139,7 +5139,7 @@ window.confirmGenerateProforma = async function () {
           <td class="center-align" style="vertical-align: top; text-transform: lowercase;">x</td>
           <td class="right-align" style="vertical-align: top;">${fmtINR(li.amount)}</td>
         </tr>`).join('')
-      : `<tr><td colspan="6" style="padding:16px 12px; text-align:center; color:#94a3b8; font-size:0.82rem;">See attached quote for plan details.</td></tr>`;
+      : `<tr><td colspan="6" style="padding:10px; text-align:center; color:#94a3b8; font-size:0.8rem;">See attached quote for plan details.</td></tr>`;
 
     // ── Build full PI HTML ────────────────────────────────────────
     const piHtml = `<!DOCTYPE html>
@@ -5160,27 +5160,27 @@ window.confirmGenerateProforma = async function () {
       padding: 0;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
-      font-size: 11px;
+      font-size: 10px;
     }
     .invoice-container {
       width: 100%;
       max-width: 1060px;
       margin: 0 auto;
-      padding: 10px;
+      padding: 5px 10px;
       box-sizing: border-box;
     }
     .invoice-header {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
-      margin-bottom: 25px;
+      margin-bottom: 10px;
     }
     .logo-container {
       flex: 1;
-      padding-top: 15px;
+      padding-top: 10px;
     }
     .pi-logo {
-      height: 56px;
+      height: 48px;
       object-fit: contain;
     }
     .title-container {
@@ -5190,17 +5190,17 @@ window.confirmGenerateProforma = async function () {
       align-items: flex-end;
     }
     .pi-title {
-      font-size: 26px;
+      font-size: 22px;
       color: #0070c0;
       font-weight: 500;
-      margin-bottom: 5px;
+      margin-bottom: 3px;
     }
     .date-table {
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: 10px;
     }
     .date-table td {
-      padding: 2px 0;
+      padding: 1px 0;
       border: none !important;
     }
     .date-label {
@@ -5213,9 +5213,9 @@ window.confirmGenerateProforma = async function () {
     }
     
     .client-container {
-      font-size: 11px;
-      line-height: 1.4;
-      margin-bottom: 20px;
+      font-size: 10px;
+      line-height: 1.3;
+      margin-bottom: 10px;
     }
     .client-name {
       font-weight: bold;
@@ -5226,10 +5226,10 @@ window.confirmGenerateProforma = async function () {
       border-left: 1px solid #7f7f7f;
       border-right: 1px solid #7f7f7f;
       text-align: center;
-      padding: 8px 10px;
-      margin: 15px 0;
-      font-size: 11px;
-      line-height: 1.4;
+      padding: 6px 8px;
+      margin: 10px 0;
+      font-size: 10px;
+      line-height: 1.3;
     }
     .supplier-name {
       font-weight: bold;
@@ -5245,26 +5245,26 @@ window.confirmGenerateProforma = async function () {
     .notice-text {
       color: #ff0000;
       text-align: center;
-      font-size: 11px;
-      margin: 10px 0 20px 0;
+      font-size: 10px;
+      margin: 5px 0 10px 0;
     }
     
     .invoice-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 11px;
+      font-size: 10px;
     }
     .invoice-table th, .invoice-table td {
       border: 1px solid #7f7f7f;
-      padding: 6px 8px;
+      padding: 4px 6px;
     }
     .invoice-table th {
       background-color: #0070c0;
       color: #ffffff;
       font-weight: bold;
       text-align: center;
-      font-size: 11px;
-      padding: 5px;
+      font-size: 10px;
+      padding: 4px;
     }
     .invoice-table th.left-align {
       text-align: left;
@@ -5288,35 +5288,35 @@ window.confirmGenerateProforma = async function () {
       background-color: #0070c0;
       color: #ffffff;
       font-weight: bold;
-      padding: 4px 8px;
-      font-size: 11px;
+      padding: 3px 6px;
+      font-size: 10px;
     }
     .terms-content {
-      padding: 10px;
-      min-height: 80px;
+      padding: 6px;
+      min-height: 30px;
     }
     
     .section-banner {
       background-color: #0070c0;
       color: #ffffff;
       font-weight: bold;
-      padding: 4px 8px;
-      margin-top: 25px;
-      margin-bottom: 12px;
-      font-size: 11px;
+      padding: 3px 6px;
+      margin-top: 10px;
+      margin-bottom: 6px;
+      font-size: 10px;
     }
     .details-content {
-      font-size: 11px;
-      line-height: 1.5;
+      font-size: 10px;
+      line-height: 1.3;
       color: #000;
     }
     
     .invoice-footer {
       text-align: center;
-      font-size: 10px;
+      font-size: 9px;
       color: #000;
-      margin-top: 40px;
-      padding-bottom: 10px;
+      margin-top: 15px;
+      padding-bottom: 5px;
     }
   </style>
 </head>
@@ -5410,7 +5410,7 @@ window.confirmGenerateProforma = async function () {
       </tr>
       
       <!-- Empty Spacer row at bottom -->
-      <tr style="height: 15px;">
+      <tr style="height: 5px;">
         <td colspan="3" style="border: none;"></td>
         <td></td>
         <td></td>
@@ -5420,7 +5420,6 @@ window.confirmGenerateProforma = async function () {
   </table>
 
   <!-- Additional Details Banner -->
-  <div style="page-break-before: always;"></div>
   <div class="section-banner">ADDITIONAL DETAILS</div>
   
   <!-- Additional Details Content -->
