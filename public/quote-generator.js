@@ -5000,10 +5000,14 @@ window.confirmGenerateProforma = async function () {
           
           const ch = parseFloat(item.values['num_channels'] ?? 5);
           const chCost = getSN('channel_cost') || 1500;
-          if (ch <= 5) {
-            lines.push(`Channels - 5 Channels Free, rest @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+          if (freeChs > 0) {
+            if (ch <= freeChs) {
+              lines.push(`Channels - ${freeChs} Channels Free, rest @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+            } else {
+              lines.push(`Channels - ${freeChs} Channels Free, ${ch - freeChs} Paid @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+            }
           } else {
-            lines.push(`Channels - 5 Channels Free, ${ch - 5} Paid @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+            lines.push(`Channels - ${ch} Channel(s) @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
           }
           
           const credits = getSN('credits');
