@@ -4984,7 +4984,7 @@ window.confirmGenerateProforma = async function () {
         if (item.sku_key === 'voice_exotel_user') {
           const uc = getSN('user_charge');
           const freeU = getV('free_users') || 0;
-          lines.push(`Unique Agent Access Charge: ${freeU ? freeU + ' Free, ' : ''}Rest @ Rs. ${uc}/agent/month`);
+          lines.push(`Unique Agent Access Charge: ${freeU ? freeU + ' Free, Rest @ ' : ''}Rs. ${uc}/agent/month`);
           lines.push(`Validity - As per balance`);
           const freeN = getV('free_numbers') || 0;
           if (freeN > 0) lines.push(`Virtual Landline Numbers - ${freeN} free VNs`);
