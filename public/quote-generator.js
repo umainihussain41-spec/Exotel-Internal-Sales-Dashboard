@@ -4856,11 +4856,56 @@ window.confirmGenerateProforma = async function () {
   const gstNumber = gstUnreg ? 'Unregistered' : ((document.getElementById('pi-gst')?.value || '').trim());
   const expiryDateVal = document.getElementById('pi-expiry-date')?.value || '';
 
-  // Close modal
-  closePiModal();
+  const confirmBtn = document.getElementById('pi-modal-confirm');
+  const cancelBtn = document.getElementById('pi-modal-cancel');
+  const billingAddressInput = document.getElementById('pi-billing-address');
+  const gstInput = document.getElementById('pi-gst');
+  const gstUnregisteredInput = document.getElementById('pi-gst-unregistered');
+  const expiryDateInput = document.getElementById('pi-expiry-date');
 
-  // Show generating toast
-  showToast('Generating Proforma Invoice PDF...', 'info');
+  // Disable all fields & buttons to prevent user interaction during generation
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML = `
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="animation: spin 0.8s linear infinite; display: inline-block;">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" style="opacity: 0.25;"></circle>
+        <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" style="opacity: 0.75;"></path>
+      </svg>
+      Generating...
+    `;
+    confirmBtn.style.cursor = 'not-allowed';
+  }
+  if (cancelBtn) {
+    cancelBtn.disabled = true;
+    cancelBtn.style.cursor = 'not-allowed';
+    cancelBtn.style.opacity = '0.5';
+  }
+  if (billingAddressInput) billingAddressInput.disabled = true;
+  if (gstInput) gstInput.disabled = true;
+  if (gstUnregisteredInput) gstUnregisteredInput.disabled = true;
+  if (expiryDateInput) expiryDateInput.disabled = true;
+
+  const restoreModalState = () => {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Generate PI
+      `;
+      confirmBtn.style.cursor = 'pointer';
+    }
+    if (cancelBtn) {
+      cancelBtn.disabled = false;
+      cancelBtn.style.cursor = 'pointer';
+      cancelBtn.style.opacity = '1';
+    }
+    if (billingAddressInput) billingAddressInput.disabled = false;
+    if (gstUnregisteredInput) gstUnregisteredInput.disabled = false;
+    if (expiryDateInput) expiryDateInput.disabled = false;
+    if (gstInput) {
+      gstInput.disabled = gstUnregisteredInput ? gstUnregisteredInput.checked : false;
+    }
+  };
 
   try {
     // ── Compute totals from quote data ────────────────────────────
@@ -5401,10 +5446,6 @@ window.confirmGenerateProforma = async function () {
 
     // ── Send to PDF endpoint ──────────────────────────────────────
     const defaultFilename = `Proforma_Invoice_${q.quote_number}_${(company || 'Exotel').replace(/[^a-z0-9]/gi,'_')}.pdf`;
-    let userFilename = await showPrompt('Enter filename for the Proforma Invoice PDF:', defaultFilename, { title: 'Save Proforma Invoice' });
-    if (userFilename === null) return;
-    if (!userFilename.trim()) userFilename = defaultFilename;
-    else if (!userFilename.toLowerCase().endsWith('.pdf')) userFilename += '.pdf';
 
     const pdfRes = await fetch('/api/export-pdf', {
       method: 'POST',
@@ -5413,11 +5454,19 @@ window.confirmGenerateProforma = async function () {
     });
     if (!pdfRes.ok) throw new Error('PDF export failed on server.');
 
+    // Update button to Generated!
+    if (confirmBtn) {
+      confirmBtn.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block;"><polyline points="20 6 9 17 4 12"/></svg>
+        Generated!
+      `;
+    }
+
     const blob = await pdfRes.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = userFilename.trim();
+    a.download = defaultFilename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -5425,9 +5474,16 @@ window.confirmGenerateProforma = async function () {
 
     showToast('Proforma Invoice generated successfully!', 'success');
 
+    // Wait 1 second before closing and restoring modal state
+    setTimeout(() => {
+      closePiModal();
+      restoreModalState();
+    }, 1000);
+
   } catch (e) {
     console.error('PI generation error', e);
     showAlert('Failed to generate Proforma Invoice. Please try again.', { type: 'error', title: 'PI Error' });
+    restoreModalState();
   }
 };
 // ── End Proforma Invoice Generator ───────────────────────────────────────────
