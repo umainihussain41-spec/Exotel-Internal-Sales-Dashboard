@@ -794,7 +794,7 @@ function setupUsersApplet() {
 
     // Quick Verify logic
     els.btnQuickVerify.addEventListener('click', async () => {
-        _wip('Single Number Verification'); return; // 🚧 Under Construction
+
         const fromNum = els.quickVerifyFrom.value.trim();
 
         if (!fromNum) {
@@ -835,7 +835,7 @@ function setupUsersApplet() {
         });
     }
     const btnVerifyBatch = document.getElementById('btn-verify-batch');
-    if (btnVerifyBatch) btnVerifyBatch.addEventListener('click', () => { _wip('Batch Number Verification'); }); // 🚧 Under Construction
+    if (btnVerifyBatch) btnVerifyBatch.addEventListener('click', () => { runBatchVerification(); });
 }
 
 // Global drag-drop handler for Add Users CSV
@@ -964,7 +964,7 @@ function renderUsersPreview() {
 }
 
 async function processSelectedUsers() {
-    _wip('Sync Users'); return; // 🚧 Under Construction
+
     if (isProcessing) return;
 
     // Additional safeguard before making batch POST requests
@@ -1145,9 +1145,9 @@ async function runBatchVerification() {
 // Exophones Applet Logic
 // ==========================================
 function setupExophonesApplet() {
-    els.btnFetchExo.addEventListener('click', () => { _wip('Fetch Available Numbers'); }); // 🚧 Under Construction
+    els.btnFetchExo.addEventListener('click', () => { fetchExophones(); });
     els.btnDownloadExo.addEventListener('click', downloadExophonesCsv);
-    els.btnAllocateExo.addEventListener('click', () => { _wip('Allocate Exophones'); }); // 🚧 Under Construction
+    els.btnAllocateExo.addEventListener('click', () => { allocateExophones(); });
 }
 
 async function fetchExophones() {
@@ -1303,7 +1303,7 @@ async function allocateExophones() {
 }
 
 async function allocateSingleExo(phoneNumber) {
-    _wip('Allocate Exophone'); return; // 🚧 Under Construction
+
     if (!await showConfirm(`Are you sure you want to allocate ${phoneNumber} to your account?`, { title: 'Confirm Allocation', confirmText: 'Allocate' })) return;
 
     logTerminal(`Requesting allocation for ${phoneNumber}...`, 'info');

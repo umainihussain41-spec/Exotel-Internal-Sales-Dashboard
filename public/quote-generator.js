@@ -4285,6 +4285,22 @@ async function generateQuote() {
     updateNavCounters();
 
     showAlert(isEdit ? `Quote ${QG.quoteNumber} updated successfully!` : `Quote ${QG.quoteNumber} generated and saved successfully!`, { type: 'success', title: 'Quote Saved!' });
+    
+    if (window._pendingPiQuoteId && window._pendingPiQuoteId === QG.currentQuoteId) {
+      const pendingId = window._pendingPiQuoteId;
+      window._pendingPiQuoteId = null;
+      // Reload quote lists
+      await loadMyQuotes().catch(() => null);
+      await loadAllQuotes().catch(() => null);
+      // Click tab to go back to My Quotes
+      document.getElementById('qtab-myquotes')?.click();
+      // Re-trigger Proforma Invoice modal
+      setTimeout(() => {
+        window.generateProformaInvoice(pendingId);
+      }, 400);
+      return;
+    }
+
     await window.printQuote();
     // Reset & get new number
     resetQuoteForm();
@@ -4454,6 +4470,7 @@ function renderQuoteCard(q, isAdminView) {
         ${!isDeleted && !isAdminView ? `<button class="btn btn-secondary" onclick="viewQuote(${q.id})">Edit Quote</button>` : ''}
         <button class="btn btn-secondary" onclick="window.viewQuoteHistory(${q.id}, '${sanitize(q.quote_number)}')">History</button>
         <button class="btn btn-secondary" onclick="printHistoricalQuote(${q.id})">Download Quote</button>
+        ${q.entity !== 'Veeno' && !isDeleted ? `<button class="btn btn-secondary" style="background:#f0fdf4;color:#059669;border:1px solid #bbf7d0;font-weight:600;" onclick="generateProformaInvoice(${q.id})">&#x1F9FE; Proforma</button>` : ''}
         ${!isDeleted && !isAdminView ? `<button class="btn btn-reset" onclick="deleteQuote(${q.id})">Delete</button>` : ''}
       </div>
     </div>`;
@@ -4737,6 +4754,683 @@ window.printHistoricalQuote = async function (id) {
     showAlert("Failed to generate PDF for historical quote.", { type: 'error', title: 'PDF Error' });
   }
 };
+
+// ── Proforma Invoice Generator ───────────────────────────────────────────────
+// State holder for the PI modal
+window._piQuoteData = null;
+
+window.generateProformaInvoice = async function (id) {
+  try {
+    // Fetch quote
+    let q;
+    const res = await fetch('/api/quotes');
+    if (res.ok) { const mine = await res.json(); q = mine.find(x => x.id === id); }
+    if (!q) {
+      const adminRes = await fetch('/api/quotes/admin');
+      if (adminRes.ok) { const all = await adminRes.json(); q = all.find(x => x.id === id); }
+    }
+    if (!q) return showAlert('Quote not found.', { type: 'error', title: 'Not Found' });
+
+    const data = typeof q.quote_data === 'string' ? JSON.parse(q.quote_data) : q.quote_data;
+    
+    // Check if company name is missing
+    const company = (data?.client?.company || '').trim();
+    if (!company) {
+      if (await showConfirm('Company name is missing for this quote. To generate a Proforma Invoice, a company name is required. Would you like to edit the quote now to add it?', { title: 'Company Name Required', confirmText: 'Edit Quote', cancelText: 'Cancel' })) {
+        window._pendingPiQuoteId = id;
+        await window.viewQuote(id);
+        setTimeout(() => {
+          const compInput = document.getElementById('q-client-company');
+          if (compInput) {
+            compInput.focus();
+            compInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            compInput.style.outline = '2px solid #ef4444';
+            compInput.style.backgroundColor = '#fef2f2';
+            setTimeout(() => {
+              compInput.style.outline = '';
+              compInput.style.backgroundColor = '';
+            }, 3000);
+          }
+        }, 500);
+      }
+      return;
+    }
+
+    window._piQuoteData = { q, data };
+
+    // Pre-fill modal subtitle
+    const subtitle = document.getElementById('pi-modal-subtitle');
+    if (subtitle) subtitle.textContent = `${q.quote_number} — ${company}`;
+
+    // Pre-fill billing address from quote client data if available
+    const addrEl = document.getElementById('pi-billing-address');
+    if (addrEl) addrEl.value = data?.client?.address || '';
+
+    // Reset GST fields
+    const gstEl = document.getElementById('pi-gst');
+    const gstUnreg = document.getElementById('pi-gst-unregistered');
+    if (gstEl) { gstEl.value = ''; gstEl.disabled = false; gstEl.style.opacity = '1'; }
+    if (gstUnreg) gstUnreg.checked = false;
+
+    // Set expiry date to 30 days from quote date
+    const expiryEl = document.getElementById('pi-expiry-date');
+    if (expiryEl) {
+      const quoteDate = new Date(q.created_at);
+      const expiry = new Date(quoteDate.getTime() + 30 * 24 * 3600 * 1000);
+      expiryEl.value = expiry.toISOString().split('T')[0];
+    }
+
+    // Show modal
+    const overlay = document.getElementById('pi-modal-overlay');
+    if (overlay) { overlay.style.display = 'flex'; }
+
+    // Focus address field
+    setTimeout(() => { if (addrEl) addrEl.focus(); }, 80);
+
+  } catch (e) {
+    console.error(e);
+    showAlert('Failed to load quote for Proforma Invoice.', { type: 'error', title: 'Error' });
+  }
+};
+
+window.closePiModal = function () {
+  const overlay = document.getElementById('pi-modal-overlay');
+  if (overlay) overlay.style.display = 'none';
+  window._piQuoteData = null;
+};
+
+window.confirmGenerateProforma = async function () {
+  if (!window._piQuoteData) return;
+
+  const { q, data } = window._piQuoteData;
+
+  const billingAddress = (document.getElementById('pi-billing-address')?.value || '').trim();
+  if (!billingAddress) {
+    document.getElementById('pi-billing-address').style.borderColor = '#ef4444';
+    document.getElementById('pi-billing-address').focus();
+    return;
+  }
+  document.getElementById('pi-billing-address').style.borderColor = '#cbd5e1';
+
+  const gstUnreg = document.getElementById('pi-gst-unregistered')?.checked;
+  const gstNumber = gstUnreg ? 'Unregistered' : ((document.getElementById('pi-gst')?.value || '').trim());
+  const expiryDateVal = document.getElementById('pi-expiry-date')?.value || '';
+
+  // Close modal
+  closePiModal();
+
+  // Show generating toast
+  showToast('Generating Proforma Invoice PDF...', 'info');
+
+  try {
+    // ── Compute totals from quote data ────────────────────────────
+    const skuItems = data.sku_items || [{ sku_key: data.sku_key, tier: data.tier, values: data.fields || {}, stopLockOverrides: [] }];
+    const validItems = skuItems.filter(i => i.sku_key);
+
+    let grandSubtotal = 0;
+    const lineItems = [];
+
+    for (const item of validItems) {
+      const sku = SKUS.find(s => s.key === item.sku_key);
+      if (!sku) continue;
+      const isStartup = item.sku_key === 'startup' || !!(STARTUP_PARENT_MAP[item.sku_key]);
+      if (isStartup) continue;
+
+      const fields = getSkuFields(item.sku_key, item.tier);
+      const getSN = (id) => {
+        const f = fields.find(x => x.id === id);
+        if (!f || f.waived) return 0;
+        return parseFloat(item.values[id] ?? f.value ?? 0) || 0;
+      };
+      const getV = (id) => {
+        const f = fields.find(x => x.id === id);
+        if (!f) return undefined;
+        return item.values[id] ?? f.value;
+      };
+
+      const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
+      let rental = getSN('rental');
+      const rentalF = fields.find(x => x.id === 'rental');
+      if (rentalF && rentalF.label.toLowerCase().includes('/month')) rental = rental * months;
+      const credits = getSN('credits');
+      const brand = getSN('brand_fee');
+      const procure = getSN('procurement');
+      const setup = getSN('setup');
+      const isVoicebot = item.sku_key === 'voice_exotel_voicebot';
+      const freeChs = isVoicebot ? 5 : 0;
+      const paidChs = Math.max(0, parseFloat(item.values['num_channels'] ?? (isVoicebot ? 5 : 0)) - freeChs);
+      const chCost = getSN('channel_cost') * paidChs * months;
+      const numUsers = parseFloat(item.values['num_users'] ?? 0);
+      const userCharge = getSN('user_charge');
+      const numNumbers = parseFloat(item.values['num_numbers'] ?? 1);
+      const numberCost = getSN('number_cost') * numNumbers * months;
+      const numPaidNums = parseFloat(item.values['num_paid_numbers'] ?? 0);
+      const extraNumCost = getSN('extra_number');
+      const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
+
+      let subtotal = credits + rental + brand + procure + setup + chCost + numberCost;
+      if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
+      if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSN('extra_validity') || 0));
+      if (didNumbers > 0) subtotal += didNumbers * (parseFloat(item.values['did_cost']) || 1500) * months;
+
+      grandSubtotal += subtotal;
+
+      // Build description
+      const getSkuDescriptionLines = (item, sku) => {
+        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        const getSN = (id) => {
+          const f = fields.find(x => x.id === id);
+          if (!f || f.waived) return 0;
+          return parseFloat(item.values[id] ?? f.value ?? 0) || 0;
+        };
+        const getV = (id) => {
+          const f = fields.find(x => x.id === id);
+          if (!f) return undefined;
+          return item.values[id] ?? f.value;
+        };
+
+        const lines = [];
+        const tierName = sku.hasTiers && item.tier ? (item.customName || TIER_DISPLAY_NAMES[item.tier] || item.tier) : '';
+        lines.push(`Plan: ${sku.label}${tierName ? ' - ' + tierName : ''}`);
+
+        const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
+
+        if (item.sku_key === 'voice_exotel_user') {
+          const uc = getSN('user_charge');
+          const freeU = getV('free_users') || 0;
+          lines.push(`Unique Agent Access Charge: ${freeU ? freeU + ' Free, ' : ''}Rest @ Rs. ${uc}/agent/month`);
+          lines.push(`Validity - As per balance`);
+          const freeN = getV('free_numbers') || 0;
+          if (freeN > 0) lines.push(`Virtual Landline Numbers - ${freeN} free VNs`);
+          const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
+          const extraN = getSN('extra_number');
+          if (numPaid > 0 && extraN > 0) {
+            lines.push(`Additional Numbers - ${numPaid} VN(s) @ ₹${extraN}/number/month`);
+          }
+          lines.push(`Unlimited Calls`);
+          lines.push(`Total Balance Provided - INR ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(item.amount || 0)}`);
+        } else if (item.sku_key === 'voice_exotel_voicebot') {
+          lines.push(`Validity - ${months} months`);
+          
+          const ch = parseFloat(item.values['num_channels'] ?? 5);
+          const chCost = getSN('channel_cost') || 1500;
+          if (ch <= 5) {
+            lines.push(`Channels - 5 Channels Free, rest @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+          } else {
+            lines.push(`Channels - 5 Channels Free, ${ch - 5} Paid @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+          }
+          
+          const credits = getSN('credits');
+          if (credits > 0) lines.push(`Call Credits Included - ₹${new Intl.NumberFormat('en-IN').format(credits)}`);
+          
+          const incoming = getSN('incoming');
+          if (incoming > 0) lines.push(`Incoming & Outgoing Rate - ${incoming} paise/min`);
+          
+          const pulse = getSN('pulse') || 60;
+          lines.push(`Billing Pulse - ${pulse} sec`);
+          
+          const handoff = item.values['human_handoff'] ?? 0;
+          if (handoff === 1 || handoff === true || handoff === '1') lines.push(`Human Handoff - Enabled`);
+          
+          const attempt = getSN('attempt');
+          if (attempt > 0) lines.push(`Attempt Charges - ${attempt} paise/failed call`);
+
+          const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
+          const extraN = getSN('extra_number');
+          if (numPaid > 0 && extraN > 0) {
+            lines.push(`Extra Numbers - ${numPaid} VN(s) @ ₹${extraN}/number/month`);
+          }
+
+          const did = parseFloat(item.values['did_numbers'] ?? 0);
+          const didCost = getSN('did_cost') || 1500;
+          if (did > 0) {
+            lines.push(`Mobile DID Numbers - ${did} VN(s) @ ₹${didCost}/number/month`);
+          }
+
+          const rental = getSN('rental');
+          if (rental > 0) lines.push(`Account Rental - ₹${new Intl.NumberFormat('en-IN').format(rental)}`);
+          
+          const setup = getSN('setup');
+          if (setup > 0) lines.push(`Setup Charges - ₹${new Intl.NumberFormat('en-IN').format(setup)}`);
+        } else {
+          lines.push(`Validity - ${months} months`);
+
+          const credits = getSN('credits');
+          if (credits > 0) lines.push(`Call Credits Included - ₹${new Intl.NumberFormat('en-IN').format(credits)}`);
+
+          const incoming = getSN('incoming') || getSN('single_leg') || getSN('call_rate');
+          if (incoming > 0) {
+            const label = resolvedKey.includes('sms') ? 'SMS Rate' : (resolvedKey.includes('whatsapp') ? 'WA Message Rate' : 'Call Rate');
+            const suffix = resolvedKey.includes('sms') || resolvedKey.includes('whatsapp') ? 'paise/msg' : 'paise/min';
+            lines.push(`${label} - ${incoming} ${suffix}`);
+          }
+
+          const pulse = getSN('pulse');
+          if (pulse > 0) lines.push(`Billing Pulse - ${pulse} sec`);
+
+          const numUsers = parseFloat(item.values['num_users'] ?? 0);
+          const userCharge = getSN('user_charge');
+          if (numUsers > 0 && userCharge > 0) {
+            lines.push(`Users - ${numUsers} User(s) @ ₹${new Intl.NumberFormat('en-IN').format(userCharge)}/user/month`);
+          }
+
+          if (item.sku_key.includes('stream') || item.sku_key.includes('campaigns')) {
+            const ch = parseFloat(item.values['num_channels'] || item.values['channels'] || 0);
+            const chCost = getSN('channel_cost');
+            if (ch > 0 && chCost > 0) {
+              lines.push(`Channels - ${ch} Channel(s) @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+            }
+          }
+
+          const did = parseFloat(item.values['did_numbers'] ?? 0);
+          const didCost = getSN('did_cost') || 1500;
+          if (did > 0) {
+            lines.push(`Mobile DID Numbers - ${did} VN(s) @ ₹${didCost}/number/month`);
+          }
+
+          const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
+          const extraN = getSN('extra_number');
+          if (numPaid > 0 && extraN > 0) {
+            lines.push(`Extra Numbers - ${numPaid} VN(s) @ ₹${extraN}/number/month`);
+          }
+
+          const rental = getSN('rental');
+          if (rental > 0) lines.push(`Account Rental - ₹${new Intl.NumberFormat('en-IN').format(rental)}/month`);
+          
+          const setup = getSN('setup');
+          if (setup > 0) lines.push(`Setup Charges - ₹${new Intl.NumberFormat('en-IN').format(setup)}`);
+        }
+
+        return lines;
+      };
+
+      item.amount = subtotal;
+      const descLines = getSkuDescriptionLines(item, sku);
+      lineItems.push({
+        descLines: descLines,
+        amount: subtotal
+      });
+    }
+
+    const gstAmt = grandSubtotal * 0.18;
+    const grandTotal = grandSubtotal + gstAmt;
+
+    // ── Format helpers ────────────────────────────────────────────
+    const fmtINR = (v) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
+    const fmtINRFull = (v) => '&#8377;' + fmtINR(v);
+
+    // ── Date strings ──────────────────────────────────────────────
+    const quoteDateObj = new Date(q.created_at);
+    const fmtDate = (d) => {
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${mm}/${dd}/${yyyy}`;
+    };
+    const quoteDateStr = fmtDate(quoteDateObj);
+    const expiryDateStr = expiryDateVal
+      ? fmtDate(new Date(expiryDateVal))
+      : fmtDate(new Date(quoteDateObj.getTime() + 30 * 24 * 3600 * 1000));
+
+    // ── Address lines ─────────────────────────────────────────────
+    const addrLines = billingAddress.replace(/\n/g, '<br>');
+    const company = data?.client?.company || '';
+
+    // ── Line items HTML ───────────────────────────────────────────
+    const liHtml = lineItems.length > 0
+      ? lineItems.map((li, i) => `
+        <tr>
+          <td class="center-align" style="vertical-align: top;">${i + 1}</td>
+          <td style="text-align: center; vertical-align: top; line-height: 1.4; padding: 15px;">
+            ${li.descLines.map(line => line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')).join('<br>')}
+          </td>
+          <td class="center-align" style="vertical-align: top;">1</td>
+          <td class="center-align" style="vertical-align: top;">-</td>
+          <td class="center-align" style="vertical-align: top; text-transform: lowercase;">x</td>
+          <td class="right-align" style="vertical-align: top;">${fmtINR(li.amount)}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="6" style="padding:16px 12px; text-align:center; color:#94a3b8; font-size:0.82rem;">See attached quote for plan details.</td></tr>`;
+
+    // ── Build full PI HTML ────────────────────────────────────────
+    const piHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Proforma Invoice - ${company.replace(/</g,'&lt;')} - ${q.quote_number}</title>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 0;
+    }
+    body {
+      background: #fff;
+      font-family: Arial, sans-serif;
+      color: #000;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+      font-size: 11px;
+    }
+    .invoice-container {
+      width: 100%;
+      max-width: 1060px;
+      margin: 0 auto;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    .invoice-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 25px;
+    }
+    .logo-container {
+      flex: 1;
+      padding-top: 15px;
+    }
+    .pi-logo {
+      height: 56px;
+      object-fit: contain;
+    }
+    .title-container {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .pi-title {
+      font-size: 26px;
+      color: #0070c0;
+      font-weight: 500;
+      margin-bottom: 5px;
+    }
+    .date-table {
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .date-table td {
+      padding: 2px 0;
+      border: none !important;
+    }
+    .date-label {
+      font-weight: bold;
+      text-align: left;
+      padding-right: 20px !important;
+    }
+    .date-value {
+      text-align: right;
+    }
+    
+    .client-container {
+      font-size: 11px;
+      line-height: 1.4;
+      margin-bottom: 20px;
+    }
+    .client-name {
+      font-weight: bold;
+    }
+    
+    .supplier-container {
+      border: 1px solid #a6a6a6;
+      border-left: 1px solid #7f7f7f;
+      border-right: 1px solid #7f7f7f;
+      text-align: center;
+      padding: 8px 10px;
+      margin: 15px 0;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .supplier-name {
+      font-weight: bold;
+      margin-bottom: 2px;
+    }
+    .supplier-address {
+      margin-bottom: 2px;
+    }
+    .supplier-meta {
+      color: #000;
+    }
+    
+    .notice-text {
+      color: #ff0000;
+      text-align: center;
+      font-size: 11px;
+      margin: 10px 0 20px 0;
+    }
+    
+    .invoice-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+    .invoice-table th, .invoice-table td {
+      border: 1px solid #7f7f7f;
+      padding: 6px 8px;
+    }
+    .invoice-table th {
+      background-color: #0070c0;
+      color: #ffffff;
+      font-weight: bold;
+      text-align: center;
+      font-size: 11px;
+      padding: 5px;
+    }
+    .invoice-table th.left-align {
+      text-align: left;
+    }
+    .invoice-table td.center-align {
+      text-align: center;
+    }
+    .invoice-table td.right-align {
+      text-align: right;
+    }
+    .bold-text {
+      font-weight: bold;
+    }
+    
+    .terms-container {
+      vertical-align: top;
+      padding: 0 !important;
+      height: 100%;
+    }
+    .terms-header {
+      background-color: #0070c0;
+      color: #ffffff;
+      font-weight: bold;
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    .terms-content {
+      padding: 10px;
+      min-height: 80px;
+    }
+    
+    .section-banner {
+      background-color: #0070c0;
+      color: #ffffff;
+      font-weight: bold;
+      padding: 4px 8px;
+      margin-top: 25px;
+      margin-bottom: 12px;
+      font-size: 11px;
+    }
+    .details-content {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #000;
+    }
+    
+    .invoice-footer {
+      text-align: center;
+      font-size: 10px;
+      color: #000;
+      margin-top: 40px;
+      padding-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+<div class="invoice-container">
+  <!-- Header -->
+  <div class="invoice-header">
+    <div class="logo-container">
+      <img src="${window.location.origin}/exotel-logo.png" class="pi-logo" alt="exotel" onerror="this.outerHTML='<span style=&quot;font-size: 24px; font-weight: bold; color: #0284c7; font-family: sans-serif;&quot;>exotel</span>'">
+    </div>
+    <div class="title-container">
+      <div class="pi-title">Proforma Invoice</div>
+      <table class="date-table">
+        <tr>
+          <td class="date-label">Quote Date</td>
+          <td class="date-value">${quoteDateStr}</td>
+        </tr>
+        <tr>
+          <td class="date-label">Expiration Date</td>
+          <td class="date-value">${expiryDateStr}</td>
+        </tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Client Details -->
+  <div class="client-container">
+    <div class="client-name">${(company || '—').toUpperCase()}</div>
+    <div class="client-address">${addrLines}</div>
+    <div class="client-gst">GST number: : &nbsp;${gstNumber}</div>
+  </div>
+
+  <!-- Supplier Details -->
+  <div class="supplier-container">
+    <div class="supplier-name">Exotel Techcom Private Limited</div>
+    <div class="supplier-address">Maruthi Infotech Center - Tower A, 540, 100 Feet Rd, Amarjyoti Layout, Domlur, Bengaluru, Karnataka 560071</div>
+    <div class="supplier-meta">Supplier GSTIN: 29AACCE7697J1ZW ● Website: www.exotel.com ● Phone no.: +91 80889 19888 ● E-mail: hello@exotel.in</div>
+  </div>
+
+  <!-- Notice -->
+  <div class="notice-text">(This is not a tax invoice)</div>
+
+  <!-- Line Items & Totals Table -->
+  <table class="invoice-table">
+    <thead>
+      <tr>
+        <th style="width: 5%;">#</th>
+        <th class="left-align" style="width: 55%;">DESCRIPTION</th>
+        <th style="width: 10%;">QTY</th>
+        <th style="width: 10%;">UNIT<br>PRICE</th>
+        <th style="width: 8%;">TAX</th>
+        <th style="width: 12%;">TOTAL AMOUNT</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${liHtml}
+      
+      <!-- Totals & Terms Rows -->
+      <tr>
+        <td colspan="3" rowspan="5" class="terms-container">
+          <div class="terms-header">TERMS OF SALE AND OTHER COMMENTS</div>
+          <div class="terms-content"></div>
+        </td>
+        <td colspan="2">Subtotal</td>
+        <td class="right-align">${fmtINR(grandSubtotal)}</td>
+      </tr>
+      <tr>
+        <td colspan="2">Taxable</td>
+        <td class="right-align">${fmtINR(grandSubtotal)}</td>
+      </tr>
+      <tr>
+        <td>GST</td>
+        <td class="center-align">18%</td>
+        <td class="right-align">${gstAmt.toFixed(3)}</td>
+      </tr>
+      <tr>
+        <td>TDS</td>
+        <td class="center-align">0%</td>
+        <td class="right-align">-</td>
+      </tr>
+      <tr>
+        <td colspan="2"></td>
+        <td class="right-align">-</td>
+      </tr>
+      
+      <!-- Total Row -->
+      <tr>
+        <td colspan="3" style="border: none;"></td>
+        <td colspan="2" class="bold-text">TOTAL</td>
+        <td class="right-align bold-text">${fmtINR(grandTotal)}</td>
+      </tr>
+      
+      <!-- Empty Spacer row at bottom -->
+      <tr style="height: 15px;">
+        <td colspan="3" style="border: none;"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Additional Details Banner -->
+  <div style="page-break-before: always;"></div>
+  <div class="section-banner">ADDITIONAL DETAILS</div>
+  
+  <!-- Additional Details Content -->
+  <div class="details-content">
+    <div style="font-weight: bold; margin-bottom: 5px;">Other details:</div>
+    <div>HSN : 998429 (OTHER INTERNET TELECOMMUNICATION SERVICES)</div>
+    <div>Whether tax is payable on reverse charge basis : No</div>
+    <div>PAN : AACCE7697J</div>
+    <br>
+    <div><strong>Bank Name</strong> - Kotak Mahindra Bank Ltd</div>
+    <div><strong>Account Holder Name</strong> - Exotel Techcom Private Limited</div>
+    <div><strong>Account no</strong> - 2512379407</div>
+    <div><strong>IFSC</strong> - KKBK0008066</div>
+    <div><strong>Bank Branch Name</strong> - MG Road Branch</div>
+    <div><strong>City</strong> - Bangalore</div>
+    <br>
+    <div style="font-weight: bold;">Note:We don't have refund policy</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="invoice-footer">
+    Exotel Techcom Private Limited is a private limited company with CIN no. U72900KA2011PTC059065
+  </div>
+</div>
+</body>
+</html>`;
+
+    // ── Send to PDF endpoint ──────────────────────────────────────
+    const defaultFilename = `Proforma_Invoice_${q.quote_number}_${(company || 'Exotel').replace(/[^a-z0-9]/gi,'_')}.pdf`;
+    let userFilename = await showPrompt('Enter filename for the Proforma Invoice PDF:', defaultFilename, { title: 'Save Proforma Invoice' });
+    if (userFilename === null) return;
+    if (!userFilename.trim()) userFilename = defaultFilename;
+    else if (!userFilename.toLowerCase().endsWith('.pdf')) userFilename += '.pdf';
+
+    const pdfRes = await fetch('/api/export-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ htmlPayload: piHtml })
+    });
+    if (!pdfRes.ok) throw new Error('PDF export failed on server.');
+
+    const blob = await pdfRes.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = userFilename.trim();
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Proforma Invoice generated successfully!', 'success');
+
+  } catch (e) {
+    console.error('PI generation error', e);
+    showAlert('Failed to generate Proforma Invoice. Please try again.', { type: 'error', title: 'PI Error' });
+  }
+};
+// ── End Proforma Invoice Generator ───────────────────────────────────────────
 
 window.viewQuote = async function (id) {
   try {

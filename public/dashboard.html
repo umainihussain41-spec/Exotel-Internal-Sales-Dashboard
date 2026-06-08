@@ -1758,6 +1758,72 @@
         </button>
     </nav>
 
+
+    <!-- ── Proforma Invoice Modal ─────────────────────────────────────── -->
+    <div id="pi-modal-overlay" style="display:none; position:fixed; inset:0; z-index:199999; background:rgba(15,23,42,0.6); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+        <div id="pi-modal" style="background:#fff; border-radius:18px; padding:32px 32px 24px; max-width:480px; width:calc(100% - 40px); box-shadow:0 28px 60px -10px rgba(0,0,0,0.28), 0 0 0 1px rgba(0,0,0,0.04); font-family:'Inter',sans-serif; animation:isdSlideUp 0.2s cubic-bezier(0.34,1.56,0.64,1);">
+            <!-- Header -->
+            <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+                <div style="width:46px; height:46px; border-radius:12px; background:#f0fdf4; color:#059669; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </div>
+                <div>
+                    <div style="font-size:1.1rem; font-weight:700; color:#0f172a;">Generate Proforma Invoice</div>
+                    <div id="pi-modal-subtitle" style="font-size:0.82rem; color:#64748b; margin-top:2px;"></div>
+                </div>
+            </div>
+
+            <!-- Billing Address -->
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:0.82rem; font-weight:600; color:#374151; margin-bottom:6px;">
+                    Billing Address <span style="color:#ef4444;">*</span>
+                </label>
+                <textarea id="pi-billing-address" rows="3" placeholder="e.g. 123 Main St, Sector 4, New Delhi, Delhi 110001"
+                    style="width:100%; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.88rem; font-family:'Inter',sans-serif; color:#0f172a; background:#f8fafc; resize:vertical; box-sizing:border-box; outline:none; transition:border-color 0.15s; line-height:1.5;"
+                    onfocus="this.style.borderColor='#059669'; this.style.background='#fff';"
+                    onblur="this.style.borderColor='#cbd5e1'; this.style.background='#f8fafc';"></textarea>
+            </div>
+
+            <!-- GST -->
+            <div style="margin-bottom:8px;">
+                <label style="display:block; font-size:0.82rem; font-weight:600; color:#374151; margin-bottom:6px;">Customer GSTIN</label>
+                <input type="text" id="pi-gst" placeholder="e.g. 29AACCE7697J1ZW"
+                    style="width:100%; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.88rem; font-family:'Inter',sans-serif; color:#0f172a; background:#f8fafc; box-sizing:border-box; outline:none; transition:border-color 0.15s; text-transform:uppercase;"
+                    oninput="this.value=this.value.toUpperCase();"
+                    onfocus="this.style.borderColor='#059669'; this.style.background='#fff';"
+                    onblur="this.style.borderColor='#cbd5e1'; this.style.background='#f8fafc';">
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:16px; font-size:0.82rem; color:#64748b;">
+                <input type="checkbox" id="pi-gst-unregistered" style="width:auto; margin:0;" onchange="document.getElementById('pi-gst').disabled=this.checked; if(this.checked){document.getElementById('pi-gst').value=''; document.getElementById('pi-gst').style.opacity='0.4';} else{document.getElementById('pi-gst').style.opacity='1';}">
+                Customer is GST Unregistered
+            </label>
+
+            <!-- Expiry Date -->
+            <div style="margin-bottom:24px;">
+                <label style="display:block; font-size:0.82rem; font-weight:600; color:#374151; margin-bottom:6px;">Proforma Expiry Date</label>
+                <input type="date" id="pi-expiry-date"
+                    style="width:100%; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.88rem; font-family:'Inter',sans-serif; color:#0f172a; background:#f8fafc; box-sizing:border-box; outline:none; transition:border-color 0.15s;"
+                    onfocus="this.style.borderColor='#059669'; this.style.background='#fff';"
+                    onblur="this.style.borderColor='#cbd5e1'; this.style.background='#f8fafc';">
+            </div>
+
+            <!-- Actions -->
+            <div style="display:flex; gap:10px; justify-content:flex-end;">
+                <button id="pi-modal-cancel" onclick="closePiModal()"
+                    style="padding:10px 22px; border-radius:8px; font-size:0.9rem; font-weight:600; cursor:pointer; background:#f1f5f9; color:#475569; border:1px solid #e2e8f0; font-family:'Inter',sans-serif; transition:background 0.15s;"
+                    onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
+                    Cancel
+                </button>
+                <button id="pi-modal-confirm" onclick="confirmGenerateProforma()"
+                    style="padding:10px 22px; border-radius:8px; font-size:0.9rem; font-weight:600; cursor:pointer; background:#059669; color:#fff; border:none; font-family:'Inter',sans-serif; display:flex; align-items:center; gap:8px; transition:background 0.15s;"
+                    onmouseover="this.style.background='#047857'" onmouseout="this.style.background='#059669'">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Generate PI
+                </button>
+            </div>
+        </div>
+    </div>
+
 </body>
 
 </html>
