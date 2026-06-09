@@ -522,6 +522,20 @@
     color: #0284c7;
 }
 
+.tier-btn.greyed-out {
+    opacity: 0.45;
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+    color: #94a3b8;
+}
+
+.tier-btn.greyed-out:hover {
+    opacity: 0.8;
+    border-color: #94a3b8;
+    color: #64748b;
+    background: #e2e8f0;
+}
+
 /* ── Stop-lock badge ── */
 .stop-lock-badge {
     display: inline-flex;

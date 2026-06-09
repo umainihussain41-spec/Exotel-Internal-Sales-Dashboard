@@ -68,7 +68,7 @@ const TIER_DEFAULTS = {
 // SKUs that support a custom plan name rename
 const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno'];
 // Standard display names for tiers (can be overridden per-item via item.customName)
-const TIER_DISPLAY_NAMES = { dabbler: 'Dabbler', believer: 'Believer', influencer: 'Influencer', elite: 'Elite' };
+const TIER_DISPLAY_NAMES = { dabbler: 'Dabbler', believer: 'Believer', influencer: 'Influencer', elite: 'Unnamed' };
 
 // ── Terms & Conditions (Full SKU Definitions) ──────────────────────────────
 const STARTUP_PARENT_MAP = {
@@ -1809,6 +1809,10 @@ window.clearItemCustomName = function(itemId) {
 
 
 window.addSkuItem = function () {
+  if (QG.skuItems.length >= 4) {
+    showAlert('Only a maximum of 3 items are allowed to be there at any given time. Please remove some first.', { type: 'warning', title: 'Limit Exceeded' });
+    return;
+  }
   const activeItem = getActiveItem();
   if (!activeItem.sku_key) {
     showAlert('Please select a SKU for the current item before adding another.', { type: 'warning', title: 'SKU Required' });
@@ -1826,6 +1830,10 @@ window.addSkuItem = function () {
   const cfgArea = document.getElementById('sku-config-area');
   if (cfgArea) cfgArea.innerHTML = '';
   document.getElementById('sku-selector-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  if (QG.skuItems.length >= 4) {
+    showAlert('Only 3 items are allowed to be there at any given time. Please remove some to proceed.', { type: 'warning', title: 'Limit Exceeded' });
+  }
 };
 
 window.removeSkuItem = function (itemId) {
@@ -2024,7 +2032,6 @@ function selectSku(key) {
   const tierCompareSkus = ['voice_exotel_std', 'sip_veeno'];
   if (QG.compareMode) {
     if (key === QG.currentSku && tierCompareSkus.includes(key)) {
-      // Same tier-compare SKU re-selected — reset to all 3 tiers
       if (ctSelector) ctSelector.style.display = 'none';
       ['dabbler','believer','influencer'].forEach(t => {
         const cb = document.getElementById('ct-' + t);
@@ -2124,15 +2131,20 @@ function renderTierSelector() {
   } else {
     const item = getActiveItem();
     const supportsElite = QG.currentSku === 'voice_exotel_std';
-    const eliteEnabled = supportsElite && item && item.eliteEnabled;
-    const supportsCustomName = CUSTOM_NAME_SKUS.includes(QG.currentSku);
-    const currentCustomName = (item && item.customName) || '';
     const stdTiers = [
       { key: 'dabbler',    label: 'Dabbler',    sub: '5 months'  },
       { key: 'believer',   label: 'Believer',   sub: '11 months' },
       { key: 'influencer', label: 'Influencer', sub: '11 months' },
     ];
-    if (eliteEnabled) stdTiers.push({ key: 'elite', label: 'Elite', sub: '11 months' });
+    if (supportsElite) stdTiers.push({ key: 'elite', label: 'Unnamed', sub: '11 months' });
+
+    const isTierActive = (key) => {
+      if (QG.compareMode) {
+        return QG.skuItems.some(i => i.tier === key);
+      }
+      return QG.currentTier === key;
+    };
+
     area.innerHTML = `
     <div class="q-card sku-tier-card">
       <div class="q-card-header" style="flex-wrap:wrap;gap:8px;">
@@ -2140,34 +2152,14 @@ function renderTierSelector() {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
           Select Plan Tier
         </div>
-        ${supportsCustomName ? `
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span style="font-size:0.78rem;color:#64748b;font-weight:500;">Custom plan name:</span>
-          <input id="custom-plan-name-input"
-            type="text"
-            value="${currentCustomName.replace(/"/g,'&quot;')}"
-            placeholder="e.g. Growth Plan"
-            oninput="window.setCustomPlanName(this.value)"
-            style="padding:4px 8px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:0.82rem;width:150px;outline:none;font-family:inherit;"
-            onfocus="this.style.borderColor='#0284c7'"
-            onblur="this.style.borderColor='#cbd5e1'"
-          >
-          ${currentCustomName ? `<button onclick="window.clearCustomPlanName()" title="Reset to default name" style="background:none;border:none;cursor:pointer;color:#94a3b8;padding:2px;line-height:1;font-size:14px;" onmouseover="this.style.color='#ef4444'" onmouseout="this.style.color='#94a3b8'">&#x2715;</button>` : ''}
-        </div>` : ''}
       </div>
       <div class="tier-selector">
-        ${stdTiers.map(t => `<button class="tier-btn ${QG.currentTier === t.key ? 'active' : ''}" onclick="selectTier('${t.key}')">${t.label}<br><small style="font-weight:400;font-size:0.72rem;">${t.sub}</small></button>`).join('')}
+        ${stdTiers.map(t => {
+          const active = isTierActive(t.key);
+          const greyed = t.key === 'elite' && !active;
+          return `<button class="tier-btn ${active ? 'active' : ''} ${greyed ? 'greyed-out' : ''}" data-tier="${t.key}" onclick="selectTier('${t.key}')">${t.label}<br><small style="font-weight:400;font-size:0.72rem;">${t.sub}</small></button>`;
+        }).join('')}
       </div>
-      ${supportsElite ? `
-      <div style="margin-top:10px;padding-top:10px;border-top:1px dashed #e2e8f0;display:flex;align-items:center;gap:8px;">
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;">
-          <input type="checkbox" id="toggle-elite-tier" ${eliteEnabled ? 'checked' : ''}
-            onchange="window.toggleEliteTier(this.checked)"
-            style="accent-color:#7c3aed;width:15px;height:15px;">
-          <span style="font-size:0.8rem;font-weight:600;color:#7c3aed;">&#9733; Enable Elite Plan</span>
-        </label>
-        <span style="font-size:0.75rem;color:#94a3b8;">(opt-in – similar to Influencer, fully customizable)</span>
-      </div>` : ''}
     </div>
   `;
   }
@@ -2175,6 +2167,53 @@ function renderTierSelector() {
 }
 
 function selectTier(tier) {
+  if (QG.compareMode) {
+    // In compare mode, clicking a tier toggles its selection in the comparison
+    const existingIdx = QG.skuItems.findIndex(i => i.tier === tier);
+    if (existingIdx !== -1) {
+      // Toggle off (remove)
+      // BUT we must keep at least 1 item in the comparison
+      if (QG.skuItems.length <= 1) {
+        showAlert('At least one plan must be selected in comparison.', { type: 'warning', title: 'Action Denied' });
+        return;
+      }
+      QG.skuItems.splice(existingIdx, 1);
+      // Revert checkbox state just in case (though it is hidden)
+      const cb = document.getElementById('ct-' + tier);
+      if (cb) cb.checked = false;
+    } else {
+      // Toggle on (add)
+      // BUT we only allow up to 3 items
+      if (QG.skuItems.length >= 3) {
+        showAlert('Only a maximum of 3 plans can be selected at any given time. Please remove some to proceed.', { type: 'warning', title: 'Limit Exceeded' });
+        return;
+      }
+      QG.skuItems.push({
+        id: 'item_' + Date.now() + '_' + QG.skuItems.length,
+        sku_key: QG.currentSku,
+        tier: tier,
+        values: {},
+        stopLockOverrides: []
+      });
+      const cb = document.getElementById('ct-' + tier);
+      if (cb) cb.checked = true;
+    }
+
+    // Update active item if the previous active one was removed
+    if (!QG.skuItems.some(i => i.id === QG.activeItemId)) {
+      QG.activeItemId = QG.skuItems[0].id;
+    }
+    syncActiveAliases();
+
+    // Re-render
+    renderTierSelector();
+    renderSkuForm(QG.currentSku, QG.currentTier);
+    renderSkuItemManager();
+    updatePreview();
+    return;
+  }
+
+  // Normal mode path:
   const item = getActiveItem();
   item.tier = tier;
   item.values = {};
@@ -2184,7 +2223,13 @@ function selectTier(tier) {
     // Re-render the whole product selector so the active button updates
     renderTierSelector();
   } else {
-    document.querySelectorAll('.tier-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().startsWith(tier)));
+    document.querySelectorAll('.tier-btn').forEach(b => {
+      const isCurrent = b.getAttribute('data-tier') === tier;
+      b.classList.toggle('active', isCurrent);
+      if (b.getAttribute('data-tier') === 'elite') {
+        b.classList.toggle('greyed-out', !isCurrent);
+      }
+    });
     renderSkuForm(QG.currentSku, tier);
     renderSkuItemManager();
   }
@@ -2271,7 +2316,7 @@ window.toggleCompareMode = function (enabled) {
   renderSkuSelector();
   const cfgArea = document.getElementById('sku-config-area');
   if (QG.currentSku) {
-    if (SKUS.find(s => s.key === QG.currentSku)?.hasTiers && !QG.compareMode) {
+    if (SKUS.find(s => s.key === QG.currentSku)?.hasTiers) {
       renderTierSelector();
     } else {
       if (cfgArea) cfgArea.innerHTML = '';
@@ -2315,13 +2360,19 @@ window.updateUserCompare = function () {
 };
 
 
-window.updateCompareTiers = function () {
+window.updateCompareTiers = function (el) {
   if (!QG.compareMode) return;
   const selectedTiers = [];
   if (document.getElementById('ct-dabbler')?.checked) selectedTiers.push('dabbler');
   if (document.getElementById('ct-believer')?.checked) selectedTiers.push('believer');
   if (document.getElementById('ct-influencer')?.checked) selectedTiers.push('influencer');
   if (document.getElementById('ct-elite')?.checked) selectedTiers.push('elite');
+
+  if (selectedTiers.length > 3) {
+    showAlert('Only a maximum of 3 plans can be selected at any given time. Please remove some to proceed.', { type: 'warning', title: 'Limit Exceeded' });
+    if (el) el.checked = false;
+    return;
+  }
 
   if (selectedTiers.length === 0) {
     selectedTiers.push('dabbler');
@@ -2351,7 +2402,7 @@ window.updateCompareTiers = function () {
   renderSkuSelector();
   const cfgArea = document.getElementById('sku-config-area');
   if (QG.currentSku) {
-    if (SKUS.find(s => s.key === QG.currentSku)?.hasTiers && !QG.compareMode) {
+    if (SKUS.find(s => s.key === QG.currentSku)?.hasTiers) {
       renderTierSelector();
     } else {
       if (cfgArea) cfgArea.innerHTML = '';
@@ -2367,7 +2418,7 @@ function renderSkuForm(skuKey, tier) {
   // Preserve the tier selector card so it stays visible while the form re-renders
   const existingTierCard = container.querySelector('.sku-tier-card');
   container.innerHTML = '';
-  if (existingTierCard && !QG.compareMode) container.appendChild(existingTierCard);
+  if (existingTierCard) container.appendChild(existingTierCard);
 
   const itemsToRender = (QG.compareMode && QG.skuItems.length > 1) ? QG.skuItems : [getActiveItem() || QG.skuItems[0]];
 
@@ -2416,7 +2467,7 @@ function renderSkuForm(skuKey, tier) {
           ${sku?.label || 'Not Selected'}
           ${item.customName
             ? `<span class="sku-entity-tag" style="margin-left:6px;background:#e0f2fe;color:#0369a1;">${sanitize(item.customName)}</span>`
-            : (t && sku?.hasTiers ? `<span class="sku-entity-tag ${sku.entity.toLowerCase()}" style="margin-left:6px;">${t.charAt(0).toUpperCase() + t.slice(1)}</span>` : '')}
+            : (t && sku?.hasTiers ? `<span class="sku-entity-tag ${sku.entity.toLowerCase()}" style="margin-left:6px;">${TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase() + t.slice(1))}</span>` : '')}
         </div>
       </div>
       
@@ -2652,13 +2703,7 @@ window.toggleAddons = function (itemId, skuKey, tier) {
 };
 
 function isBreaching(f, numVal, item) {
-  if (!f.stopType || isNaN(numVal)) return false;
-  let limit = f.stopVal;
-  if (['single_leg', 'incoming', 'outgoing', 'call_rate'].includes(f.id)) {
-    const itemPulse = item.values['pulse'] || 60;
-    limit = f.stopVal * (itemPulse / 60);
-  }
-  return (f.stopType === 'lower' && numVal < limit) || (f.stopType === 'upper' && numVal > limit);
+  return false;
 }
 
 function renderFieldRow(f, item) {
@@ -4152,6 +4197,10 @@ window.printQuote = async function () {
 
 // -- Generate Quote (Save) ----------------------------------
 async function generateQuote() {
+  if (QG.skuItems.length > 3) {
+    showAlert('Only a maximum of 3 items are allowed to be there at any given time. Please remove some items first.', { type: 'warning', title: 'Limit Exceeded' });
+    return;
+  }
   const validItems = QG.skuItems.filter(i => i.sku_key);
   if (validItems.length === 0) { showAlert('Please select a SKU plan first.', { type: 'warning', title: 'No SKU Selected' }); return; }
   const firstSkuObj = SKUS.find(s => s.key === validItems[0].sku_key);
@@ -4217,6 +4266,7 @@ async function generateQuote() {
   const quoteData = {
     sku_items: validItems,
     entity: firstSku?.entity,
+    compareMode: QG.compareMode,
     client: {
       company: document.getElementById('q-client-company')?.value,
       contact: document.getElementById('q-client-contact')?.value,
@@ -4312,6 +4362,10 @@ async function generateQuote() {
 
 // -- Save Draft ---------------------------------------------
 async function saveDraft(e, silent = false) {
+  if (QG.skuItems.length > 3) {
+    showAlert('Only a maximum of 3 items are allowed to be there at any given time. Please remove some items first.', { type: 'warning', title: 'Limit Exceeded' });
+    return;
+  }
   const validItems = QG.skuItems.filter(i => i.sku_key);
   if (validItems.length === 0) { showAlert('Select a SKU before saving a draft.', { type: 'warning', title: 'No SKU' }); return; }
   const firstSkuObj = SKUS.find(s => s.key === validItems[0].sku_key);
@@ -4772,6 +4826,29 @@ window.generateProformaInvoice = async function (id) {
     if (!q) return showAlert('Quote not found.', { type: 'error', title: 'Not Found' });
 
     const data = typeof q.quote_data === 'string' ? JSON.parse(q.quote_data) : q.quote_data;
+
+    // Check if it is a compare quote
+    const isCompare = data.compareMode || (data.sku_items && data.sku_items.length >= 2 && data.sku_items.every(i => i.sku_key === data.sku_items[0].sku_key));
+    if (isCompare) {
+      if (await showConfirm('Proforma Invoice cannot be generated for comparison quotes. Would you like to edit the quote now to remove extra options and select a single tier?', { title: 'Comparison Quote Found', confirmText: 'Edit Quote', cancelText: 'Cancel' })) {
+        window._pendingPiQuoteId = id;
+        await window.viewQuote(id);
+        setTimeout(() => {
+          const manager = document.getElementById('sku-item-manager');
+          if (manager) {
+            manager.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            manager.style.outline = '2px solid #dc2626';
+            manager.style.backgroundColor = '#fef2f2';
+            setTimeout(() => {
+              manager.style.outline = '';
+              manager.style.backgroundColor = '';
+            }, 5000);
+          }
+          showAlert('Please remove extra options from the Quote Items list so that only a single plan is left, then generate the Proforma Invoice.', { type: 'info', title: 'Remove Extra Plans' });
+        }, 600);
+      }
+      return;
+    }
     
     // Check if company name is missing
     const company = (data?.client?.company || '').trim();
@@ -4975,120 +5052,357 @@ window.confirmGenerateProforma = async function () {
           return item.values[id] ?? f.value;
         };
 
+        const fmtRupee = (v) => {
+          if (v === null || v === undefined) return '-';
+          return '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
+        };
+        const currentPulse = parseFloat(getV('pulse')) || 60;
+        const rateUnit = currentPulse === 60 ? 'p/min' : `p/${currentPulse}secs`;
+        const fmtPaise = (v) => {
+          if (v === null || v === undefined) return '-';
+          const num = parseFloat(v);
+          if (isNaN(num)) return String(v);
+          if (num >= 100) return '₹' + (num / 100).toFixed(2) + '/' + (currentPulse === 60 ? 'min' : currentPulse + 'secs');
+          return num + ' ' + rateUnit;
+        };
+        const fmtPaiseMsg = (v) => {
+          if (v === null || v === undefined) return '-';
+          const num = parseFloat(v);
+          if (isNaN(num)) return String(v);
+          if (num >= 100) return '₹' + (num / 100).toFixed(2) + '/msg';
+          return num + 'p/msg';
+        };
+
         const lines = [];
         const tierName = sku.hasTiers && item.tier ? (item.customName || TIER_DISPLAY_NAMES[item.tier] || item.tier) : '';
         lines.push(`Plan: ${sku.label}${tierName ? ' - ' + tierName : ''}`);
 
         const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
+        const sk = item.sku_key;
+        const resolvedStartupKey = sk === 'startup' ? ('startup_' + (item.tier || 'voice')) : sk;
+        const effectiveSk = STARTUP_PARENT_MAP[resolvedStartupKey] || (STARTUP_PARENT_MAP[sk]) || sk;
 
-        if (item.sku_key === 'voice_exotel_user') {
-          const uc = getSN('user_charge');
-          const freeU = getV('free_users') || 0;
-          lines.push(`Unique Agent Access Charge: ${freeU ? freeU + ' Free, Rest @ ' : ''}Rs. ${uc}/agent/month`);
-          lines.push(`Validity - As per balance`);
-          const freeN = getV('free_numbers') || 0;
-          if (freeN > 0) lines.push(`Virtual Landline Numbers - ${freeN} free VNs`);
-          const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
-          const extraN = getSN('extra_number');
-          if (numPaid > 0 && extraN > 0) {
-            lines.push(`Additional Numbers - ${numPaid} VN(s) @ ₹${extraN}/number/month`);
-          }
-          lines.push(`Unlimited Calls`);
-          lines.push(`Total Balance Provided - INR ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(item.amount || 0)}`);
-        } else if (item.sku_key === 'voice_exotel_voicebot') {
-          lines.push(`Validity - ${months} months`);
+        if (effectiveSk === 'voice_exotel_std') {
+          const baseValidity = parseFloat(getV('validity')) || 0;
+          const extraValidity = getSN('extra_validity') || 0;
+          lines.push(`Validity: ${extraValidity > 0 ? baseValidity + ' + ' + extraValidity + ' months' : baseValidity + ' Months'}`);
           
-          const ch = parseFloat(item.values['num_channels'] ?? 5);
-          const chCost = getSN('channel_cost') || 1500;
-          if (freeChs > 0) {
-            if (ch <= freeChs) {
-              lines.push(`Channels - ${freeChs} Channels Free, rest @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
-            } else {
-              lines.push(`Channels - ${freeChs} Channels Free, ${ch - freeChs} Paid @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
-            }
-          } else {
-            lines.push(`Channels - ${ch} Channel(s) @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
-          }
-          
-          const credits = getSN('credits');
-          if (credits > 0) lines.push(`Call Credits Included - ₹${new Intl.NumberFormat('en-IN').format(credits)}`);
-          
-          const incoming = getSN('incoming');
-          if (incoming > 0) lines.push(`Incoming & Outgoing Rate - ${incoming} paise/min`);
-          
-          const pulse = getSN('pulse') || 60;
-          lines.push(`Billing Pulse - ${pulse} sec`);
-          
-          const handoff = item.values['human_handoff'] ?? 0;
-          if (handoff === 1 || handoff === true || handoff === '1') lines.push(`Human Handoff - Enabled`);
-          
-          const attempt = getSN('attempt');
-          if (attempt > 0) lines.push(`Attempt Charges - ${attempt} paise/failed call`);
-
-          const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
-          const extraN = getSN('extra_number');
-          if (numPaid > 0 && extraN > 0) {
-            lines.push(`Extra Numbers - ${numPaid} VN(s) @ ₹${extraN}/number/month`);
-          }
-
-          const did = parseFloat(item.values['did_numbers'] ?? 0);
-          const didCost = getSN('did_cost') || 1500;
-          if (did > 0) {
-            lines.push(`Mobile DID Numbers - ${did} VN(s) @ ₹${didCost}/number/month`);
-          }
-
           const rental = getSN('rental');
-          if (rental > 0) lines.push(`Account Rental - ₹${new Intl.NumberFormat('en-IN').format(rental)}`);
+          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
           
           const setup = getSN('setup');
-          if (setup > 0) lines.push(`Setup Charges - ₹${new Intl.NumberFormat('en-IN').format(setup)}`);
+          lines.push(`Setup Charges: ${setup === 0 ? 'Waived' : fmtRupee(setup)}`);
+          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
+          
+          const fu = getV('free_users');
+          const fuExtra = getSN('extra_users') || 0;
+          const fuDisplay = (fu === null || fu === 'Unlimited') ? 'Unlimited (Included)' : (fuExtra > 0 ? `${fu} + ${fuExtra} Users (Free)` : fu + ' Users (Free)');
+          lines.push(`Free Users: ${fuDisplay}`);
+          
+          if (fu !== null && fu !== 'Unlimited') {
+            lines.push(`Extra User Cost: ${fmtRupee(getSN('extra_user_cost'))}/user/month`);
+          }
+          
+          lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+          lines.push(`Extra Number Cost: ${fmtRupee(getSN('extra_number'))}/number/month`);
+          
+          const paidNums = getSN('num_paid_numbers') || 0;
+          if (paidNums > 0) {
+            const extNumCost = getSN('extra_number');
+            const vMonths = baseValidity + extraValidity;
+            lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * vMonths * extNumCost)} for ${vMonths} months)`);
+          }
+          
+          const baseCredits = getSN('credits');
+          const extraCredits = getSN('extra_credits') || 0;
+          lines.push(`Call Credits Included: ${extraCredits > 0 ? fmtRupee(baseCredits) + ' + ' + fmtRupee(extraCredits) : fmtRupee(baseCredits)}`);
+          lines.push(`Incoming Call Charges: ${fmtPaise(getSN('incoming'))}`);
+          lines.push(`Outgoing Call Charges: ${fmtPaise(getSN('outgoing'))}`);
+          
+          const showSms = item.values['sms_cost'] !== undefined;
+          const showWa = item.values['wa_api'] !== undefined;
+          if (showSms) {
+            lines.push(`SMS Cost: ${fmtPaiseMsg(getSN('sms_cost'))}`);
+          }
+          if (showWa) {
+            lines.push(`WhatsApp Utility Messages: ${fmtPaiseMsg(getV('wa_utility'))}`);
+            lines.push(`WhatsApp Promotional Messages: ${fmtPaiseMsg(getV('wa_promo'))}`);
+            lines.push(`WhatsApp API Charge: ${fmtPaiseMsg(getSN('wa_api'))}`);
+          }
+        } else if (effectiveSk === 'voice_veeno_std') {
+          const validity = parseFloat(getV('validity')) || 0;
+          const extraValidity = getSN('extra_validity') || 0;
+          lines.push(`Validity: ${extraValidity > 0 ? validity + ' + ' + extraValidity + ' months' : validity + ' Months'}`);
+          
+          const rental = getSN('rental');
+          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
+          lines.push(`Setup Charges: Waived`);
+          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
+          
+          const numUsers = getSN('num_users') || 0;
+          const uCharge = getSN('user_charge') || 1000;
+          const vStdExtraUsers = getSN('extra_users') || 0;
+          const userLabel = vStdExtraUsers > 0 ? `${vStdExtraUsers} Free, ${numUsers} Charged` : numUsers;
+          lines.push(`No. of Users: ${userLabel}`);
+          lines.push(`User Charge: ${fmtRupee(uCharge)}/user/month`);
+          
+          const removStd = getSN('remove_std_numbers') || 0;
+          if (!removStd) {
+            lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+            lines.push(`Extra Number Cost: ${fmtRupee(getSN('extra_number'))}/number/month`);
+            
+            const paidNums = getSN('num_paid_numbers') || 0;
+            if (paidNums > 0) {
+              const extNumCost = getSN('extra_number');
+              const effVal = validity + extraValidity;
+              lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effVal * extNumCost)} for ${effVal} months)`);
+            }
+          }
+          
+          const didNums = getSN('did_numbers') || 0;
+          if (didNums > 0) {
+            const DID_COST = getSN('did_cost') || 1500;
+            lines.push(`Mobile DID Numbers: ${didNums} DID(s) @ ${fmtRupee(DID_COST)}/DID/month`);
+          }
+          
+          const baseCredits = getSN('credits');
+          const extraCredits = getSN('extra_credits') || 0;
+          lines.push(`Call Credits Included: ${extraCredits > 0 ? fmtRupee(baseCredits) + ' + ' + fmtRupee(extraCredits) : fmtRupee(baseCredits)}`);
+          lines.push(`Incoming Call Charges: Free`);
+          lines.push(`Outgoing Call Charges: ${fmtPaise(getSN('outgoing'))}`);
+        } else if (effectiveSk === 'sip_veeno') {
+          const validity = parseFloat(getV('validity')) || 0;
+          const extraValidity = getSN('extra_validity') || 0;
+          lines.push(`Validity: ${extraValidity > 0 ? validity + ' + ' + extraValidity + ' months' : validity + ' Months'}`);
+          
+          const rental = getSN('rental');
+          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
+          lines.push(`Setup Charges: Waived`);
+          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
+          
+          const fu2 = getV('free_users');
+          const fu2Extra = getSN('extra_users') || 0;
+          const fu2Display = (fu2 === null || fu2 === 'Unlimited') ? 'Unlimited (Included)' : (fu2Extra > 0 ? `${fu2} + ${fu2Extra} Users (Free)` : fu2 + ' Users (Free)');
+          lines.push(`Free Users: ${fu2Display}`);
+          lines.push(`Extra User Cost: ${fmtRupee(199)}/user/month`);
+          
+          const removStd = getSN('remove_std_numbers') || 0;
+          if (!removStd) {
+            lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+            lines.push(`Extra Number Cost: ${fmtRupee(499)}/number/month`);
+            
+            const paidNums = getSN('num_paid_numbers') || 0;
+            if (paidNums > 0) {
+              const effVal = validity + extraValidity;
+              lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effVal * 499)} for ${effVal} months)`);
+            }
+          }
+          
+          const didNums = getSN('did_numbers') || 0;
+          if (didNums > 0) {
+            lines.push(`Mobile DID Numbers: ${didNums} DID(s) @ ${fmtRupee(1500)}/DID/month`);
+          }
+          
+          const baseCredits = getSN('credits');
+          const extraCredits = getSN('extra_credits') || 0;
+          lines.push(`Call Credits Included: ${extraCredits > 0 ? fmtRupee(baseCredits) + ' + ' + fmtRupee(extraCredits) : fmtRupee(baseCredits)}`);
+          lines.push(`Incoming Calls: ${fmtPaise(getSN('incoming'))}`);
+          lines.push(`Outgoing Calls: ${fmtPaise(getSN('outgoing'))}`);
+          
+          const attempt = getSN('attempt');
+          lines.push(`Attempt Charges: ${attempt === 0 ? 'Free' : fmtPaise(attempt) + ' / failed call'}`);
+        } else if (effectiveSk === 'voice_exotel_user' || effectiveSk === 'voice_veeno_user') {
+          const isVeeno = effectiveSk === 'voice_veeno_user';
+          lines.push(`Account Rental: Waived`);
+          lines.push(`Setup Charges: Waived`);
+          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
+          
+          const numUsers = getSN('num_users') || 0;
+          const numMonths = getSN('num_months') || 0;
+          const userCharge = getSN('user_charge') || 0;
+          const userExtraFree = getSN('extra_users') || 0;
+          const userLabel = userExtraFree > 0 ? `${userExtraFree} Free, ${numUsers} Charged` : numUsers;
+          
+          lines.push(`No. of Users: ${userLabel}`);
+          lines.push(`No. of Months: ${numMonths}`);
+          lines.push(`User Charge: ${fmtRupee(userCharge)}/user/month`);
+          
+          const removStd = getSN('remove_std_numbers') || 0;
+          if (!isVeeno || !removStd) {
+            lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+            lines.push(`Extra Number Cost: ${fmtRupee(getSN('extra_number'))}/number/month`);
+            
+            const paidNums = getSN('num_paid_numbers') || 0;
+            if (paidNums > 0) {
+              const effVal = numMonths + (getSN('extra_validity') || 0);
+              lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effVal * getSN('extra_number'))} for ${effVal} months)`);
+            }
+          }
+          
+          const didNums = getSN('did_numbers') || 0;
+          if (isVeeno && didNums > 0) {
+            const DID_COST = getSN('did_cost') || 1500;
+            lines.push(`Mobile DID Numbers: ${didNums} DID(s) @ ${fmtRupee(DID_COST)}/DID/month`);
+          }
+        } else if (effectiveSk === 'voice_exotel_tfn') {
+          lines.push(`Account Rental: Waived`);
+          lines.push(`Setup Charges: Waived`);
+          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
+          lines.push(`No. of Months: ${getSN('num_months')}`);
+          
+          const fuTfn = getV('free_users');
+          const fuTfnExtra = getSN('extra_users') || 0;
+          const fuTfnDisplay = (fuTfn === null || fuTfn === 'Unlimited') ? 'Unlimited (Included)' : (fuTfnExtra > 0 ? `${fuTfn} + ${fuTfnExtra} Users (Free)` : fuTfn + ' Users (Free)');
+          lines.push(`Free Users: ${fuTfnDisplay}`);
+          lines.push(`Extra User Cost: ${fmtRupee(getSN('extra_user_cost'))}/user/month`);
+          
+          const numNums = getSN('num_numbers') || 0;
+          const numCost = getSN('number_cost') || 0;
+          lines.push(`No. of TFN Numbers: ${numNums}`);
+          lines.push(`TFN Number Cost: ${fmtRupee(numCost)}/number/month`);
+          
+          const tfnVnEnabled = item.values['add_vn'] === 1;
+          if (tfnVnEnabled) {
+            lines.push(`Free Virtual Landline Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+            lines.push(`Extra Number Cost: ${fmtRupee(getSN('extra_number'))}/number/month`);
+            
+            const tfnPaidVNs = getSN('num_paid_numbers') || 0;
+            if (tfnPaidVNs > 0) {
+              const tfnVnCost = getSN('extra_number');
+              const tfnEffMonths = getSN('num_months') + (getSN('extra_validity') || 0);
+              lines.push(`Extra Numbers: ${tfnPaidVNs} Number(s) (Total cost: ${fmtRupee(tfnPaidVNs * tfnEffMonths * tfnVnCost)} for ${tfnEffMonths} months)`);
+            }
+          }
+          
+          lines.push(`Call Credits Included: ${fmtRupee(getSN('credits'))}`);
+          lines.push(`Incoming Calls: ${fmtPaise(getSN('incoming'))}`);
+        } else if (effectiveSk === 'voice_exotel_stream' || effectiveSk === 'voice_exotel_voicebot') {
+          const isVoicebot = effectiveSk === 'voice_exotel_voicebot';
+          const numChs = getSN('num_channels') || 0;
+          const numMos = getSN('num_months') || 0;
+          const chCost = getSN('channel_cost') || 0;
+          
+          lines.push(`No. of Months: ${numMos}`);
+          const rental = getSN('rental');
+          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
+          lines.push(`Setup Charges: Waived`);
+          
+          if (isVoicebot) {
+            const freeChs = 5;
+            const paidChs = Math.max(0, numChs - freeChs);
+            lines.push(`No. of Channels: ${paidChs > 0 ? `5 Free, ${paidChs} Paid` : `5 Channels (Included Free)`}`);
+            lines.push(`Additional Channel Cost: ${fmtRupee(chCost)}/channel/month`);
+          } else {
+            lines.push(`No. of Channels: ${numChs}`);
+            lines.push(`Channel Cost: ${fmtRupee(chCost)}/channel/month`);
+          }
+          
+          const fuStr = getV('free_users');
+          const fuStrExtra = getSN('extra_users') || 0;
+          const fuStrDisplay = (fuStr === null || fuStr === 'Unlimited') ? 'Unlimited (Included)' : (fuStrExtra > 0 ? `${fuStr} + ${fuStrExtra} Users (Free)` : fuStr + ' Users (Free)');
+          lines.push(`Free Users: ${fuStrDisplay}`);
+          lines.push(`Extra User Cost: ${fmtRupee(getSN('extra_user_cost'))}/user/month`);
+          
+          lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+          lines.push(`Extra Number Cost: ${fmtRupee(getSN('extra_number'))}/number/month`);
+          
+          const paidNums = getSN('num_paid_numbers') || 0;
+          if (paidNums > 0) {
+            const effMos = numMos + (getSN('extra_validity') || 0);
+            lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effMos * getSN('extra_number'))} for ${effMos} months)`);
+          }
+          
+          const didNums = getSN('did_numbers') || 0;
+          if (didNums > 0) {
+            const didCost = getSN('did_cost') || 1500;
+            lines.push(`Mobile DID Numbers: ${didNums} DID(s) @ ${fmtRupee(didCost)}/number/month`);
+          }
+          
+          lines.push(`Call Credits Included: ${fmtRupee(getSN('credits'))}`);
+          lines.push(`Incoming Calls: ${fmtPaise(getSN('incoming'))}`);
+          lines.push(`Outgoing Calls: ${fmtPaise(getSN('outgoing'))}`);
+          
+          if (isVoicebot) {
+            const attempt = getSN('attempt');
+            lines.push(`Attempt Charges: ${attempt === 0 ? 'Free' : fmtPaise(attempt) + ' / failed call'}`);
+            const handoff = item.values['human_handoff'] ?? 0;
+            if (handoff === 1 || handoff === true || handoff === '1') {
+              lines.push(`Human Handoff: Enabled`);
+            }
+          }
+        } else if (effectiveSk === 'voice_exotel_campaigns') {
+          lines.push(`No. of Months: ${getSN('num_months')}`);
+          const rental = getSN('rental');
+          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
+          lines.push(`Setup Charges: Waived`);
+          
+          lines.push(`No. of Channels: ${getSN('num_channels')}`);
+          lines.push(`Channel Cost: ${fmtRupee(getSN('channel_cost'))}/channel/month`);
+          
+          const fuStr = getV('free_users');
+          const fuStrExtra = getSN('extra_users') || 0;
+          const fuStrDisplay = (fuStr === null || fuStr === 'Unlimited') ? 'Unlimited (Included)' : (fuStrExtra > 0 ? `${fuStr} + ${fuStrExtra} Users (Free)` : fuStr + ' Users (Free)');
+          lines.push(`Free Users: ${fuStrDisplay}`);
+          lines.push(`Extra User Cost: ${fmtRupee(getSN('extra_user_cost'))}/user/month`);
+          
+          lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+          lines.push(`Extra Number Cost: ${fmtRupee(getSN('extra_number'))}/number/month`);
+          
+          const paidNums = getSN('num_paid_numbers') || 0;
+          if (paidNums > 0) {
+            const effMos = getSN('num_months') + (getSN('extra_validity') || 0);
+            lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effMos * getSN('extra_number'))} for ${effMos} months)`);
+          }
+          
+          lines.push(`Call Credits Included: ${fmtRupee(getSN('credits'))}`);
+          lines.push(`Outgoing Calls: ${fmtPaise(getSN('outgoing'))}`);
         } else {
-          lines.push(`Validity - ${months} months`);
+          lines.push(`Validity: ${months} months`);
 
           const credits = getSN('credits');
-          if (credits > 0) lines.push(`Call Credits Included - ₹${new Intl.NumberFormat('en-IN').format(credits)}`);
+          if (credits > 0) lines.push(`Call/SMS/WA Credits Included: ${fmtRupee(credits)}`);
 
           const incoming = getSN('incoming') || getSN('single_leg') || getSN('call_rate');
           if (incoming > 0) {
             const label = resolvedKey.includes('sms') ? 'SMS Rate' : (resolvedKey.includes('whatsapp') ? 'WA Message Rate' : 'Call Rate');
             const suffix = resolvedKey.includes('sms') || resolvedKey.includes('whatsapp') ? 'paise/msg' : 'paise/min';
-            lines.push(`${label} - ${incoming} ${suffix}`);
+            lines.push(`${label}: ${incoming} ${suffix}`);
           }
 
           const pulse = getSN('pulse');
-          if (pulse > 0) lines.push(`Billing Pulse - ${pulse} sec`);
+          if (pulse > 0) lines.push(`Billing Pulse: ${pulse} sec`);
 
           const numUsers = parseFloat(item.values['num_users'] ?? 0);
           const userCharge = getSN('user_charge');
           if (numUsers > 0 && userCharge > 0) {
-            lines.push(`Users - ${numUsers} User(s) @ ₹${new Intl.NumberFormat('en-IN').format(userCharge)}/user/month`);
+            lines.push(`Users: ${numUsers} User(s) @ ${fmtRupee(userCharge)}/user/month`);
           }
 
           if (item.sku_key.includes('stream') || item.sku_key.includes('campaigns')) {
             const ch = parseFloat(item.values['num_channels'] || item.values['channels'] || 0);
             const chCost = getSN('channel_cost');
             if (ch > 0 && chCost > 0) {
-              lines.push(`Channels - ${ch} Channel(s) @ ₹${new Intl.NumberFormat('en-IN').format(chCost)}/channel/month`);
+              lines.push(`Channels: ${ch} Channel(s) @ ${fmtRupee(chCost)}/channel/month`);
             }
           }
 
           const did = parseFloat(item.values['did_numbers'] ?? 0);
           const didCost = getSN('did_cost') || 1500;
           if (did > 0) {
-            lines.push(`Mobile DID Numbers - ${did} VN(s) @ ₹${didCost}/number/month`);
+            lines.push(`Mobile DID Numbers: ${did} DID(s) @ ${fmtRupee(didCost)}/DID/month`);
           }
 
           const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
           const extraN = getSN('extra_number');
           if (numPaid > 0 && extraN > 0) {
-            lines.push(`Extra Numbers - ${numPaid} VN(s) @ ₹${extraN}/number/month`);
+            lines.push(`Extra Numbers: ${numPaid} DID(s) @ ${fmtRupee(extraN)}/number/month`);
           }
 
           const rental = getSN('rental');
-          if (rental > 0) lines.push(`Account Rental - ₹${new Intl.NumberFormat('en-IN').format(rental)}/month`);
+          if (rental > 0) lines.push(`Account Rental: ${fmtRupee(rental)}/month`);
           
           const setup = getSN('setup');
-          if (setup > 0) lines.push(`Setup Charges - ₹${new Intl.NumberFormat('en-IN').format(setup)}`);
+          if (setup > 0) lines.push(`Setup Charges: ${fmtRupee(setup)}`);
         }
 
         return lines;
