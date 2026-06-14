@@ -9,8 +9,9 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
-const puppeteer = require('puppeteer');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 dotenv.config();
 
@@ -115,7 +116,29 @@ db.exec(`
         status      TEXT NOT NULL DEFAULT 'new',
         created_at  TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS todos (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_email   TEXT NOT NULL,
+        title        TEXT NOT NULL,
+        notes        TEXT,
+        status       TEXT NOT NULL DEFAULT 'pending',
+        due_at       TEXT,
+        created_at   TEXT NOT NULL,
+        updated_at   TEXT NOT NULL,
+        subtasks     TEXT,
+        reminder_at  TEXT,
+        ringer_type  TEXT NOT NULL DEFAULT 'both',
+        alert_rung   INTEGER DEFAULT 0,
+        ai_data      TEXT
+    );
 `);
+
+try {
+    db.exec("ALTER TABLE todos ADD COLUMN ai_data TEXT");
+} catch (e) {
+    // Column already exists, ignore
+}
 
 // ─── Security Helpers ────────────────────────────────────────────────────────
 function isDeveloper(email) {
@@ -175,7 +198,8 @@ passport.use(new GoogleStrategy({
     proxy: true
 },
     function (accessToken, refreshToken, profile, cb) {
-        const exotelEmail = profile.emails.find(email => email.value.endsWith('@exotel.com'));
+        const allowedEmails = ['hussain.umaini@exotel.com', 'nivas.p@exotel.com'];
+        const exotelEmail = profile.emails.find(email => allowedEmails.includes(email.value.toLowerCase()));
         if (exotelEmail) {
             // Auto-upsert display name from Google profile
             const displayName = profile.displayName || '';
@@ -190,7 +214,7 @@ passport.use(new GoogleStrategy({
             return cb(null, profile);
         } else {
             addLog('LOGIN_ATTEMPT', 'FAILED', `Unauthorized attempt from ${profile.emails[0].value}`, profile.emails[0].value);
-            return cb(null, false, { message: "Only @exotel.com emails are allowed" });
+            return cb(null, false, { message: "Access restricted to authorized email addresses only." });
         }
     }));
 
@@ -693,6 +717,7 @@ app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => 
             db.prepare(`DELETE FROM skus`).run();
             db.prepare(`DELETE FROM approval_requests`).run();
             db.prepare(`DELETE FROM dev_feedback`).run();
+            db.prepare(`DELETE FROM todos`).run();
             db.prepare(`DELETE FROM logs`).run();
             db.prepare(`DELETE FROM user_profiles`).run();
         })();
@@ -709,10 +734,8 @@ app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => 
 // ─── Developer Feedback ──────────────────────────────────────────────────────
 // Gemini key rotation helper (reuses the same pool as the AI quote parser)
 function getGeminiKeysForFeedback() {
-    const fallbacks = ['AIzaSyAxM1nG9fnwAx3pGT7i4PwGbqI5cC09AwQ', 'AIzaSyAMTxuUeDhjh9a9PI4g3fJI_n5A70L5ekI'];
     const keys = [];
     if (process.env.GEMINI_API_KEY) keys.push(process.env.GEMINI_API_KEY);
-    keys.push(...fallbacks);
     return [...new Set(keys)];
 }
 
@@ -726,10 +749,11 @@ async function analyseFeedbackWithGemini(rawMessage, submitterEmail) {
     const keys = getGeminiKeysForFeedback();
     let lastErr;
     for (const key of keys) {
-        try {
-            const genAI = new GoogleGenerativeAI(key);
-            const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
-            const prompt = `You are a product feedback analyst for Exotel's Internal Sales Dashboard.
+        for (const modelName of ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest']) {
+            try {
+                const genAI = new GoogleGenerativeAI(key);
+                const model = genAI.getGenerativeModel({ model: modelName });
+                const prompt = `You are a product feedback analyst for Exotel's Internal Sales Dashboard.
 An SE (sales engineer) submitted the following feedback:
 
 "${feedbackText}"
@@ -748,22 +772,23 @@ Provide a concise analysis in this exact format:
 *⚡ Priority*
 [Low / Medium / High — with one-line reason]`;
 
-            // Build multimodal parts array
-            const parts = [{ text: prompt }];
-            if (screenshotDataUrl) {
-                const matches = screenshotDataUrl.match(/^data:([^;]+);base64,(.+)$/s);
-                if (matches) {
-                    parts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+                // Build multimodal parts array
+                const parts = [{ text: prompt }];
+                if (screenshotDataUrl) {
+                    const matches = screenshotDataUrl.match(/^data:([^;]+);base64,(.+)$/s);
+                    if (matches) {
+                        parts.push({ inlineData: { mimeType: matches[1], data: matches[2] } });
+                    }
                 }
-            }
 
-            const result = await model.generateContent(parts);
-            return result.response.text();
-        } catch (err) {
-            lastErr = err;
+                const result = await model.generateContent(parts);
+                return result.response.text();
+            } catch (err) {
+                lastErr = err;
+            }
         }
     }
-    throw lastErr || new Error('All Gemini keys failed');
+    throw lastErr || new Error('All keys failed');
 }
 
 async function uploadScreenshotToPublicHost(dataUrl) {
@@ -946,6 +971,359 @@ app.post('/api/admin/dev-feedback/clear-all', ensureAuthenticated, ensureDevelop
         console.error('[FEEDBACK] Error clearing dev_feedback:', e.message);
         res.status(500).json({ error: 'Failed to clear all feedback: ' + e.message });
     }
+});
+
+// ─── Smart Task Board (Todos) CRUD & AI Parser ────────────────────────────────
+app.get('/api/todos', ensureAuthenticated, (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    try {
+        const rows = db.prepare(`SELECT * FROM todos WHERE user_email = ? ORDER BY id DESC`).all(email);
+        const mapped = rows.map(r => ({
+            ...r,
+            subtasks: r.subtasks ? JSON.parse(r.subtasks) : [],
+            ai_data: r.ai_data ? JSON.parse(r.ai_data) : null
+        }));
+        res.json(mapped);
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read todos' });
+    }
+});
+
+app.post('/api/todos', ensureAuthenticated, async (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    const { title, notes, due_at, subtasks, reminder_at, ringer_type, ai_data, smart } = req.body;
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    let finalTitle = title;
+    let finalNotes = notes || '';
+    let finalDueAt = due_at || null;
+    let finalSubtasks = subtasks || [];
+    let finalReminderAt = reminder_at || null;
+    let finalRingerType = ringer_type || 'both';
+    let finalAiData = ai_data || null;
+
+    const now = new Date().toISOString();
+    try {
+        const result = db.prepare(
+            `INSERT INTO todos (user_email, title, notes, status, due_at, created_at, updated_at, subtasks, reminder_at, ringer_type, alert_rung, ai_data)
+             VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0, ?)`
+        ).run(
+            email,
+            finalTitle,
+            finalNotes,
+            finalDueAt,
+            now,
+            now,
+            JSON.stringify(finalSubtasks),
+            finalReminderAt,
+            finalRingerType,
+            finalAiData ? JSON.stringify(finalAiData) : null
+        );
+        addLog('TODO_CREATED', 'SUCCESS', `Todo "${finalTitle}" created (smart: ${!!smart})`, email);
+        res.json({ id: result.lastInsertRowid, title: finalTitle });
+    } catch (e) {
+        console.error('[TODO_CREATE_ERROR]', e);
+        res.status(500).json({ error: 'Failed to save todo: ' + e.message });
+    }
+});
+
+app.post('/api/todos/voice', ensureAuthenticated, upload.single('audio'), async (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    if (!req.file) return res.status(400).json({ error: 'Audio file is required' });
+
+    try {
+        const key = process.env.GEMINI_API_KEY;
+        if (!key) throw new Error('GEMINI_API_KEY not configured');
+        
+        let parsed = null;
+        for (const modelName of ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest']) {
+            try {
+                const genAI = new GoogleGenerativeAI(key);
+                const model = genAI.getGenerativeModel({ 
+                    model: modelName,
+                    generationConfig: { responseMimeType: "application/json" }
+                });
+
+                const prompt = `You are a smart task parser.
+Listen to the audio, which contains a user dictating a task.
+Transcribe the audio exactly (STT) and parse it into a JSON object with these exact keys:
+1. "title": Short, clear summary of the task.
+2. "notes": The full exact transcript of what was said.
+3. "due_at": An ISO 8601 string representing the exact date and time the task is due, or null if no date/time is specified.
+
+Return ONLY the JSON string. Do not include markdown code block formatting.`;
+
+                const result = await model.generateContent([
+                    prompt,
+                    {
+                        inlineData: {
+                            mimeType: req.file.mimetype,
+                            data: req.file.buffer.toString("base64")
+                        }
+                    }
+                ]);
+
+                let text = result.response.text().trim();
+                if (text.startsWith('\`\`\`')) {
+                    text = text.replace(/^\`\`\`json\s*/, '').replace(/\`\`\`$/, '').trim();
+                }
+
+                parsed = JSON.parse(text);
+                break;
+            } catch (err) {
+                console.error(`[TODO VOICE PARSE ERROR] Model ${modelName} failed:`, err.message);
+            }
+        }
+
+        if (!parsed) {
+            throw new Error('Failed to parse voice with all Gemini models.');
+        }
+        
+        const finalTitle = parsed.title || "Voice Task";
+        const finalNotes = parsed.notes || "";
+        const finalDueAt = parsed.due_at || null;
+        const now = new Date().toISOString();
+
+        const insertRes = db.prepare(
+            `INSERT INTO todos (user_email, title, notes, status, due_at, created_at, updated_at, subtasks, reminder_at, ringer_type, alert_rung, ai_data)
+             VALUES (?, ?, ?, 'pending', ?, ?, ?, '[]', null, 'both', 0, null)`
+        ).run(email, finalTitle, finalNotes, finalDueAt, now, now);
+
+        res.json({ id: insertRes.lastInsertRowid, title: finalTitle, notes: finalNotes });
+    } catch (e) {
+        console.error('[TODO_VOICE_ERROR]', e);
+        res.status(500).json({ error: 'Failed to process voice: ' + e.message });
+    }
+});
+
+app.put('/api/todos/:id', ensureAuthenticated, (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    const { id } = req.params;
+    const { title, notes, status, due_at, subtasks, reminder_at, ringer_type, alert_rung, ai_data } = req.body;
+    const now = new Date().toISOString();
+    try {
+        const existing = db.prepare(`SELECT * FROM todos WHERE id = ?`).get(id);
+        if (!existing) return res.status(404).json({ error: 'Todo not found' });
+        if (existing.user_email !== email) return res.status(403).json({ error: 'Forbidden' });
+
+        db.prepare(
+            `UPDATE todos SET title = ?, notes = ?, status = ?, due_at = ?, subtasks = ?, reminder_at = ?, ringer_type = ?, alert_rung = ?, ai_data = ?, updated_at = ? WHERE id = ?`
+        ).run(
+            title !== undefined ? title : existing.title,
+            notes !== undefined ? notes : existing.notes,
+            status !== undefined ? status : existing.status,
+            due_at !== undefined ? due_at : existing.due_at,
+            subtasks !== undefined ? JSON.stringify(subtasks) : existing.subtasks,
+            reminder_at !== undefined ? reminder_at : existing.reminder_at,
+            ringer_type !== undefined ? ringer_type : existing.ringer_type,
+            alert_rung !== undefined ? alert_rung : existing.alert_rung,
+            ai_data !== undefined ? JSON.stringify(ai_data) : existing.ai_data,
+            now,
+            id
+        );
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to update todo' });
+    }
+});
+
+app.delete('/api/todos/:id', ensureAuthenticated, (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    const { id } = req.params;
+    try {
+        const existing = db.prepare(`SELECT * FROM todos WHERE id = ?`).get(id);
+        if (!existing) return res.status(404).json({ error: 'Todo not found' });
+        if (existing.user_email !== email) return res.status(403).json({ error: 'Forbidden' });
+        db.prepare(`DELETE FROM todos WHERE id = ?`).run(id);
+        addLog('TODO_DELETED', 'SUCCESS', `Todo "${existing.title}" deleted`, email);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to delete todo' });
+    }
+});
+
+app.post('/api/todos/:id/ai-think', ensureAuthenticated, async (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    const { id } = req.params;
+    try {
+        const todo = db.prepare(`SELECT * FROM todos WHERE id = ? AND user_email = ?`).get(id, email);
+        if (!todo) return res.status(404).json({ error: 'Todo not found' });
+
+        const allKeys = [];
+        if (process.env.GEMINI_API_KEY) allKeys.push(process.env.GEMINI_API_KEY);
+        const uniqueKeys = [...new Set(allKeys)];
+
+        if (uniqueKeys.length === 0) {
+            return res.status(503).json({ error: 'API key is not configured' });
+        }
+
+        let lastErr;
+        for (const key of uniqueKeys) {
+            for (const modelName of ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-flash-latest']) {
+                try {
+                    console.log(`[AI-THINK] Thinking with model ${modelName}...`);
+                    const genAI = new GoogleGenerativeAI(key);
+                    const model = genAI.getGenerativeModel({ 
+                        model: modelName,
+                        generationConfig: { responseMimeType: "application/json" }
+                    });
+
+                    const prompt = `You are an operations dashboard task synthesizer.
+The user added a task: "${todo.title}"
+Due Date/Time: ${todo.due_at ? todo.due_at : 'No due date'}
+Notes: ${todo.notes || 'None'}
+Current Time: ${new Date().toISOString()}
+
+Analyze this task and think about how the user can perform it better, when they should be reminded, and what subtasks they need.
+Provide a structured JSON output matching this structure:
+{
+  "smart_reminders": [
+    {
+      "time": "ISO 8601 string representing a reminder time in the future",
+      "reason": "Short explanation of why this reminder time is chosen",
+      "rung": 0
+    }
+  ],
+  "suggested_subtasks": ["string representing concrete follow-up steps"],
+  "better_advice": "A short paragraph (2-3 sentences) explaining how the user can perform this task better, focusing on efficiency, CPaaS best practices, or general productivity.",
+  "summary_title": "A clean, concise title (4-8 words) summarizing the user's raw input task",
+  "priority": "one of: 'high', 'medium', 'low'",
+  "estimated_duration": "an estimate of how long this task will take, e.g., '15 mins', '45 mins', '2 hours'",
+  "category": "one of: 'Technical', 'Client', 'Operations', 'Follow-up', 'Internal', 'General'"
+}
+
+IMPORTANT: Only generate items in "suggested_subtasks" if the task is complex, multi-step, or requires planning. For simple tasks that do not require multiple steps, return an empty array [] for "suggested_subtasks". Keep priority as 'medium' unless keywords like 'urgent', 'now', 'asap', 'blocker', 'critical', 'client review' strongly suggest 'high'.`;
+
+                    let result;
+                    let retries = 3;
+                    while (retries > 0) {
+                        try {
+                            result = await model.generateContent(prompt);
+                            break;
+                        } catch (err) {
+                            if ((err.message.includes('503') || err.message.includes('Service Unavailable') || err.message.includes('Resource Exhausted') || err.message.includes('429')) && retries > 1) {
+                                console.warn(`[AI-THINK] Model ${modelName} returned temporary error. Retrying in 2 seconds...`);
+                                await new Promise(r => setTimeout(r, 2000));
+                                retries--;
+                            } else {
+                                throw err;
+                            }
+                        }
+                    }
+                    let text = result.response.text().trim();
+
+                    if (text.startsWith('```')) {
+                        text = text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+                    }
+
+                    const parsed = JSON.parse(text);
+                    
+                    const currentSubtasks = todo.subtasks ? JSON.parse(todo.subtasks) : [];
+                    const mergedSubtasks = [...currentSubtasks];
+                    if (parsed.suggested_subtasks && Array.isArray(parsed.suggested_subtasks)) {
+                        parsed.suggested_subtasks.forEach(title => {
+                            if (!mergedSubtasks.some(s => s.title.toLowerCase() === title.toLowerCase())) {
+                                mergedSubtasks.push({ title, completed: false });
+                            }
+                        });
+                    }
+
+                    const ai_data = {
+                        reminders: parsed.smart_reminders || [],
+                        advice: parsed.better_advice || '',
+                        priority: parsed.priority || 'medium',
+                        duration: parsed.estimated_duration || '30 mins',
+                        category: parsed.category || 'General'
+                    };
+
+                    let newReminderAt = todo.reminder_at;
+                    if (!newReminderAt && ai_data.reminders.length > 0) {
+                        newReminderAt = ai_data.reminders[0].time;
+                    }
+
+                    db.prepare(
+                        `UPDATE todos SET title = ?, subtasks = ?, ai_data = ?, reminder_at = ?, updated_at = ? WHERE id = ?`
+                    ).run(
+                        parsed.summary_title || todo.title,
+                        JSON.stringify(mergedSubtasks),
+                        JSON.stringify(ai_data),
+                        newReminderAt,
+                        new Date().toISOString(),
+                        id
+                    );
+
+                    console.log(`[AI-THINK] Completed successfully for todo ${id}`);
+                    return res.json({ success: true, ai_data, subtasks: mergedSubtasks, reminder_at: newReminderAt });
+                } catch (err) {
+                    console.error(`[AI-THINK ERROR] Model ${modelName} failed:`, err.message);
+                    lastErr = err;
+                }
+            }
+        }
+        return res.status(500).json({ error: 'Failed to process: ' + lastErr?.message });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: 'Failed to perform AI analysis: ' + e.message });
+    }
+});
+
+app.post('/api/todos/smart-parse', ensureAuthenticated, async (req, res) => {
+    const { description } = req.body;
+    if (!description) return res.status(400).json({ error: 'Description is required' });
+
+    const allKeys = [];
+    if (process.env.GEMINI_API_KEY) allKeys.push(process.env.GEMINI_API_KEY);
+    const uniqueKeys = [...new Set(allKeys)];
+
+    if (uniqueKeys.length === 0) {
+        return res.status(503).json({ error: 'API key is not configured' });
+    }
+
+    let lastErr;
+    for (const key of uniqueKeys) {
+        for (const modelName of ['gemini-2.5-flash-lite', 'gemini-2.5-flash', 'gemini-flash-latest']) {
+            try {
+                console.log(`[TODO] Parsing task description with model ${modelName}...`);
+                const genAI = new GoogleGenerativeAI(key);
+                const model = genAI.getGenerativeModel({ 
+                    model: modelName,
+                    generationConfig: { responseMimeType: "application/json" }
+                });
+                
+                const prompt = `You are a smart assistant inside the Exotel Operations Dashboard.
+Your job: parse a user's task description into a structured JSON object.
+Use the current time as context for parsing relative dates like "tomorrow", "next Monday", "in 2 hours".
+Current Local Time: ${new Date().toISOString()} (User's time zone: IST / local)
+
+Input prompt: "${description}"
+
+Provide a structured JSON output with these exact keys:
+1. "title": Short, clear summary of the task (e.g., "Email Client X the Quote").
+2. "notes": Any additional context or description from the input.
+3. "due_at": An ISO 8601 string representing the exact date and time the task is due, or null if no date/time is specified. If the user says "tomorrow morning", assume 9:00 AM local time. If they say "tomorrow afternoon", assume 2:00 PM local time. If they say "tomorrow evening", assume 6:00 PM local time.
+4. "subtasks": An array of objects, each with "title" (string) and "completed" (false). These should represent concrete follow-up steps or subtasks that are implied by the main task. IMPORTANT: Only generate subtasks if the task is complex, multi-step, or requires planning. For simple tasks that do not require multiple steps (such as simple requests, single calls, brief checks, notifications, permissions, etc.), return an empty array [] for "subtasks".
+5. "ringer_type": "both", "audible", or "silent" (default to "both"). If they mention "silent", "notifications only", "don't make noise", use "silent". If they say "ring", "make sound", "alarm", "loud", use "audible".
+6. "reminder_at": An ISO 8601 string representing when to alert the user. If they specify a time (e.g., "remind me at 3 PM"), use that. If they don't specify, default to 15 minutes before the due_at time, or null if due_at is null.
+
+Return ONLY the JSON string. Do not include markdown code block formatting (like \`\`\`json).`;
+
+                const result = await model.generateContent(prompt);
+                let text = result.response.text().trim();
+                
+                if (text.startsWith('```')) {
+                    text = text.replace(/^```json\s*/, '').replace(/```$/, '').trim();
+                }
+                
+                const parsed = JSON.parse(text);
+                return res.json(parsed);
+            } catch (err) {
+                console.error(`[TODO SMART PARSE ERROR] Model ${modelName} failed with key:`, err.message);
+                lastErr = err;
+            }
+        }
+    }
+    
+    return res.status(500).json({ error: 'Failed to process: ' + lastErr?.message });
 });
 
 // ─── Live Call Monitor (LWB) ─────────────────────────────────────────────────
@@ -1133,14 +1511,8 @@ app.post('/api/ai-quote-parse', ensureAuthenticated, async (req, res) => {
 
     const email = req.user?.emails?.[0]?.value || 'unknown';
     
-    const fallbackKeys = [
-        'AIzaSyAxM1nG9fnwAx3pGT7i4PwGbqI5cC09AwQ',
-        'AIzaSyAMTxuUeDhjh9a9PI4g3fJI_n5A70L5ekI'
-    ];
-    
     const allKeys = [];
     if (process.env.GEMINI_API_KEY) allKeys.push(process.env.GEMINI_API_KEY);
-    allKeys.push(...fallbackKeys);
     const uniqueKeys = [...new Set(allKeys)];
 
     if (uniqueKeys.length === 0) {
@@ -1388,37 +1760,44 @@ Do NOT set compareMode=true for two different products.
 
         for (let attempt = 0; attempt < uniqueKeys.length; attempt++) {
             const activeKey = uniqueKeys[currentGeminiKeyIndex];
-            try {
-                const genAI = new GoogleGenerativeAI(activeKey);
-                const model = genAI.getGenerativeModel({
-                    model: "gemini-2.5-flash",
-                    systemInstruction: systemInstruction
-                });
+            let lastErrForAttempt;
+            for (const modelName of ['gemini-2.5-flash-lite', 'gemini-2.5-flash']) {
+                try {
+                    const genAI = new GoogleGenerativeAI(activeKey);
+                    const model = genAI.getGenerativeModel({
+                        model: modelName,
+                        systemInstruction: systemInstruction
+                    });
 
-                result = await model.generateContent({
-                    contents: [{ 
-                        role: "user", 
-                        parts: [
-                            { text: promptText },
-                            { inlineData: { data: audioBase64, mimeType: mimeType } }
-                        ] 
-                    }],
-                    generationConfig: {
-                        responseMimeType: "application/json",
-                        responseSchema: schema
-                    }
-                });
-                
-                // Success, break out of retry loop
+                    result = await model.generateContent({
+                        contents: [{ 
+                            role: "user", 
+                            parts: [
+                                { text: promptText },
+                                { inlineData: { data: audioBase64, mimeType: mimeType } }
+                            ] 
+                        }],
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: schema
+                        }
+                    });
+                    
+                    break;
+                } catch (err) {
+                    lastErrForAttempt = err;
+                    console.error(`Gemini API error with model ${modelName} using key index ${currentGeminiKeyIndex}:`, err.message);
+                }
+            }
+            if (result) {
                 break;
-            } catch (err) {
-                lastError = err;
-                console.error(`Gemini API error with key index ${currentGeminiKeyIndex}:`, err.message);
-                if (err.status === 429 || err.message.includes('429') || err.message.includes('quota') || err.message.includes('rate limit')) {
+            } else {
+                lastError = lastErrForAttempt;
+                if (lastError && (lastError.status === 429 || lastError.message.includes('429') || lastError.message.includes('quota') || lastError.message.includes('rate limit'))) {
                     currentGeminiKeyIndex = (currentGeminiKeyIndex + 1) % uniqueKeys.length;
                     console.log(`Switching to next Gemini API key (index ${currentGeminiKeyIndex})`);
                 } else {
-                    throw err;
+                    throw lastError || new Error("Unknown API error");
                 }
             }
         }

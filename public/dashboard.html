@@ -11,6 +11,7 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="style.css?v=1.1">
     <link rel="stylesheet" href="quote-generator.css?v=16">
+    <link rel="stylesheet" href="todo-list.css?v=11">
     <link rel="stylesheet" href="mobile.css?v=1">
     <!-- LIVE MONITOR DISABLED: <link rel="stylesheet" href="live-monitor.css"> -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -100,6 +101,14 @@
                         <polyline points="10 9 9 9 8 9"></polyline>
                     </svg>
                     <span>Quote Generator</span>
+                </button>
+                <button class="nav-item" data-target="todo" id="nav-todo" title="Task Hub">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polyline points="9 11 12 14 22 4"></polyline>
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                    </svg>
+                    <span>Task Hub</span>
                 </button>
                 <button class="nav-item" data-target="logs" id="nav-logs" title="Activity Logs">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -287,6 +296,19 @@
                         </div>
                         <h3>Quote Generator</h3>
                         <p>Create and manage professional commercial proposals.</p>
+                    </div>
+
+                    <!-- Task Hub -->
+                    <div class="app-card app-todo" onclick="openApp('todo')">
+                        <div class="app-icon" style="background:#f3e8ff; color:#7c3aed;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="9 11 12 14 22 4"></polyline>
+                                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                            </svg>
+                        </div>
+                        <h3>Task Hub</h3>
+                        <p>Interactive planner with automatic step breakdowns and alerts.</p>
                     </div>
 
                     <!-- Admin Panel (hidden until admin check, shown by JS) -->
@@ -1373,7 +1395,110 @@
 
 
             </section>
+
+             <!-- ================================             <!-- ==========================================
+                  TASK HUB APPLET
+                  ========================================== -->
+             <section id="todo-applet" class="applet hidden">
+                 <!-- Header -->
+                 <div class="th-header">
+                     <div class="th-title-block">
+                         <div class="th-title-icon">
+                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+                         </div>
+                         <div>
+                             <h1 class="th-title">Tasks</h1>
+                             <p class="th-subtitle">Manage and track your sales dashboard tasks</p>
+                         </div>
+                     </div>
+                     <div class="th-header-actions">
+                         <div class="th-sort-wrap">
+                             <span class="th-sort-label">Sort By:</span>
+                             <select id="todo-sort-select" class="th-sort-select">
+                                 <option value="created" selected>Newest first</option>
+                                 <option value="due">Due date</option>
+                             </select>
+                         </div>
+                         <button class="th-notif-btn" id="btn-request-notif-perm">🔔 Enable Alerts</button>
+                     </div>
+                 </div>
+
+                 <!-- Stats row -->
+                 <div class="th-stats">
+                     <div class="th-stat-card lnr-stat-pill active" data-filter="all">
+                         <div class="th-stat-num" id="lnr-count-all">0</div>
+                         <div class="th-stat-label">Active</div>
+                     </div>
+                     <div class="th-stat-card lnr-stat-pill stat-overdue" data-filter="overdue">
+                         <div class="th-stat-num" id="lnr-count-overdue">0</div>
+                         <div class="th-stat-label">Overdue</div>
+                     </div>
+                     <div class="th-stat-card lnr-stat-pill stat-done" data-filter="done">
+                         <div class="th-stat-num" id="lnr-count-done">0</div>
+                         <div class="th-stat-label">Done</div>
+                     </div>
+                 </div>
+
+                 <!-- Composer card -->
+                 <div class="th-compose-card">
+                     <div class="th-compose-row">
+                         <div class="th-input-icon">
+                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                         </div>
+                         <input type="text" class="th-task-input" id="todo-input-title" placeholder="Add task… e.g. Call Rakhee to review the PDF quote tomorrow" autocomplete="off">
+                         <div class="th-compose-btns">
+                             <button class="th-icon-btn" id="btn-todo-voice-bar" title="Voice">
+                                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+                             </button>
+                             <button class="th-due-btn" id="todo-time-picker-trigger">
+                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                                 <span id="selected-time-label" class="due-label">Set Due</span>
+                             </button>
+                             <button class="th-add-btn" id="btn-todo-add">
+                                 Create Task
+                             </button>
+                         </div>
+                     </div>
+
+                     <!-- DateTime Dropdown -->
+                     <div class="th-dt-dropdown hidden" id="todo-datetime-dropdown">
+                         <div class="th-dt-presets">
+                             <button class="th-dt-preset" data-preset="30m">In 30 mins</button>
+                             <button class="th-dt-preset" data-preset="2h">In 2 hours</button>
+                             <button class="th-dt-preset" data-preset="tonight">Tonight 8PM</button>
+                             <button class="th-dt-preset" data-preset="tomorrow">Tomorrow 9AM</button>
+                             <button class="th-dt-preset" data-preset="next-mon">Next Mon 10AM</button>
+                         </div>
+                         <div class="th-dt-sep-line">Custom</div>
+                         <div class="th-cal">
+                             <div class="th-cal-hdr">
+                                 <button type="button" class="th-cal-nav" id="cal-prev-month">&#8592;</button>
+                                 <span id="cal-month-year">June 2026</span>
+                                 <button type="button" class="th-cal-nav" id="cal-next-month">&#8594;</button>
+                             </div>
+                             <div class="th-cal-grid">
+                                 <div class="th-cal-wd">Su</div><div class="th-cal-wd">Mo</div><div class="th-cal-wd">Tu</div><div class="th-cal-wd">We</div><div class="th-cal-wd">Th</div><div class="th-cal-wd">Fr</div><div class="th-cal-wd">Sa</div>
+                             </div>
+                             <div class="th-cal-grid" id="custom-calendar-days-grid"></div>
+                         </div>
+                         <input type="hidden" id="custom-picker-date-value">
+                         <div class="th-time-row">
+                             <div><label>Hour</label><select id="custom-picker-hour"><option value="1">01</option><option value="2">02</option><option value="3">03</option><option value="4">04</option><option value="5">05</option><option value="6">06</option><option value="7">07</option><option value="8">08</option><option value="9">09</option><option value="10">10</option><option value="11">11</option><option value="12" selected>12</option></select></div>
+                             <div><label>Min</label><select id="custom-picker-minute"><option value="00" selected>00</option><option value="05">05</option><option value="10">10</option><option value="15">15</option><option value="20">20</option><option value="25">25</option><option value="30">30</option><option value="35">35</option><option value="40">40</option><option value="45">45</option><option value="50">50</option><option value="55">55</option></select></div>
+                             <div><label>AM/PM</label><select id="custom-picker-ampm"><option value="AM">AM</option><option value="PM" selected>PM</option></select></div>
+                         </div>
+                         <div class="th-dt-footer">
+                             <button class="th-dt-btn th-dt-cancel" id="btn-datetime-clear">Clear</button>
+                             <button class="th-dt-btn th-dt-apply" id="btn-datetime-apply">Apply</button>
+                         </div>
+                     </div>
+                 </div>
+
+                 <!-- Task List Container -->
+                 <div class="th-task-list" id="todo-list-container"></div>
+             </section>
         </main>
+    </div>
     </div>
 
 
@@ -1587,6 +1712,7 @@
 
     <script src="app.js?v=23"></script>
     <script src="quote-generator.js?v=29"></script>
+    <script src="todo-list.js?v=11"></script>
     <!-- LIVE MONITOR DISABLED: <script src="live-monitor.js"></script> -->
     <!-- Small script to hide TOPBAR logo when NOT home state (since sidebar is visible) -->
     <script>
@@ -1735,12 +1861,20 @@
         <button class="mbn-item" id="mbn-quotes" data-target="quotes" aria-label="Quotes">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                 stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2-2V8z" />
                 <polyline points="14 2 14 8 20 8" />
                 <line x1="16" y1="13" x2="8" y2="13" />
                 <line x1="16" y1="17" x2="8" y2="17" />
             </svg>
             <span class="mbn-label">Quotes</span>
+        </button>
+        <button class="mbn-item" id="mbn-todo" data-target="todo" aria-label="Tasks">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <polyline points="9 11 12 14 22 4" />
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+            </svg>
+            <span class="mbn-label">Tasks</span>
         </button>
         <button class="mbn-item" id="mbn-logs" data-target="logs" aria-label="Logs">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"

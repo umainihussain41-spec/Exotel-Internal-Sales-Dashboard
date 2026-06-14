@@ -313,6 +313,10 @@ window.openApp = function (target) {
     if (target === 'dev-feedback') {
         fetchDevFeedback();
     }
+    // Auto refresh smart tasks if board opened
+    if (target === 'todo' && typeof fetchTodos === 'function') {
+        fetchTodos();
+    }
     // Init Live Monitor applet
     if (target === 'live-monitor' && typeof lwbInit === 'function') {
         lwbInit();
