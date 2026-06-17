@@ -1167,7 +1167,6 @@ function getSkuFields(skuKey, tier) {
         { id: 'rental', label: 'Account Rental (₹)', value: 1000, type: 'rental_toggle', locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
-        // No free users - charged from first user, non-waiveable
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         {
@@ -2730,6 +2729,26 @@ window.toggleAddons = function (itemId, skuKey, tier) {
     }
   });
 
+  // Handle Veeno STD user model toggle – hide/show fields based on active model
+  if (skuKey === 'voice_veeno_std') {
+    const card = document.getElementById('sku-fields-card-' + itemId);
+    if (card) {
+      const showExotel = item.values['user_model_exotel'] === 1;
+      // Field IDs that belong only to the per-user (Veeno) model
+      ['user_charge'].forEach(fid => {
+        const el = card.querySelector(`#qf_${fid}_${itemId}`);
+        const row = el?.closest('.q-field-row');
+        if (row) row.style.display = showExotel ? 'none' : 'flex';
+      });
+      // Field IDs that belong only to the free-user (Exotel) model
+      ['exotel_free_users', 'exotel_user_charge'].forEach(fid => {
+        const el = card.querySelector(`#qf_${fid}_${itemId}`);
+        const row = el?.closest('.q-field-row');
+        if (row) row.style.display = showExotel ? 'flex' : 'none';
+      });
+    }
+  }
+
   if (QG.activeItemId === itemId) syncActiveAliases();
   updatePreview();
 };
@@ -3558,7 +3577,7 @@ function updatePreview() {
       const DID_COST = getSafeNum('did_cost') || 1500;
       const didNums = getSafeNum('did_numbers') || 0;
       const removStd = getSafeNum('remove_std_numbers') || 0;
-      const rentalOneTime = getSafeNum('rental_onetime') === 1;
+      const rentalOneTime = item.values['rental_onetime'] === 1;
       const userModelExotel = getSafeNum('user_model_exotel') === 1;
       const exoFreeUsers = getSafeNum('exotel_free_users') || 6;
       const exoUserCharge = getSafeNum('exotel_user_charge') || 1999;
@@ -5210,7 +5229,7 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Validity: ${extraValidity > 0 ? validity + ' + ' + extraValidity + ' months' : validity + ' Months'}`);
           
           const rental = getSN('rental');
-          const rentalOneTimeSN = getSN('rental_onetime') === 1;
+          const rentalOneTimeSN = item.values['rental_onetime'] === 1;
           if (rental === 0) {
             lines.push(`Account Rental: Waived`);
           } else if (rentalOneTimeSN) {
