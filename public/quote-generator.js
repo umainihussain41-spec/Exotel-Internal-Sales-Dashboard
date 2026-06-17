@@ -1140,7 +1140,7 @@ function getSkuFields(skuKey, tier) {
     case 'voice_exotel_std': {
       return [
         { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
-        { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'rental', label: 'Account Rental (₹)', value: t.rental, type: 'rental_toggle', locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
@@ -1173,9 +1173,9 @@ function getSkuFields(skuKey, tier) {
           id: 'user_charge', label: 'User Charge – Veeno Model (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000,
           note: 'Non-waiveable. Charged from user 1.'
         },
-        { id: 'user_model_exotel', label: 'Switch to Exotel model (6 free + ₹1,999/extra user)?', value: 0, type: 'boolean', locked: false },
+        { id: 'user_model_exotel', label: 'Pricing Model', value: 0, type: 'model_toggle', locked: false },
         { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: false },
-        { id: 'exotel_user_charge', label: 'Extra User Charge – Exotel model (₹/user/month)', value: 1999, locked: true, stopType: 'lower', stopVal: 1999 },
+        { id: 'exotel_user_charge', label: 'Extra User Charge – Exotel model (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 199 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
@@ -2554,7 +2554,7 @@ function renderSkuForm(skuKey, tier) {
           return;
         }
 
-        if (f.type === 'boolean') {
+        if (f.type === 'boolean' || f.type === 'model_toggle') {
           const toggleGroup = card.querySelector(`#qf_toggle_${f.id}_${item.id}`);
           toggleGroup?.querySelectorAll('.q-toggle-opt').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -2563,7 +2563,7 @@ function renderSkuForm(skuKey, tier) {
               toggleGroup.querySelectorAll('.q-toggle-opt').forEach(b =>
                 b.classList.toggle('active', parseInt(b.dataset.val, 10) === val)
               );
-              // Re-run addon visibility whenever any boolean field changes (e.g. add_vn)
+              // Re-run addon visibility whenever any boolean/model field changes (e.g. add_vn, user_model_exotel)
               window.toggleAddons(item.id, k, t);
               updatePreview();
             });
@@ -2734,17 +2734,33 @@ window.toggleAddons = function (itemId, skuKey, tier) {
     const card = document.getElementById('sku-fields-card-' + itemId);
     if (card) {
       const showExotel = item.values['user_model_exotel'] === 1;
-      // Field IDs that belong only to the per-user (Veeno) model
-      ['user_charge'].forEach(fid => {
+      // Fields that belong only to the Veeno per-user model
+      ['num_users', 'extra_users', 'user_charge'].forEach(fid => {
         const el = card.querySelector(`#qf_${fid}_${itemId}`);
         const row = el?.closest('.q-field-row');
         if (row) row.style.display = showExotel ? 'none' : 'flex';
       });
-      // Field IDs that belong only to the free-user (Exotel) model
+      // Fields that belong only to the Exotel free-user model
       ['exotel_free_users', 'exotel_user_charge'].forEach(fid => {
         const el = card.querySelector(`#qf_${fid}_${itemId}`);
         const row = el?.closest('.q-field-row');
         if (row) row.style.display = showExotel ? 'flex' : 'none';
+      });
+      // Also hide/show the Veeno user charge label row (for the toggle itself keep visible)
+      // Update the section label visibility for clarity
+      const veenoLabelFields = card.querySelectorAll('.q-field-row');
+      veenoLabelFields.forEach(row => {
+        const label = row.querySelector('.q-field-label');
+        if (!label) return;
+        const labelText = label.textContent.trim();
+        // Hide "User Charge – Veeno Model" label row when in Exotel model
+        if (labelText === 'User Charge – Veeno Model (₹/user/month)') {
+          row.style.display = showExotel ? 'none' : 'flex';
+        }
+        // Hide Exotel-model-only labels when in Veeno model
+        if (labelText === 'Free Users (Exotel model)' || labelText === 'Extra User Charge – Exotel model (₹/user/month)') {
+          row.style.display = showExotel ? 'flex' : 'none';
+        }
       });
     }
   }
@@ -2781,6 +2797,20 @@ function renderFieldRow(f, item) {
             <button type="button" class="q-toggle-opt${pulseVal == 15 ? ' active' : ''}" data-val="15">15secs</button>
             <button type="button" class="q-toggle-opt${pulseVal == 30 ? ' active' : ''}" data-val="30">30secs</button>
             <button type="button" class="q-toggle-opt${pulseVal == 60 ? ' active' : ''}" data-val="60">60secs</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  if (f.type === 'model_toggle') {
+    const mtVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
+    return `
+      <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
+        <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+        <div class="q-field-value" style="justify-content:flex-end;">
+          <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}">
+            <button type="button" class="q-toggle-opt${mtVal == 0 ? ' active' : ''}" data-val="0">Veeno Model</button>
+            <button type="button" class="q-toggle-opt${mtVal == 1 ? ' active' : ''}" data-val="1">Exotel Model</button>
           </div>
         </div>
       </div>`;
@@ -3604,8 +3634,7 @@ function updatePreview() {
       tableHTML += secRow('User Plan');
       const vStdExtraUsers = getSafeNum('extra_users') || 0;
       if (userModelExotel) {
-        const freeCount = Math.min(numUsers, exoFreeUsers);
-        const freeDisplay = vStdExtraUsers > 0 ? `${freeCount} + ${vStdExtraUsers} Users (Free)` : `${freeCount} Users (Free)`;
+        const freeDisplay = vStdExtraUsers > 0 ? `${exoFreeUsers} + ${vStdExtraUsers} Users (Free)` : `${exoFreeUsers} Users (Free)`;
         tableHTML += stdRow('Free Users', freeDisplay);
         tableHTML += indRow('Extra User Cost', `${fmtRupee(exoUserCharge)} ${perUnit('/user/month')}`);
         if (chargedUsers > 0) {
@@ -4071,7 +4100,21 @@ function updatePreview() {
     const numberCost = getSafeNum('number_cost') * numNumbers * months;
 
     let subtotal = credits + rental + brand + procure + setup + chCost + numberCost;
-    if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
+    // For Veeno STD: respect the pricing model toggle
+    if (item.sku_key === 'voice_veeno_std') {
+      const useExotelModel = item.values['user_model_exotel'] === 1;
+      if (useExotelModel) {
+        const exoFree = parseFloat(item.values['exotel_free_users'] ?? 6) || 6;
+        const exoCharge = parseFloat(item.values['exotel_user_charge'] ?? 199) || 199;
+        const charged = Math.max(0, numUsers - exoFree);
+        if (charged > 0) subtotal += charged * exoCharge * months;
+      } else {
+        const userCharge = getSafeNum('user_charge');
+        if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
+      }
+    } else {
+      if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
+    }
     const numPaidNums = parseFloat(item.values['num_paid_numbers'] ?? 0);
     const extraNumCost = getSafeNum('extra_number');
     if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSafeNum('extra_validity') || 0));
@@ -5132,7 +5175,21 @@ window.confirmGenerateProforma = async function () {
       const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
 
       let subtotal = credits + rental + brand + procure + setup + chCost + numberCost;
-      if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
+      // For Veeno STD: respect the pricing model toggle
+      if (item.sku_key === 'voice_veeno_std') {
+        const useExotelModel = item.values['user_model_exotel'] === 1;
+        if (useExotelModel) {
+          const exoFree = parseFloat(item.values['exotel_free_users'] ?? 6) || 6;
+          const exoCharge = parseFloat(item.values['exotel_user_charge'] ?? 199) || 199;
+          const charged = Math.max(0, numUsers - exoFree);
+          if (charged > 0) subtotal += charged * exoCharge * months;
+        } else {
+          const userChargeV = getSN('user_charge');
+          if (numUsers && userChargeV) subtotal += numUsers * userChargeV * months;
+        }
+      } else {
+        if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
+      }
       if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSN('extra_validity') || 0));
       if (didNumbers > 0) subtotal += didNumbers * (parseFloat(item.values['did_cost']) || 1500) * months;
 
