@@ -198,8 +198,7 @@ passport.use(new GoogleStrategy({
     proxy: true
 },
     function (accessToken, refreshToken, profile, cb) {
-        const allowedEmails = ['hussain.umaini@exotel.com', 'nivas.p@exotel.com'];
-        const exotelEmail = profile.emails.find(email => allowedEmails.includes(email.value.toLowerCase()));
+        const exotelEmail = profile.emails.find(email => email.value.toLowerCase().endsWith('@exotel.com'));
         if (exotelEmail) {
             // Auto-upsert display name from Google profile
             const displayName = profile.displayName || '';
