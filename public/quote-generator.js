@@ -1164,8 +1164,7 @@ function getSkuFields(skuKey, tier) {
     case 'voice_veeno_std': {
       return [
         { id: 'validity', label: 'Validity (months)', value: 11, locked: false, stopType: 'lower', stopVal: 1 },
-        { id: 'rental', label: 'Account Rental (₹)', value: 1000, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
-        { id: 'rental_onetime', label: 'One-Time Rental (instead of monthly)?', value: 0, type: 'boolean', locked: false },
+        { id: 'rental', label: 'Account Rental (₹)', value: 1000, type: 'rental_toggle', locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         // No free users - charged from first user, non-waiveable
@@ -1176,8 +1175,8 @@ function getSkuFields(skuKey, tier) {
           note: 'Non-waiveable. Charged from user 1.'
         },
         { id: 'user_model_exotel', label: 'Switch to Exotel model (6 free + ₹1,999/extra user)?', value: 0, type: 'boolean', locked: false },
-        { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: true, nonEditable: true },
-        { id: 'exotel_user_charge', label: 'Charged User Rate – Exotel model (₹/user/month)', value: 1999, locked: true, stopType: 'lower', stopVal: 1999 },
+        { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: false },
+        { id: 'exotel_user_charge', label: 'Extra User Charge – Exotel model (₹/user/month)', value: 1999, locked: true, stopType: 'lower', stopVal: 1999 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
@@ -2573,6 +2572,31 @@ function renderSkuForm(skuKey, tier) {
           return;
         }
 
+        if (f.type === 'rental_toggle') {
+          // Wire up the number input for the rental amount
+          const rtInput = card.querySelector(`#qf_${f.id}_${item.id}`);
+          if (rtInput) {
+            rtInput.addEventListener('input', () => {
+              const numVal = parseFloat(rtInput.value);
+              item.values[f.id] = isNaN(numVal) ? rtInput.value : numVal;
+              updatePreview();
+            });
+          }
+          // Wire up the inline Monthly/One-Time toggle
+          const rtToggleGroup = card.querySelector(`#qf_toggle_rental_onetime_${item.id}`);
+          rtToggleGroup?.querySelectorAll('.q-toggle-opt').forEach(btn => {
+            btn.addEventListener('click', () => {
+              const val = parseInt(btn.dataset.val, 10);
+              item.values['rental_onetime'] = val;
+              rtToggleGroup.querySelectorAll('.q-toggle-opt').forEach(b =>
+                b.classList.toggle('active', parseInt(b.dataset.val, 10) === val)
+              );
+              updatePreview();
+            });
+          });
+          return;
+        }
+
         const input = card.querySelector('#qf_' + f.id + '_' + item.id);
         if (!input) return;
         input.addEventListener('input', async () => {
@@ -2757,6 +2781,22 @@ function renderFieldRow(f, item) {
       </div>`;
   }
 
+  if (f.type === 'rental_toggle') {
+    const rtVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
+    const rtOneTime = (item.values['rental_onetime'] ?? 0) == 1;
+    return `
+      <div class="q-field-row" data-addon="${f.note || ''}">
+        <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+        <div class="q-field-value" style="gap:6px;align-items:center;">
+          <input type="text" inputmode="decimal" class="q-input" id="qf_${f.id}_${item.id}" value="${rtVal}" autocomplete="off" spellcheck="false" style="width:80px;">
+          <div class="q-toggle-group" id="qf_toggle_rental_onetime_${item.id}" style="font-size:0.72rem;">
+            <button type="button" class="q-toggle-opt${!rtOneTime ? ' active' : ''}" data-val="0">Monthly</button>
+            <button type="button" class="q-toggle-opt${rtOneTime ? ' active' : ''}" data-val="1">One-Time</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   return `
     <div class="q-field-row" data-addon="${f.note || ''}">
       <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
@@ -2779,6 +2819,7 @@ function renderFieldsGrouped(fields, item) {
     channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
     num_months: 'Plan Overview',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
+    user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
@@ -3533,7 +3574,7 @@ function updatePreview() {
       if (rVal === 0) {
         tableHTML += stdRow('Account Rental', W);
       } else if (rentalOneTime) {
-        tableHTML += stdRow('Account Rental', `${fmtRupee(rVal)} (One-Time Payment)`);
+        tableHTML += stdRow('Account Rental', fmtRupee(rVal));
       } else {
         tableHTML += stdRow('Account Rental', `${fmtRupee(rVal)} ${perUnit('/month')}`);
         tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
@@ -3544,12 +3585,13 @@ function updatePreview() {
       tableHTML += secRow('User Plan');
       const vStdExtraUsers = getSafeNum('extra_users') || 0;
       if (userModelExotel) {
-        tableHTML += stdRow('No. of Users', `${numUsers} (${Math.min(numUsers, exoFreeUsers)} Free, ${chargedUsers} Charged)`);
-        tableHTML += stdRow('User Model', `Exotel – First ${exoFreeUsers} users free, then ₹${exoUserCharge.toLocaleString('en-IN')}/user/month`);
+        const freeCount = Math.min(numUsers, exoFreeUsers);
+        const freeDisplay = vStdExtraUsers > 0 ? `${freeCount} + ${vStdExtraUsers} Users (Free)` : `${freeCount} Users (Free)`;
+        tableHTML += stdRow('Free Users', freeDisplay);
+        tableHTML += indRow('Extra User Cost', `${fmtRupee(exoUserCharge)} ${perUnit('/user/month')}`);
         if (chargedUsers > 0) {
-          tableHTML += indRow('Calculation', `${chargedUsers} paid users × ${validity} months × ${fmtRupee(exoUserCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
-        } else {
-          tableHTML += indRow('Note', `All ${numUsers} user(s) within the free allocation`);
+          tableHTML += stdRow('Charged Users', chargedUsers + ' users');
+          tableHTML += indRow('Calculation', `${chargedUsers} users × ${validity} months × ${fmtRupee(exoUserCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
         }
       } else {
         const vStdUserLabel = vStdExtraUsers > 0 ? `${vStdExtraUsers} Free, ${numUsers} Charged` : numUsers;
@@ -5172,7 +5214,7 @@ window.confirmGenerateProforma = async function () {
           if (rental === 0) {
             lines.push(`Account Rental: Waived`);
           } else if (rentalOneTimeSN) {
-            lines.push(`Account Rental: ${fmtRupee(rental)} (One-Time Payment)`);
+            lines.push(`Account Rental: ${fmtRupee(rental)}`);
           } else {
             lines.push(`Account Rental: ${fmtRupee(rental)}/month`);
           }
@@ -5186,9 +5228,13 @@ window.confirmGenerateProforma = async function () {
           const exoFreeUsersSN = getSN('exotel_free_users') || 6;
           const exoUserChargeSN = getSN('exotel_user_charge') || 1999;
           if (userModelExotelSN) {
+            const freeCountSN = Math.min(numUsers, exoFreeUsersSN);
             const chargedUsersSN = Math.max(0, numUsers - exoFreeUsersSN);
-            lines.push(`No. of Users: ${numUsers} (${Math.min(numUsers, exoFreeUsersSN)} Free, ${chargedUsersSN} Charged)`);
-            lines.push(`User Model: Exotel – ${exoFreeUsersSN} free, then ${fmtRupee(exoUserChargeSN)}/user/month`);
+            lines.push(`Free Users: ${freeCountSN} Users (Free)`);
+            lines.push(`Extra User Cost: ${fmtRupee(exoUserChargeSN)}/user/month`);
+            if (chargedUsersSN > 0) {
+              lines.push(`Charged Users: ${chargedUsersSN} users @ ${fmtRupee(exoUserChargeSN)}/user/month`);
+            }
           } else {
             const userLabel = vStdExtraUsers > 0 ? `${vStdExtraUsers} Free, ${numUsers} Charged` : numUsers;
             lines.push(`No. of Users: ${userLabel}`);
