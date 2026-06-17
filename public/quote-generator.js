@@ -1164,16 +1164,20 @@ function getSkuFields(skuKey, tier) {
     case 'voice_veeno_std': {
       return [
         { id: 'validity', label: 'Validity (months)', value: 11, locked: false, stopType: 'lower', stopVal: 1 },
-        { id: 'rental', label: 'Account Rental (₹/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'rental', label: 'Account Rental (₹)', value: 1000, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'rental_onetime', label: 'One-Time Rental (instead of monthly)?', value: 0, type: 'boolean', locked: false },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         // No free users - charged from first user, non-waiveable
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
         {
-          id: 'user_charge', label: 'User Charge (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000,
+          id: 'user_charge', label: 'User Charge – Veeno Model (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000,
           note: 'Non-waiveable. Charged from user 1.'
         },
+        { id: 'user_model_exotel', label: 'Switch to Exotel model (6 free + ₹1,999/extra user)?', value: 0, type: 'boolean', locked: false },
+        { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: true, nonEditable: true },
+        { id: 'exotel_user_charge', label: 'Charged User Rate – Exotel model (₹/user/month)', value: 1999, locked: true, stopType: 'lower', stopVal: 1999 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
@@ -1204,6 +1208,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Paid Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Paid Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
+        { id: 'incoming', label: 'Incoming Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
+        { id: 'outgoing', label: 'Outgoing Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
       ];
 
     // ── Veeno User-based (₹2,000/user, no free users) ───────────────
@@ -1226,6 +1232,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'did_numbers', label: 'Mobile DID Numbers (optional)', value: 0, locked: false },
         { id: 'did_cost', label: 'Mobile DID Rate (₹/Mobile DID/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
+        { id: 'incoming', label: 'Incoming Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
+        { id: 'outgoing', label: 'Outgoing Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
       ];
 
     case 'voice_exotel_tfn':
@@ -3509,25 +3517,46 @@ function updatePreview() {
       const DID_COST = getSafeNum('did_cost') || 1500;
       const didNums = getSafeNum('did_numbers') || 0;
       const removStd = getSafeNum('remove_std_numbers') || 0;
-      const totalUserCostV = numUsers * validity * uCharge;
+      const rentalOneTime = getSafeNum('rental_onetime') === 1;
+      const userModelExotel = getSafeNum('user_model_exotel') === 1;
+      const exoFreeUsers = getSafeNum('exotel_free_users') || 6;
+      const exoUserCharge = getSafeNum('exotel_user_charge') || 1999;
+      const chargedUsers = Math.max(0, numUsers - (userModelExotel ? exoFreeUsers : 0));
+      const totalUserCostV = userModelExotel
+        ? chargedUsers * validity * exoUserCharge
+        : numUsers * validity * uCharge;
 
       tableHTML += secRow('Plan Details');
       const extraValidityV = getSafeNum('extra_validity') || 0;
       tableHTML += stdRow('Validity', extraValidityV > 0 ? `${validity} + ${extraValidityV} months` : validity + ' Months');
       const rVal = getSafeNum('rental');
-      tableHTML += stdRow('Account Rental', rVal === 0 ? W : `${fmtRupee(rVal)} ${perUnit('/month')}`, rVal === 0);
-      if (rVal > 0) tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
+      if (rVal === 0) {
+        tableHTML += stdRow('Account Rental', W);
+      } else if (rentalOneTime) {
+        tableHTML += stdRow('Account Rental', `${fmtRupee(rVal)} (One-Time Payment)`);
+      } else {
+        tableHTML += stdRow('Account Rental', `${fmtRupee(rVal)} ${perUnit('/month')}`);
+        tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
+      }
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const vStdExtraUsers = getSafeNum('extra_users') || 0;
-      const vStdUserLabel = vStdExtraUsers > 0
-        ? `${vStdExtraUsers} Free, ${numUsers} Charged`
-        : numUsers;
-      tableHTML += stdRow('No. of Users', vStdUserLabel);
-      tableHTML += stdRow('User Charge', `${fmtRupee(uCharge)} ${perUnit('/user/month')}`);
-      tableHTML += indRow('Calculation', `${numUsers} users × ${validity} months × ${fmtRupee(uCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
+      if (userModelExotel) {
+        tableHTML += stdRow('No. of Users', `${numUsers} (${Math.min(numUsers, exoFreeUsers)} Free, ${chargedUsers} Charged)`);
+        tableHTML += stdRow('User Model', `Exotel – First ${exoFreeUsers} users free, then ₹${exoUserCharge.toLocaleString('en-IN')}/user/month`);
+        if (chargedUsers > 0) {
+          tableHTML += indRow('Calculation', `${chargedUsers} paid users × ${validity} months × ${fmtRupee(exoUserCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
+        } else {
+          tableHTML += indRow('Note', `All ${numUsers} user(s) within the free allocation`);
+        }
+      } else {
+        const vStdUserLabel = vStdExtraUsers > 0 ? `${vStdExtraUsers} Free, ${numUsers} Charged` : numUsers;
+        tableHTML += stdRow('No. of Users', vStdUserLabel);
+        tableHTML += stdRow('User Charge', `${fmtRupee(uCharge)} ${perUnit('/user/month')}`);
+        tableHTML += indRow('Calculation', `${numUsers} users × ${validity} months × ${fmtRupee(uCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
+      }
 
       tableHTML += secRow('Number Plan');
       if (!removStd) {
@@ -3655,6 +3684,10 @@ function updatePreview() {
         tableHTML += indRow('Mobile DID Rate', `${fmtRupee(DID_COST)} ${perUnit('/Mobile DID/month')}`);
       tableHTML += indRow('Calculation', `${didNums} Mobile DID(s) × ${numMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotal)}</strong>`);
       }
+
+      tableHTML += secRow('Call Charges');
+      tableHTML += stdRow('Incoming Call Charges', W);
+      tableHTML += stdRow('Outgoing Call Charges', W);
 
     } else if (effectiveSk === 'voice_exotel_tfn') {
       const numNums = getSafeNum('num_numbers') || 0;
@@ -5135,16 +5168,32 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Validity: ${extraValidity > 0 ? validity + ' + ' + extraValidity + ' months' : validity + ' Months'}`);
           
           const rental = getSN('rental');
-          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
+          const rentalOneTimeSN = getSN('rental_onetime') === 1;
+          if (rental === 0) {
+            lines.push(`Account Rental: Waived`);
+          } else if (rentalOneTimeSN) {
+            lines.push(`Account Rental: ${fmtRupee(rental)} (One-Time Payment)`);
+          } else {
+            lines.push(`Account Rental: ${fmtRupee(rental)}/month`);
+          }
           lines.push(`Setup Charges: Waived`);
           lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const numUsers = getSN('num_users') || 0;
           const uCharge = getSN('user_charge') || 1000;
           const vStdExtraUsers = getSN('extra_users') || 0;
-          const userLabel = vStdExtraUsers > 0 ? `${vStdExtraUsers} Free, ${numUsers} Charged` : numUsers;
-          lines.push(`No. of Users: ${userLabel}`);
-          lines.push(`User Charge: ${fmtRupee(uCharge)}/user/month`);
+          const userModelExotelSN = getSN('user_model_exotel') === 1;
+          const exoFreeUsersSN = getSN('exotel_free_users') || 6;
+          const exoUserChargeSN = getSN('exotel_user_charge') || 1999;
+          if (userModelExotelSN) {
+            const chargedUsersSN = Math.max(0, numUsers - exoFreeUsersSN);
+            lines.push(`No. of Users: ${numUsers} (${Math.min(numUsers, exoFreeUsersSN)} Free, ${chargedUsersSN} Charged)`);
+            lines.push(`User Model: Exotel – ${exoFreeUsersSN} free, then ${fmtRupee(exoUserChargeSN)}/user/month`);
+          } else {
+            const userLabel = vStdExtraUsers > 0 ? `${vStdExtraUsers} Free, ${numUsers} Charged` : numUsers;
+            lines.push(`No. of Users: ${userLabel}`);
+            lines.push(`User Charge: ${fmtRupee(uCharge)}/user/month`);
+          }
           
           const removStd = getSN('remove_std_numbers') || 0;
           if (!removStd) {
@@ -5244,6 +5293,9 @@ window.confirmGenerateProforma = async function () {
             const DID_COST = getSN('did_cost') || 1500;
             lines.push(`Mobile DID Numbers: ${didNums} DID(s) @ ${fmtRupee(DID_COST)}/DID/month`);
           }
+          
+          lines.push(`Incoming Call Charges: Waived`);
+          lines.push(`Outgoing Call Charges: Waived`);
         } else if (effectiveSk === 'voice_exotel_tfn') {
           lines.push(`Account Rental: Waived`);
           lines.push(`Setup Charges: Waived`);
