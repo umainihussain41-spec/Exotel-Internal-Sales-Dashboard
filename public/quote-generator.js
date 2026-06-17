@@ -4050,7 +4050,14 @@ function updatePreview() {
     const credits = getSafeNum('credits');
     let rental = getSafeNum('rental');
     const rentalF = fields.find(x => x.id === 'rental');
-    if (rentalF && rentalF.label.toLowerCase().includes('/month')) rental = rental * months;
+    const isRentalOneTime = item.values['rental_onetime'] === 1;
+    if (rentalF && rentalF.type === 'rental_toggle' && !isRentalOneTime) {
+      // Veeno STD monthly rental — multiply by validity months
+      rental = rental * months;
+    } else if (rentalF && rentalF.label.toLowerCase().includes('/month')) {
+      // Other SKUs that have '/month' in label
+      rental = rental * months;
+    }
     const brand = getSafeNum('brand_fee');
     const procure = getSafeNum('procurement');
     const setup = getSafeNum('setup');
