@@ -11,6 +11,7 @@ const fs = require('fs');
 const Database = require('better-sqlite3');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const multer = require('multer');
+const puppeteer = require('puppeteer');
 const upload = multer({ storage: multer.memoryStorage() });
 
 dotenv.config();
@@ -410,11 +411,16 @@ app.post('/api/export-pdf', ensureAuthenticated, async (req, res) => {
     
     let browser;
     try {
-        browser = await puppeteer.launch({
+        const launchOpts = {
             headless: 'new',
-            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+            args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
             defaultViewport: { width: 1024, height: 800 }
-        });
+        };
+        // On Railway (Linux), use the system-installed Chromium pointed to by env var
+        if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+            launchOpts.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+        }
+        browser = await puppeteer.launch(launchOpts);
         const page = await browser.newPage();
         
         // Render the exact HTML passed from the frontend containing statically linked stylesheets
