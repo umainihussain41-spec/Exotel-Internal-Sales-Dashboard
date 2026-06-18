@@ -328,6 +328,91 @@ app.get('/api/admin/check', ensureAuthenticated, (req, res) => {
     res.json({ isAdmin: isAdmin(email) });
 });
 
+// ─── Online User Presence Tracking (in-memory, no DB) ────────────────────────
+const onlineUsers = new Map(); // email → { name, avatar, last_seen }
+
+// Passive tracker: update presence on every authenticated API call
+app.use((req, res, next) => {
+    if (req.isAuthenticated() && req.user) {
+        const email = req.user.emails?.[0]?.value;
+        if (email) {
+            const profile = req.user;
+            const name = profile.displayName || email.split('@')[0];
+            const avatar = profile.photos?.[0]?.value || null;
+            onlineUsers.set(email, { name, avatar, last_seen: Date.now() });
+        }
+    }
+    next();
+});
+
+// Explicit heartbeat — client pings every 30s
+app.post('/api/heartbeat', ensureAuthenticated, (req, res) => {
+    res.json({ ok: true, ts: Date.now() });
+});
+
+// Admin: get all users with online/offline status
+app.get('/api/admin/online-users', ensureAuthenticated, ensureAdmin, (req, res) => {
+    const ONLINE_THRESHOLD_MS = 3 * 60 * 1000; // 3 minutes
+    const now = Date.now();
+    try {
+        // ── Build lifetime user set from everyone who ever logged in ──────────
+        // Pull distinct emails from successful login logs
+        const loggedInEmails = db.prepare(
+            `SELECT DISTINCT user_email AS email FROM logs WHERE status = 'SUCCESS' ORDER BY email ASC`
+        ).all().map(r => r.email).filter(Boolean);
+
+        // Also grab user_profiles for display names
+        const profiles = db.prepare(`SELECT email, display_name FROM user_profiles`).all();
+        const profileMap = {};
+        profiles.forEach(p => { profileMap[p.email] = p; });
+
+        // Merge: start from all known emails
+        const allEmails = new Set([...loggedInEmails, ...Object.keys(profileMap)]);
+
+        const result = [];
+        for (const email of allEmails) {
+            const profile = profileMap[email];
+            const presence = onlineUsers.get(email);
+            const last_seen = presence?.last_seen || null;
+            const is_online = last_seen && (now - last_seen) < ONLINE_THRESHOLD_MS;
+            result.push({
+                email,
+                name: presence?.name || profile?.display_name || email.split('@')[0],
+                avatar: presence?.avatar || null,
+                is_online: !!is_online,
+                last_seen: last_seen ? new Date(last_seen).toISOString() : null,
+                is_admin: isAdmin(email),
+            });
+        }
+
+        // Also include anyone in onlineUsers map not yet in the known set
+        for (const [email, data] of onlineUsers.entries()) {
+            if (!allEmails.has(email)) {
+                const is_online = (now - data.last_seen) < ONLINE_THRESHOLD_MS;
+                result.push({
+                    email,
+                    name: data.name || email.split('@')[0],
+                    avatar: data.avatar || null,
+                    is_online: !!is_online,
+                    last_seen: new Date(data.last_seen).toISOString(),
+                    is_admin: isAdmin(email),
+                });
+            }
+        }
+
+        // Sort: online first, then alphabetical by name
+        result.sort((a, b) => {
+            if (a.is_online !== b.is_online) return a.is_online ? -1 : 1;
+            return (a.name || '').localeCompare(b.name || '');
+        });
+
+        res.json(result);
+    } catch (e) {
+        console.error('[online-users] Error:', e);
+        res.status(500).json({ error: e.message || 'Failed to fetch online users' });
+    }
+});
+
 // ─── User Info ───────────────────────────────────────────────────────────────
 app.get('/api/user', ensureAuthenticated, (req, res) => {
     res.json(req.user);

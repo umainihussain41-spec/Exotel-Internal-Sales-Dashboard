@@ -43,6 +43,14 @@ const I_MONITOR = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" s
 const I_HASH = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`;
 const I_BOT = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11a9 9 0 0 1 18 0"></path><rect x="2" y="9" width="2" height="5" rx="1"></rect><rect x="20" y="9" width="2" height="5" rx="1"></rect><rect x="4" y="8" width="16" height="9" rx="2"></rect><path d="M12 8V5"></path><circle cx="12" cy="4" r="1" fill="currentColor"></circle><circle cx="9" cy="12" r="1" fill="currentColor"></circle><circle cx="15" cy="12" r="1" fill="currentColor"></circle><path d="M10 15h4M20 12v3a2 2 0 0 1-2 2h-3"></path><circle cx="14" cy="17" r="1" fill="currentColor"></circle></svg>`;
 
+// Bundle Compare — VS split-panel icon with styled text
+const I_VS = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="1" y="3" width="9" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+  <rect x="14" y="3" width="9" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
+  <circle cx="12" cy="12" r="4.5" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.5"/>
+  <text x="12" y="15.5" text-anchor="middle" font-size="5.5" font-weight="800" fill="currentColor" font-family="system-ui,sans-serif" letter-spacing="-0.3">VS</text>
+</svg>`;
+
 const SKUS = [
   { key: 'voice_exotel_std', label: 'Voice STD', sub: 'Minute Based', entity: 'Exotel', icon: I_PHONE, hasTiers: true },
   { key: 'voice_exotel_user', label: 'Voice User', sub: 'User Based', entity: 'Exotel', icon: I_USERS, hasTiers: false },
@@ -62,6 +70,9 @@ const SKUS = [
   { key: 'sip_veeno', label: 'SIP Lines', sub: 'WebRTC / Browser', entity: 'Veeno', icon: I_MONITOR, hasTiers: true },
   { key: 'num_1400', label: '1400 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
   { key: 'num_1600', label: '1600 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
+
+  // ── Bundle Compare — special toggle card (not a real SKU) ────────
+  { key: 'bundle_compare', label: 'Bundle Compare', sub: 'Compare Option A vs B', entity: 'Both', theme: 'bundle', icon: I_VS, hasTiers: false, isBundleCompare: true },
 ];
 
 // Tier defaults
@@ -1618,8 +1629,62 @@ function today() {
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
+// ── Confetti burst (same animation as Task Hub completion) ──────
+function launchConfetti() {
+  let c = document.getElementById('qg-confetti');
+  if (c) c.remove();
+  c = document.createElement('canvas');
+  c.id = 'qg-confetti';
+  c.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2147483647;';
+  document.body.appendChild(c);
+  const ctx = c.getContext('2d');
+  c.width = window.innerWidth;
+  c.height = window.innerHeight;
+
+  const cols = ['#0284c7','#38bdf8','#10b981','#f59e0b','#ef4444','#7c3aed','#ec4899','#84cc16'];
+  const pts = Array.from({ length: 120 }, () => ({
+    x: Math.random() * c.width,
+    y: c.height + 10,
+    vx: (Math.random() - 0.5) * 7,
+    vy: -(Math.random() * 9 + 9),
+    size: Math.random() * 7 + 3,
+    color: cols[Math.floor(Math.random() * cols.length)],
+    rot: Math.random() * 360,
+    rs: (Math.random() - 0.5) * 0.1,
+    opacity: 1,
+  }));
+
+  let alive = true;
+  (function anim() {
+    if (!alive) return;
+    ctx.clearRect(0, 0, c.width, c.height);
+    let any = false;
+    pts.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.35; p.rot += p.rs;
+      if (p.vy > 0) p.opacity -= 0.018;
+      if (p.opacity > 0 && p.y < c.height + 50) {
+        any = true;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.globalAlpha = p.opacity;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        ctx.restore();
+      }
+    });
+    if (any) requestAnimationFrame(anim);
+    else { alive = false; c.remove(); }
+  })();
+}
+
 // ── Tab switching with browser history support ─────────────────
 function switchQuoteTab(target, pushHistory = true) {
+  // Reset the form if returning to new-quote while in edit mode
+  if (target === 'new-quote' && QG.currentQuoteId) {
+    resetQuoteForm();
+  }
+
   document.querySelectorAll('.quote-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.quote-tab-content').forEach(c => c.classList.remove('active'));
 
@@ -1951,6 +2016,11 @@ window.toggleMultiSkuMode = function (enabled) {
 
 
 window.toggleBundleCompareMode = function (enabled) {
+  // Mutual exclusion: exit tier-compare mode before entering bundle compare
+  if (enabled && QG.compareMode) {
+    window.toggleCompareMode(false);
+  }
+
   QG.bundleCompareMode = enabled;
   const multiSkuLabel = document.getElementById('toggle-multi-sku-mode')?.closest('label');
   const tabSwitcher = document.getElementById('bundle-tab-switcher');
@@ -2059,13 +2129,11 @@ function renderBundleTabSwitcher() {
 
   tabSwitcher.innerHTML = `
     <div class="bundle-tab-bar">
-      <button class="bundle-tab ${QG.activeBundle === 'A' ? 'active' : ''}" onclick="window.switchBundle('A')" title="Option A" style="display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 16px;">
-        <span style="font-size:0.65rem;opacity:0.55;letter-spacing:0.06em;line-height:1;font-weight:600;">OPTION A</span>
-        <span style="font-size:0.85rem;line-height:1.3;">${sanitize(labelA)}</span>
+      <button class="bundle-tab ${QG.activeBundle === 'A' ? 'active' : ''}" onclick="window.switchBundle('A')" title="${sanitize(labelA)}" style="display:flex;align-items:center;justify-content:center;padding:8px 16px;">
+        <span style="font-size:0.9rem;font-weight:600;line-height:1.3;">${sanitize(labelA)}</span>
       </button>
-      <button class="bundle-tab ${QG.activeBundle === 'B' ? 'active' : ''}" onclick="window.switchBundle('B')" title="Option B" style="display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 16px;">
-        <span style="font-size:0.65rem;opacity:0.55;letter-spacing:0.06em;line-height:1;font-weight:600;">OPTION B</span>
-        <span style="font-size:0.85rem;line-height:1.3;">${sanitize(labelB)}</span>
+      <button class="bundle-tab ${QG.activeBundle === 'B' ? 'active' : ''}" onclick="window.switchBundle('B')" title="${sanitize(labelB)}" style="display:flex;align-items:center;justify-content:center;padding:8px 16px;">
+        <span style="font-size:0.9rem;font-weight:600;line-height:1.3;">${sanitize(labelB)}</span>
       </button>
     </div>
   `;
@@ -2075,15 +2143,36 @@ function renderBundleTabSwitcher() {
 function renderSkuSelector() {
   const grid = document.getElementById('sku-selector-grid');
   if (!grid) return;
+
   // In bundle compare mode each bundle is independent — show all SKUs, no cross-entity lock
-  const filtered = (QG.multiSkuMode && QG.lockedEntity && !QG.bundleCompareMode)
-    ? SKUS.filter(s => s.entity === QG.lockedEntity || s.entity === 'Both')
-    : SKUS.filter(s => !s.hidden);
+  // Always include the bundle_compare card regardless of entity lock
+  let filtered;
+  if (QG.multiSkuMode && QG.lockedEntity && !QG.bundleCompareMode) {
+    filtered = SKUS.filter(s => s.isBundleCompare || s.entity === QG.lockedEntity || s.entity === 'Both');
+  } else {
+    filtered = SKUS.filter(s => !s.hidden);
+  }
 
   const compareCapable = ['voice_exotel_std', 'voice_exotel_user', 'voice_veeno_std', 'voice_veeno_user', 'sip_veeno'];
   const CMP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 4 7 4"/><polyline points="7 20 17 20"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><polyline points="11 8 7 12 11 16"/><polyline points="13 8 17 12 13 16"/></svg>`;
 
   grid.innerHTML = filtered.map(s => {
+    if (s.isBundleCompare) {
+      // Special toggle card — not a regular SKU
+      const isActive = QG.bundleCompareMode;
+      return `
+      <div class="sku-option sku-bundle${isActive ? ' selected' : ''}" data-sku="bundle_compare"
+           onclick="window.toggleBundleCompareMode(!QG.bundleCompareMode); renderSkuSelector();"
+           title="${isActive ? 'Disable Bundle Compare mode' : 'Enable Bundle Compare: configure two packages side-by-side'}">
+        <div class="sku-option-icon">${s.icon}</div>
+        <div>
+          <div class="sku-option-label">${sanitize(s.label)}</div>
+          <div class="sku-option-sub">${isActive ? 'Active — A vs B' : sanitize(s.sub)}</div>
+          <span class="sku-entity-tag bundle">${isActive ? '✓ ON' : 'A vs B'}</span>
+        </div>
+      </div>`;
+    }
+
     const canCmp = compareCapable.includes(s.key);
     const isCmpActive = QG.compareMode && QG.currentSku === s.key;
     const cmpBtn = canCmp
@@ -2105,6 +2194,11 @@ function renderSkuSelector() {
 
 // Enable compare mode for a specific SKU (called from the per-card icon button)
 window.enableCompareFor = function(key) {
+  // Mutual exclusion: exit bundle compare mode before entering same-SKU tier compare
+  if (QG.bundleCompareMode) {
+    window.toggleBundleCompareMode(false);
+  }
+
   // Toggle off if already comparing this SKU
   if (QG.compareMode && QG.currentSku === key) {
     window.toggleCompareMode(false);
@@ -3801,11 +3895,12 @@ function _renderBundleItemsHTML(bundleItems) {
     const tierLabel = sku.hasTiers && item.tier
       ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
       : '';
+    const sectionTitle = (!sku.hasTiers && item.customName) ? item.customName : `${sku.label}${tierLabel}`;
 
     allSectionsHTML += `
     <div class="quote-doc-section sku-card" style="margin-top:24px;">
       <div class="quote-doc-section-title" style="font-size:1.05rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
-        ${sanitize(sku.label)}${sanitize(tierLabel)}
+        ${sanitize(sectionTitle)}
       </div>
       <table class="quote-sku-table">
         <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
@@ -4294,6 +4389,22 @@ function updatePreview() {
     const itemsB = QG.bundleB?.skuItems || [];
     const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
 
+    // Compute human-readable labels for each bundle column (same logic as renderBundleTabSwitcher)
+    const _bundleLabel = (items, fallback) => {
+      const configured = items.filter(i => i.sku_key);
+      if (configured.length === 0) return fallback;
+      if (configured.length === 1) {
+        const item = configured[0];
+        const sku = SKUS.find(s => s.key === item.sku_key);
+        const skuName = item.customName || sku?.label || item.sku_key;
+        const tier = item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : '';
+        return tier ? `${skuName} · ${tier}` : skuName;
+      }
+      return `${fallback} (${configured.length} SKUs)`;
+    };
+    const labelA = _bundleLabel(itemsA, 'Option A');
+    const labelB = _bundleLabel(itemsB, 'Option B');
+
     const resultA = _renderBundleItemsHTML(itemsA);
     const resultB = _renderBundleItemsHTML(itemsB);
     const gstA = Math.round(resultA.grandSubtotal * 0.18);
@@ -4346,8 +4457,7 @@ function updatePreview() {
         <div class="quote-doc-section-title" style="margin-bottom:18px;">Comparative Packages</div>
         <div class="bundle-compare-container">
           <div class="bundle-col">
-            <div class="bundle-col-header" style="background:linear-gradient(135deg,#0284c7,#0369a1);">&#65313; &nbsp; Option A</div>
-            <div>${hasA ? resultA.allSectionsHTML : emptyMsg('Option A')}</div>
+            <div>${hasA ? resultA.allSectionsHTML : emptyMsg(labelA)}</div>
             ${hasA ? `<div class="bundle-subtotal-card" style="border-color:#bae6fd;page-break-inside:avoid;break-inside:avoid;">
               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#475569;margin-bottom:5px;"><span>Subtotal (excl. GST)</span><strong>${fmtR(resultA.grandSubtotal)}</strong></div>
               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#64748b;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #cbd5e1;"><span>GST @ 18%</span><strong>${fmtR(gstA)}</strong></div>
@@ -4356,8 +4466,7 @@ function updatePreview() {
           </div>
           <div class="bundle-compare-divider"><div class="bundle-compare-divider-badge">VS</div></div>
           <div class="bundle-col">
-            <div class="bundle-col-header" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);">&#65314; &nbsp; Option B</div>
-            <div>${hasB ? resultB.allSectionsHTML : emptyMsg('Option B')}</div>
+            <div>${hasB ? resultB.allSectionsHTML : emptyMsg(labelB)}</div>
             ${hasB ? `<div class="bundle-subtotal-card" style="border-color:#ede9fe;page-break-inside:avoid;break-inside:avoid;">
               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#475569;margin-bottom:5px;"><span>Subtotal (excl. GST)</span><strong>${fmtR(resultB.grandSubtotal)}</strong></div>
               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#64748b;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #c4b5fd;"><span>GST @ 18%</span><strong>${fmtR(gstB)}</strong></div>
@@ -5031,11 +5140,12 @@ function updatePreview() {
     const tierLabel = sku.hasTiers && item.tier
       ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
       : '';
+    const sectionTitle = (!sku.hasTiers && item.customName) ? item.customName : `${sku.label}${tierLabel}`;
 
     allSectionsHTML += `
     <div class="quote-doc-section sku-card" style="margin-top:24px;">
       <div class="quote-doc-section-title" style="font-size:1.15rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
-        ${sanitize(sku.label)}${sanitize(tierLabel)}
+        ${sanitize(sectionTitle)}
       </div>
       <table class="quote-sku-table">
         <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
@@ -5375,10 +5485,28 @@ async function generateQuote() {
     }
   }
 
+  // Sync the currently-active bundle back before building quoteData
+  if (QG.bundleCompareMode) {
+    const curBundle = QG.activeBundle === 'A' ? QG.bundleA : QG.bundleB;
+    if (curBundle) { curBundle.skuItems = QG.skuItems; curBundle.activeItemId = QG.activeItemId; }
+  }
+
+  const itemsA = QG.bundleCompareMode ? (QG.bundleA?.skuItems || []).filter(i => i.sku_key) : [];
+  const itemsB = QG.bundleCompareMode ? (QG.bundleB?.skuItems || []).filter(i => i.sku_key) : [];
+
+  // For bundle compare, the saved entity is determined by Bundle A's first SKU
+  const bundleFirstSku = QG.bundleCompareMode && itemsA.length > 0
+    ? SKUS.find(s => s.key === itemsA[0].sku_key)
+    : firstSku;
+
   const quoteData = {
     sku_items: validItems,
-    entity: firstSku?.entity,
+    entity: (bundleFirstSku || firstSku)?.entity,
     compareMode: QG.compareMode,
+    bundleCompareMode: QG.bundleCompareMode || false,
+    bundle_a_items: itemsA,
+    bundle_b_items: itemsB,
+    activeBundle: QG.bundleCompareMode ? QG.activeBundle : null,
     client: {
       company: document.getElementById('q-client-company')?.value,
       contact: document.getElementById('q-client-contact')?.value,
@@ -5447,6 +5575,7 @@ async function generateQuote() {
     updateNavCounters();
 
     showAlert(isEdit ? `Quote ${QG.quoteNumber} updated successfully!` : `Quote ${QG.quoteNumber} generated and saved successfully!`, { type: 'success', title: 'Quote Saved!' });
+    if (!isEdit) launchConfetti();
     
     if (window._pendingPiQuoteId && window._pendingPiQuoteId === QG.currentQuoteId) {
       const pendingId = window._pendingPiQuoteId;
@@ -6979,19 +7108,76 @@ window.viewQuote = async function (id) {
     // Switch to New Quote tab
     document.querySelector('[data-qtab="new-quote"]').click();
 
-    // Select SKU & Tier
-    if (data.sku_items && data.sku_items.length > 0) {
+    // ── Bundle Compare Mode restore ─────────────────────────────────
+    if (data.bundleCompareMode && data.bundle_a_items?.length > 0) {
+      // Activate bundle compare mode
+      QG.bundleA = {
+        skuItems: data.bundle_a_items,
+        activeItemId: data.bundle_a_items[0]?.id || 'item_a_0',
+        lockedEntity: SKUS.find(s => s.key === data.bundle_a_items[0]?.sku_key)?.entity || null,
+      };
+      QG.bundleB = {
+        skuItems: data.bundle_b_items || [],
+        activeItemId: (data.bundle_b_items || [])[0]?.id || 'item_b_0',
+        lockedEntity: data.bundle_b_items?.[0]?.sku_key ? (SKUS.find(s => s.key === data.bundle_b_items[0].sku_key)?.entity || null) : null,
+      };
+      QG.activeBundle = data.activeBundle || 'A';
+      QG.bundleCompareMode = true;
+      QG.multiSkuMode = true;
+
+      // Load active bundle into QG.skuItems
+      const activeData = QG.activeBundle === 'A' ? QG.bundleA : QG.bundleB;
+      QG.skuItems = activeData.skuItems;
+      QG.activeItemId = activeData.activeItemId;
+      QG.lockedEntity = activeData.lockedEntity;
+      syncActiveAliases();
+
+      // Hydrate field defaults for all items in both bundles
+      [...QG.bundleA.skuItems, ...QG.bundleB.skuItems].forEach(item => {
+        if (!item.sku_key) return;
+        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        fields.forEach(f => {
+          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
+            item.values[f.id] = f.value;
+          }
+        });
+      });
+
+      // Show bundle tab switcher
+      const tabSwitcher = document.getElementById('bundle-tab-switcher');
+      if (tabSwitcher) tabSwitcher.style.display = 'block';
+
+      // Hide multi-sku toggle label (same as toggleBundleCompareMode does)
+      const multiSkuLabel = document.getElementById('toggle-multi-sku-mode')?.closest('label');
+      if (multiSkuLabel) multiSkuLabel.style.display = 'none';
+
+      // Show SKU item manager
+      const manager = document.getElementById('sku-item-manager');
+      if (manager) manager.style.display = '';
+
+      renderBundleTabSwitcher();
+      renderSkuItemManager();
+      renderSkuSelector();
+
+      // Render the config form for the active bundle's first item
+      if (QG.currentSku) {
+        if (SKUS.find(s => s.key === QG.currentSku)?.hasTiers) renderTierSelector();
+        else {
+          const cfgArea = document.getElementById('sku-config-area');
+          if (cfgArea) cfgArea.innerHTML = '';
+          renderSkuForm(QG.currentSku, QG.currentTier);
+        }
+      }
+
+    } else if (data.sku_items && data.sku_items.length > 0) {
+      // ── Standard (non-bundle) quote restore ───────────────────────
       QG.skuItems = data.sku_items;
       QG.activeItemId = data.sku_items[0].id;
       QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       syncActiveAliases();
 
-      // Hydrate missing field defaults for every item immediately.
-      // Saved quotes only store values the user explicitly changed; any untouched
-      // field is absent from item.values. Without this, getSafeNum/getVal fall back
-      // to field.value inside the renderer — but only AFTER renderSkuForm has run.
-      // For other users or slower machines updatePreview fires before renderSkuForm,
-      // causing all-zero values and a blank section in the preview (e.g. Web Streaming).
+      // Hydrate missing field defaults
       QG.skuItems.forEach(item => {
         if (!item.sku_key) return;
         const resolvedKey = item.sku_key === 'startup'
@@ -7414,15 +7600,36 @@ window.resolveSkuRequest = async function (id, btn) {
 
 // -- Reset Form ---------------------------------------------
 function resetQuoteForm() {
-  // Clear all SKU state
+  // ── Unwind all mode toggles first (order matters) ──────────
+  if (QG.bundleCompareMode) {
+    const cb = document.getElementById('toggle-bundle-compare-mode');
+    if (cb) cb.checked = false;
+    window.toggleBundleCompareMode(false);
+  }
+  if (QG.compareMode) {
+    window.toggleCompareMode(false);
+  }
+  if (QG.multiSkuMode) {
+    const cb = document.getElementById('toggle-multi-sku-mode');
+    if (cb) cb.checked = false;
+    window.toggleMultiSkuMode(false);
+  }
+
+  // ── Clear core SKU + quote state ───────────────────────────
   initSkuItems();
   QG.draftKey = null;
   QG._dirty = false;
+  QG.currentQuoteId = null;   // exit edit mode
+  QG._renamingItemId = null;
 
   // Clear SKU selector highlights and config area
   document.querySelectorAll('.sku-option').forEach(el => el.classList.remove('selected'));
   const cfgArea = document.getElementById('sku-config-area');
   if (cfgArea) cfgArea.innerHTML = '';
+
+  // Hide bundle tab switcher
+  const tabSwitcher = document.getElementById('bundle-tab-switcher');
+  if (tabSwitcher) tabSwitcher.style.display = 'none';
 
   // Clear client fields
   ['q-client-company', 'q-client-contact', 'q-client-email', 'q-client-phone', 'q-client-tenantid'].forEach(id => {
@@ -7432,6 +7639,10 @@ function resetQuoteForm() {
 
   // Reset entity badge
   updateEntityBadge('Exotel');
+
+  // Re-render SKU manager (clears item list UI)
+  renderSkuItemManager();
+  renderSkuSelector();
 
   // Get a fresh quote number from server
   initQuoteNumber();

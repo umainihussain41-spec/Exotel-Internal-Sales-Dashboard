@@ -1347,11 +1347,88 @@ window.switchLogTab = function(tab) {
 
 window.switchAdminLogTab = function(tab) {
     _currentAdminLogTab = tab;
-    document.querySelectorAll('#altab-activity, #altab-quotes').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#altab-activity, #altab-quotes, #altab-online').forEach(b => b.classList.remove('active'));
     document.getElementById(`altab-${tab}`)?.classList.add('active');
     document.getElementById('admin-log-activity-panel').classList.toggle('hidden', tab !== 'activity');
     document.getElementById('admin-log-quotes-panel').classList.toggle('hidden', tab !== 'quotes');
+    document.getElementById('admin-log-online-panel').classList.toggle('hidden', tab !== 'online');
+    if (tab === 'online') loadOnlineUsers();
 };
+
+// ── Online Users panel ────────────────────────────────────────────────────────
+window.loadOnlineUsers = async function() {
+    const grid = document.getElementById('online-users-grid');
+    const onlineCount = document.getElementById('online-users-online-count');
+    const offlineCount = document.getElementById('online-users-offline-count');
+    if (!grid) return;
+
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#94a3b8;font-size:0.9rem;">Loading…</div>`;
+
+    try {
+        const res = await fetch('/api/admin/online-users');
+        if (!res.ok) {
+            let errMsg = `HTTP ${res.status}`;
+            try { const j = await res.json(); errMsg += `: ${j.error || j.message || res.statusText}`; } catch(_) {}
+            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#ef4444;font-size:0.88rem;">${sanitizeHTML(errMsg)}</div>`;
+            return;
+        }
+        const users = await res.json();
+
+        const online  = users.filter(u => u.is_online).length;
+        const offline = users.filter(u => !u.is_online).length;
+        if (onlineCount)  onlineCount.textContent  = online;
+        if (offlineCount) offlineCount.textContent = offline;
+
+        if (!users.length) {
+            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#94a3b8;">No users found yet — users appear here after they log in for the first time.</div>`;
+            return;
+        }
+
+        grid.innerHTML = users.map(u => {
+            const initials = (u.name || u.email).split(/[\s.]/).map(p => p[0]?.toUpperCase()).filter(Boolean).slice(0,2).join('');
+            const avatarBg = u.is_online
+                ? 'linear-gradient(135deg,#dcfce7,#bbf7d0)'
+                : 'linear-gradient(135deg,#f1f5f9,#e2e8f0)';
+            const avatarColor  = u.is_online ? '#15803d' : '#64748b';
+            const dotColor     = u.is_online ? '#22c55e' : '#94a3b8';
+            const cardBorder   = u.is_online ? '#bbf7d0' : '#e2e8f0';
+            const cardBg       = u.is_online ? 'rgba(240,253,244,0.7)' : '#fff';
+            const statusText   = u.is_online ? 'Online now' : (u.last_seen ? `Last seen ${relativeTime(u.last_seen)}` : 'Never seen');
+            const statusColor  = u.is_online ? '#15803d' : '#94a3b8';
+            const adminBadge   = u.is_admin
+                ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:0.65rem;font-weight:700;padding:1px 7px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:10px;letter-spacing:0.04em;">ADMIN</span>`
+                : '';
+            const avatar = u.avatar
+                ? `<img src="${sanitizeHTML(u.avatar)}" alt="" style="width:44px;height:44px;border-radius:50%;object-fit:cover;border:2px solid ${u.is_online ? '#86efac' : '#e2e8f0'};flex-shrink:0;">`
+                : `<div style="width:44px;height:44px;border-radius:50%;background:${avatarBg};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1rem;color:${avatarColor};flex-shrink:0;border:2px solid ${u.is_online ? '#86efac' : '#e2e8f0'};">${sanitizeHTML(initials)}</div>`;
+
+            return `
+            <div style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:12px;padding:14px 16px;display:flex;align-items:center;gap:13px;transition:box-shadow 0.15s;position:relative;overflow:hidden;">
+                <div style="position:absolute;top:11px;right:11px;width:9px;height:9px;border-radius:50%;background:${dotColor};box-shadow:0 0 0 2px #fff;"></div>
+                ${avatar}
+                <div style="min-width:0;flex:1;">
+                    <div style="font-weight:700;font-size:0.9rem;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;">
+                        ${sanitizeHTML(u.name || u.email.split('@')[0])} ${adminBadge}
+                    </div>
+                    <div style="font-size:0.75rem;color:#64748b;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${sanitizeHTML(u.email)}">${sanitizeHTML(u.email)}</div>
+                    <div style="font-size:0.73rem;color:${statusColor};margin-top:5px;font-weight:600;display:flex;align-items:center;gap:4px;">
+                        <span style="width:6px;height:6px;border-radius:50%;background:${dotColor};display:inline-block;flex-shrink:0;"></span>
+                        ${sanitizeHTML(statusText)}
+                    </div>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#ef4444;">Error: ${sanitizeHTML(e.message)}</div>`;
+    }
+};
+
+// ── Heartbeat: keep current user's presence alive ─────────────────────────────
+(function startHeartbeat() {
+    const ping = () => fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    ping(); // immediate
+    setInterval(ping, 30000); // every 30 s
+})();
 
 function setupLogsApplet() {
     document.getElementById('btn-refresh-logs')?.addEventListener('click', fetchLogs);

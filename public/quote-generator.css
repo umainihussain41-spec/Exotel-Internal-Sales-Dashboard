@@ -398,6 +398,30 @@
     color: #059669;
 }
 
+/* Bundle Compare card */
+.sku-bundle .sku-option-icon {
+    background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%);
+    color: #7c3aed;
+}
+
+.sku-bundle:hover {
+    border-color: #a78bfa;
+    background: #f5f3ff;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.12);
+}
+
+.sku-bundle.selected {
+    border-color: #7c3aed;
+    background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 40%);
+    box-shadow: 0 2px 12px rgba(124, 58, 237, 0.25);
+}
+
+.sku-entity-tag.bundle {
+    background: linear-gradient(90deg, #ede9fe, #fce7f3);
+    color: #7c3aed;
+    font-weight: 800;
+}
+
 .sku-option-label {
     font-size: 0.85rem;
     font-weight: 600;
