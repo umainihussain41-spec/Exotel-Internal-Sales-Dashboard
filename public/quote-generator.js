@@ -1157,7 +1157,7 @@ function getSkuFields(skuKey, tier) {
     case 'voice_exotel_std': {
       return [
         { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
-        { id: 'rental', label: 'Account Rental (₹)', value: t.rental, type: 'rental_toggle', locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
