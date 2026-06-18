@@ -1173,7 +1173,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'incoming', label: 'Incoming (Single Leg) (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single },
         { id: 'outgoing', label: 'Outgoing (Double Leg) (p/min)', value: t.single_leg * 2, locked: true, stopType: 'lower', stopVal: t.stop_single * 2 },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
-        sms_field, ...wa_fields
+        sms_field, ...wa_fields,
+        { id: 'call_transfer', label: 'Call Transfer (₹/month)', value: 499, locked: false, note: 'CT Add-on' },
       ];
     }
 
@@ -1207,6 +1208,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'incoming', label: 'Incoming Call Charges (p/min, 0=Free)', value: 0, locked: false, stopType: 'lower', stopVal: 0, note: '0 means Free for client' },
         { id: 'outgoing', label: 'Outgoing (Single Leg) (p/min)', value: 52, locked: true, stopType: 'lower', stopVal: 52 },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
+        { id: 'call_transfer', label: 'Call Transfer (₹/month)', value: 499, locked: false, note: 'CT Add-on' },
       ];
     }
 
@@ -1225,6 +1227,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'extra_number', label: 'Paid Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'incoming', label: 'Incoming Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
         { id: 'outgoing', label: 'Outgoing Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
+        { id: 'call_transfer', label: 'Call Transfer (₹/month)', value: 499, locked: false, note: 'CT Add-on' },
       ];
 
     // ── Veeno User-based (₹2,000/user, no free users) ───────────────
@@ -1249,6 +1252,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
         { id: 'incoming', label: 'Incoming Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
         { id: 'outgoing', label: 'Outgoing Call Charges', value: 0, locked: true, nonEditable: true, waived: true },
+        { id: 'call_transfer', label: 'Call Transfer (₹/month)', value: 499, locked: false, note: 'CT Add-on' },
       ];
 
     case 'voice_exotel_tfn':
@@ -2706,10 +2710,11 @@ function renderSkuForm(skuKey, tier) {
       </div>
       
       ${fields.some(f => f.note?.includes('Add-on') && f.note !== 'VN Add-on') ? `
-      <div style="padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; font-size: 0.85rem; margin-bottom: 12px; border-radius: 6px;">
+      <div style="padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; font-size: 0.85rem; margin-bottom: 12px; border-radius: 6px; flex-wrap:wrap; align-items:center;">
         <strong>Add-ons:</strong>
         ${fields.some(f => f.note === 'SMS Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-sms-addon_${item.id}" ${item.values['sms_cost'] ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> SMS</label>` : ''}
         ${fields.some(f => f.note === 'WA Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-wa-addon_${item.id}" ${item.values['wa_api'] ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> WhatsApp</label>` : ''}
+        ${fields.some(f => f.note === 'CT Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-ct-addon_${item.id}" ${item.values['call_transfer'] !== undefined ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> Call Transfer <span style="font-size:0.78rem;color:#64748b;">(₹499/mo)</span></label>` : ''}
       </div>` : ''}
 
       <div class="q-card-fields-container">
@@ -2914,6 +2919,7 @@ window.toggleAddons = function (itemId, skuKey, tier) {
   }
   const showSms = document.getElementById('toggle-sms-addon_' + itemId)?.checked;
   const showWa = document.getElementById('toggle-wa-addon_' + itemId)?.checked;
+  const showCt = document.getElementById('toggle-ct-addon_' + itemId)?.checked;
 
   const item = QG.skuItems.find(i => i.id === itemId);
   if (!item) return;
@@ -2948,6 +2954,19 @@ window.toggleAddons = function (itemId, skuKey, tier) {
         item.waAddon = true;
       } else {
         item.waAddon = true;
+      }
+    }
+    if (addonType === 'CT Add-on') {
+      const showCt = document.getElementById('toggle-ct-addon_' + itemId)?.checked;
+      row.style.display = showCt ? 'flex' : 'none';
+      if (!showCt) {
+        delete item.values['call_transfer'];
+        item.ctAddon = false;
+      } else if (item.values['call_transfer'] === undefined) {
+        item.values['call_transfer'] = fields.find(f => f.id === 'call_transfer')?.value ?? 499;
+        item.ctAddon = true;
+      } else {
+        item.ctAddon = true;
       }
     }
     if (addonType === 'VN Add-on') {
@@ -3324,6 +3343,7 @@ function _renderBundleItemsHTML(bundleItems) {
     const isEditingThisItem = (item.id === QG.activeItemId);
     const showSms = isEditingThisItem ? document.getElementById('toggle-sms-addon_' + QG.activeItemId)?.checked : (item.smsAddon === true);
     const showWa  = isEditingThisItem ? document.getElementById('toggle-wa-addon_'  + QG.activeItemId)?.checked : (item.waAddon  === true);
+    const showCt  = isEditingThisItem ? document.getElementById('toggle-ct-addon_'  + QG.activeItemId)?.checked : (item.ctAddon  === true);
 
     // Startup banner header (renders before the SKU-format rows)
     if (effectiveSk === 'voice_exotel_std') {
@@ -3363,6 +3383,7 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Call Credits', creditsDisplayE);
       tableHTML += stdRow('Incoming Call Charges', fmtPaise(getSafeNum('incoming')));
       tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
+      if (showCt) tableHTML += stdRow('Call Transfer Add-on', `${fmtRupee(getSafeNum('call_transfer'))}/month`);
 
       if (showSms || showWa) {
         tableHTML += secRow('Messaging & Communication Services');
@@ -3450,6 +3471,7 @@ function _renderBundleItemsHTML(bundleItems) {
       const incomingV = getSafeNum('incoming');
       tableHTML += stdRow('Incoming Call Charges', incomingV === 0 ? FREE : fmtPaise(incomingV));
       tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
+      if (showCt) tableHTML += stdRow('Call Transfer Add-on', `${fmtRupee(getSafeNum('call_transfer'))}/month`);
 
     } else if (effectiveSk === 'sip_veeno') {
       tableHTML += secRow('Plan Details');
@@ -3838,7 +3860,8 @@ function _renderBundleItemsHTML(bundleItems) {
     } else {
       fields.forEach(f => {
         if (f.note === 'SMS Add-on' && !showSms) return;
-        if (f.note === 'WA Add-on' && !showWa) return;
+        if (f.note === 'WA Add-on'  && !showWa)  return;
+        if (f.note === 'CT Add-on'  && !showCt)  return;
         const val = item.values[f.id] ?? f.value;
         tableHTML += stdRow(cleanLabel(f.label), f.waived ? null : val, f.waived === true);
       });
@@ -4564,6 +4587,7 @@ function updatePreview() {
     const isEditingThisItem = (item.id === QG.activeItemId);
     const showSms = isEditingThisItem ? document.getElementById('toggle-sms-addon_' + QG.activeItemId)?.checked : (item.smsAddon === true);
     const showWa  = isEditingThisItem ? document.getElementById('toggle-wa-addon_'  + QG.activeItemId)?.checked : (item.waAddon  === true);
+    const showCt  = isEditingThisItem ? document.getElementById('toggle-ct-addon_'  + QG.activeItemId)?.checked : (item.ctAddon  === true);
 
     // Startup banner header (renders before the SKU-format rows)
     if (effectiveSk === 'voice_exotel_std') {
@@ -4603,6 +4627,7 @@ function updatePreview() {
       tableHTML += stdRow('Call Credits', creditsDisplayE);
       tableHTML += stdRow('Incoming Call Charges', fmtPaise(getSafeNum('incoming')));
       tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
+      if (showCt) tableHTML += stdRow('Call Transfer Add-on', `${fmtRupee(getSafeNum('call_transfer'))}/month`);
 
       if (showSms || showWa) {
         tableHTML += secRow('Messaging & Communication Services');
@@ -4690,6 +4715,7 @@ function updatePreview() {
       const incomingV = getSafeNum('incoming');
       tableHTML += stdRow('Incoming Call Charges', incomingV === 0 ? FREE : fmtPaise(incomingV));
       tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
+      if (showCt) tableHTML += stdRow('Call Transfer Add-on', `${fmtRupee(getSafeNum('call_transfer'))}/month`);
 
     } else if (effectiveSk === 'sip_veeno') {
       tableHTML += secRow('Plan Details');
@@ -4791,6 +4817,7 @@ function updatePreview() {
       tableHTML += secRow('Call Charges');
       tableHTML += stdRow('Incoming Call Charges', W);
       tableHTML += stdRow('Outgoing Call Charges', W);
+      if (showCt) tableHTML += stdRow('Call Transfer Add-on', `${fmtRupee(getSafeNum('call_transfer'))}/month`);
 
     } else if (effectiveSk === 'voice_exotel_tfn') {
       const numNums = getSafeNum('num_numbers') || 0;
@@ -5078,7 +5105,8 @@ function updatePreview() {
     } else {
       fields.forEach(f => {
         if (f.note === 'SMS Add-on' && !showSms) return;
-        if (f.note === 'WA Add-on' && !showWa) return;
+        if (f.note === 'WA Add-on'  && !showWa)  return;
+        if (f.note === 'CT Add-on'  && !showCt)  return;
         const val = item.values[f.id] ?? f.value;
         tableHTML += stdRow(cleanLabel(f.label), f.waived ? null : val, f.waived === true);
       });
@@ -6375,7 +6403,8 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Outgoing Call Charges: ${fmtPaise(getSN('outgoing'))}`);
           
           const showSms = item.values['sms_cost'] !== undefined;
-          const showWa = item.values['wa_api'] !== undefined;
+          const showWa  = item.values['wa_api'] !== undefined;
+          const showCt  = item.values['call_transfer'] !== undefined;
           if (showSms) {
             lines.push(`SMS Cost: ${fmtPaiseMsg(getSN('sms_cost'))}`);
           }
@@ -6383,6 +6412,9 @@ window.confirmGenerateProforma = async function () {
             lines.push(`WhatsApp Utility Messages: ${fmtPaiseMsg(getV('wa_utility'))}`);
             lines.push(`WhatsApp Promotional Messages: ${fmtPaiseMsg(getV('wa_promo'))}`);
             lines.push(`WhatsApp API Charge: ${fmtPaiseMsg(getSN('wa_api'))}`);
+          }
+          if (showCt) {
+            lines.push(`Call Transfer Add-on: ₹${getSN('call_transfer')}/month`);
           }
         } else if (effectiveSk === 'voice_veeno_std') {
           const validity = parseFloat(getV('validity')) || 0;
@@ -6522,6 +6554,7 @@ window.confirmGenerateProforma = async function () {
           
           lines.push(`Incoming Call Charges: Waived`);
           lines.push(`Outgoing Call Charges: Waived`);
+          if (item.values['call_transfer'] !== undefined) lines.push(`Call Transfer Add-on: ₹${item.values['call_transfer']}/month`);
         } else if (effectiveSk === 'voice_exotel_tfn') {
           lines.push(`Account Rental: Waived`);
           lines.push(`Setup Charges: Waived`);
