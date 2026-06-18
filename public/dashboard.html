@@ -10,7 +10,7 @@
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="icon" type="image/png" href="favicon.png">
     <link rel="stylesheet" href="style.css?v=1.1">
-    <link rel="stylesheet" href="quote-generator.css?v=16">
+    <link rel="stylesheet" href="quote-generator.css?v=17">
     <link rel="stylesheet" href="todo-list.css?v=11">
     <link rel="stylesheet" href="mobile.css?v=1">
     <!-- LIVE MONITOR DISABLED: <link rel="stylesheet" href="live-monitor.css"> -->
@@ -1120,6 +1120,18 @@
                                         style="accent-color:#0284c7; width:16px; height:16px;">
                                     Enable Multi-SKU Quote
                                 </label>
+                                <label
+                                    style="display:flex; align-items:center; gap:6px; font-weight:600; font-size:0.85rem; color:#475569; cursor:pointer;">
+                                    <input type="checkbox" id="toggle-bundle-compare-mode"
+                                        onchange="window.toggleBundleCompareMode(this.checked)"
+                                        style="accent-color:#7c3aed; width:16px; height:16px;">
+                                    Compare Bundles (A vs B)
+                                </label>
+                            </div>
+
+                            <!-- Bundle Compare Tab Switcher -->
+                            <div id="bundle-tab-switcher" style="display:none; margin-bottom: 16px;">
+                                <!-- Dynamically populated by JS (Option A / Option B tabs) -->
                             </div>
 
                             <!-- Compare Tier Selection -->
@@ -1162,17 +1174,7 @@
                                         </svg>
                                         Quote Items
                                     </div>
-                                    <button id="btn-add-sku-item" class="btn btn-secondary"
-                                        style="padding:5px 12px;font-size:0.82rem;display:flex;align-items:center;gap:5px;"
-                                        onclick="window.addSkuItem()">
-                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-                                            stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-                                            stroke-linejoin="round">
-                                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                        Add SKU
-                                    </button>
+
                                 </div>
                                 <div id="sku-item-list"
                                     style="padding:10px 16px;display:flex;flex-direction:column;gap:6px;">
@@ -1711,7 +1713,7 @@
 
 
     <script src="app.js?v=23"></script>
-    <script src="quote-generator.js?v=29"></script>
+    <script src="quote-generator.js?v=30"></script>
     <script src="todo-list.js?v=11"></script>
     <!-- LIVE MONITOR DISABLED: <script src="live-monitor.js"></script> -->
     <!-- Small script to hide TOPBAR logo when NOT home state (since sidebar is visible) -->

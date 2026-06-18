@@ -23,6 +23,12 @@ const QG = {
   lockedEntity: null,      // 'Exotel' | 'Veeno' | null - entity of first SKU selected
   compareMode: false,
   multiSkuMode: false,     // true when multi-SKU quote mode is enabled
+  // ── Bundle Compare state ───────────────────────────────────
+  bundleCompareMode: false,
+  bundleA: null,
+  bundleB: null,
+  activeBundle: 'A',
+  savedSingleState: null,
 };
 
 // ── SKU Definitions ────────────────────────────────────────
@@ -1690,6 +1696,8 @@ function renderSkuItemManager() {
   const list = document.getElementById('sku-item-list');
   if (!list) return;
 
+  if (QG.bundleCompareMode) renderBundleTabSwitcher();
+
   // Show panel whenever multi-SKU mode is on or multiple items exist
   if (manager) {
     const hasSku = QG.skuItems.some(i => i.sku_key);
@@ -1708,7 +1716,9 @@ function renderSkuItemManager() {
       lockBadge.style.color = QG.lockedEntity === 'Veeno' ? '#9d174d' : '#0369a1';
     }
     if (lockName) lockName.textContent = QG.lockedEntity;
-    if (hint) hint.textContent = `You can only add ${QG.lockedEntity} SKUs to this quote.`;
+    if (hint) hint.textContent = QG.bundleCompareMode
+      ? `Option ${QG.activeBundle} is using ${QG.lockedEntity} SKUs. Switch to the other option to pick a different entity.`
+      : `You can only add ${QG.lockedEntity} SKUs to this quote.`;
   } else {
     if (lockBadge) lockBadge.style.display = 'none';
     if (hint) hint.textContent = 'Choose the product plan for this quote. The logo and entity will switch automatically.';
@@ -1939,10 +1949,134 @@ window.toggleMultiSkuMode = function (enabled) {
   }
 };
 
+
+window.toggleBundleCompareMode = function (enabled) {
+  QG.bundleCompareMode = enabled;
+  const multiSkuLabel = document.getElementById('toggle-multi-sku-mode')?.closest('label');
+  const tabSwitcher = document.getElementById('bundle-tab-switcher');
+  const manager = document.getElementById('sku-item-manager');
+
+  if (enabled) {
+    QG.savedSingleState = {
+      skuItems: JSON.parse(JSON.stringify(QG.skuItems)),
+      activeItemId: QG.activeItemId,
+      lockedEntity: QG.lockedEntity,
+      multiSkuMode: QG.multiSkuMode
+    };
+    if (multiSkuLabel) multiSkuLabel.style.display = 'none';
+    QG.multiSkuMode = true;
+    // Always start with fresh bundle items to avoid stale add-on state carrying over
+    QG.bundleA = { skuItems: [_makeItem('item_a_0')], activeItemId: 'item_a_0', lockedEntity: null };
+    QG.bundleB = { skuItems: [_makeItem('item_b_0')], activeItemId: 'item_b_0', lockedEntity: null };
+    QG.activeBundle = QG.activeBundle || 'A';
+    const activeData = QG.activeBundle === 'A' ? QG.bundleA : QG.bundleB;
+    QG.skuItems = activeData.skuItems;
+    QG.activeItemId = activeData.activeItemId;
+    QG.lockedEntity = activeData.lockedEntity;
+    if (tabSwitcher) tabSwitcher.style.display = 'block';
+    if (manager) manager.style.display = '';
+  } else {
+    if (QG.savedSingleState) {
+      QG.skuItems = QG.savedSingleState.skuItems;
+      QG.activeItemId = QG.savedSingleState.activeItemId;
+      QG.lockedEntity = QG.savedSingleState.lockedEntity;
+      QG.multiSkuMode = QG.savedSingleState.multiSkuMode;
+    }
+    if (multiSkuLabel) {
+      multiSkuLabel.style.display = '';
+      const cb = document.getElementById('toggle-multi-sku-mode');
+      if (cb) cb.checked = QG.multiSkuMode;
+    }
+    if (tabSwitcher) tabSwitcher.style.display = 'none';
+    if (manager) manager.style.display = QG.multiSkuMode ? '' : 'none';
+  }
+  syncActiveAliases();
+  renderSkuItemManager();
+  renderSkuSelector();
+  const cfgArea = document.getElementById('sku-config-area');
+  if (cfgArea) {
+    if (QG.currentSku) {
+      const sku = SKUS.find(s => s.key === QG.currentSku);
+      if (sku?.hasTiers && !QG.compareMode) { renderTierSelector(); }
+      else { cfgArea.innerHTML = ''; renderSkuForm(QG.currentSku, QG.currentTier); }
+    } else { cfgArea.innerHTML = ''; }
+  }
+  updatePreview();
+};
+
+window.switchBundle = function (bundleLabel) {
+  if (QG.activeBundle === bundleLabel) return;
+  const oldBundle = QG.activeBundle === 'A' ? QG.bundleA : QG.bundleB;
+  oldBundle.skuItems = QG.skuItems;
+  oldBundle.activeItemId = QG.activeItemId;
+  oldBundle.lockedEntity = QG.lockedEntity;
+  QG.activeBundle = bundleLabel;
+  const newBundle = bundleLabel === 'A' ? QG.bundleA : QG.bundleB;
+  QG.skuItems = newBundle.skuItems;
+  QG.activeItemId = newBundle.activeItemId;
+  QG.lockedEntity = newBundle.lockedEntity;
+  syncActiveAliases();
+  renderSkuItemManager();
+  renderSkuSelector();
+  const cfgArea = document.getElementById('sku-config-area');
+  if (cfgArea) {
+    if (QG.currentSku) {
+      const sku = SKUS.find(s => s.key === QG.currentSku);
+      if (sku?.hasTiers && !QG.compareMode) { renderTierSelector(); }
+      else { cfgArea.innerHTML = ''; renderSkuForm(QG.currentSku, QG.currentTier); }
+    } else { cfgArea.innerHTML = ''; }
+  }
+  // Do NOT call updatePreview() here synchronously — renderSkuForm's setTimeout(10ms)
+  // fires toggleAddons first (which sets smsAddon/waAddon flags), then calls updatePreview.
+  // Calling it here would render the preview before addon flags are updated for the new bundle.
+  if (!QG.currentSku) updatePreview(); // only if no form will be rendered
+};
+
+
+function renderBundleTabSwitcher() {
+  const tabSwitcher = document.getElementById('bundle-tab-switcher');
+  if (!tabSwitcher) return;
+
+  const skuItemsA = QG.bundleA?.skuItems || [];
+  const skuItemsB = QG.bundleB?.skuItems || [];
+
+  // Build a human-readable label for a bundle's tab
+  const bundleTabLabel = (items, fallback) => {
+    const configured = items.filter(i => i.sku_key);
+    if (configured.length === 0) return fallback;
+    if (configured.length === 1) {
+      const item = configured[0];
+      const sku = SKUS.find(s => s.key === item.sku_key);
+      const skuName = item.customName || sku?.label || item.sku_key;
+      const tier = item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : '';
+      return tier ? `${skuName} · ${tier}` : skuName;
+    }
+    return `${fallback} (${configured.length} SKUs)`;
+  };
+
+  const labelA = bundleTabLabel(skuItemsA, 'Option A');
+  const labelB = bundleTabLabel(skuItemsB, 'Option B');
+
+  tabSwitcher.innerHTML = `
+    <div class="bundle-tab-bar">
+      <button class="bundle-tab ${QG.activeBundle === 'A' ? 'active' : ''}" onclick="window.switchBundle('A')" title="Option A" style="display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 16px;">
+        <span style="font-size:0.65rem;opacity:0.55;letter-spacing:0.06em;line-height:1;font-weight:600;">OPTION A</span>
+        <span style="font-size:0.85rem;line-height:1.3;">${sanitize(labelA)}</span>
+      </button>
+      <button class="bundle-tab ${QG.activeBundle === 'B' ? 'active' : ''}" onclick="window.switchBundle('B')" title="Option B" style="display:flex;flex-direction:column;align-items:center;gap:1px;padding:8px 16px;">
+        <span style="font-size:0.65rem;opacity:0.55;letter-spacing:0.06em;line-height:1;font-weight:600;">OPTION B</span>
+        <span style="font-size:0.85rem;line-height:1.3;">${sanitize(labelB)}</span>
+      </button>
+    </div>
+  `;
+}
+
+
 function renderSkuSelector() {
   const grid = document.getElementById('sku-selector-grid');
   if (!grid) return;
-  const filtered = (QG.multiSkuMode && QG.lockedEntity)
+  // In bundle compare mode each bundle is independent — show all SKUs, no cross-entity lock
+  const filtered = (QG.multiSkuMode && QG.lockedEntity && !QG.bundleCompareMode)
     ? SKUS.filter(s => s.entity === QG.lockedEntity || s.entity === 'Both')
     : SKUS.filter(s => !s.hidden);
 
@@ -2003,8 +2137,8 @@ function selectSku(key) {
   const sku = SKUS.find(s => s.key === key);
   if (!sku) return;
 
-  // Entity lock enforcement
-  if (QG.multiSkuMode && QG.lockedEntity && sku.entity !== QG.lockedEntity) {
+  // Entity lock enforcement — only applies within a bundle (not across bundles in compare mode)
+  if (QG.multiSkuMode && QG.lockedEntity && sku.entity !== QG.lockedEntity && sku.entity !== 'Both' && !QG.bundleCompareMode) {
     showAlert(`This quote is locked to ${QG.lockedEntity} plans. Remove all items to start a new quote with a different entity.`, { type: 'warning', title: 'Entity Lock' });
     return;
   }
@@ -2698,8 +2832,12 @@ window.toggleAddons = function (itemId, skuKey, tier) {
       row.style.display = showSms ? 'flex' : 'none';
       if (!showSms) {
         delete item.values['sms_cost'];
+        item.smsAddon = false;
       } else if (item.values['sms_cost'] === undefined) {
         item.values['sms_cost'] = fields.find(f => f.id === 'sms_cost')?.value;
+        item.smsAddon = true;
+      } else {
+        item.smsAddon = true;
       }
     }
     if (addonType === 'WA Add-on') {
@@ -2708,10 +2846,14 @@ window.toggleAddons = function (itemId, skuKey, tier) {
         delete item.values['wa_utility'];
         delete item.values['wa_promo'];
         delete item.values['wa_api'];
+        item.waAddon = false;
       } else if (item.values['wa_api'] === undefined) {
         item.values['wa_utility'] = fields.find(f => f.id === 'wa_utility')?.value;
         item.values['wa_promo'] = fields.find(f => f.id === 'wa_promo')?.value;
         item.values['wa_api'] = fields.find(f => f.id === 'wa_api')?.value;
+        item.waAddon = true;
+      } else {
+        item.waAddon = true;
       }
     }
     if (addonType === 'VN Add-on') {
@@ -3011,6 +3153,671 @@ window.updateStartupBudget = function () {
   label.innerHTML = `&#8377;${Math.round(used).toLocaleString('en-IN')} / &#8377;6,000`;
   if (warning) warning.style.display = over ? 'block' : 'none';
 };
+
+
+// ── Bundle Compare Preview Helper ─────────────────────────────────────────
+function _renderBundleItemsHTML(bundleItems) {
+  let allSectionsHTML = '';
+  let grandSubtotal = 0;
+  const perUnit = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
+  const validItems = bundleItems.filter(i => i.sku_key);
+
+  for (let idx = 0; idx < validItems.length; idx++) {
+    const item = validItems[idx];
+    const sku = SKUS.find(s => s.key === item.sku_key);
+    const fields = getSkuFields(item.sku_key, item.tier);
+
+    const getVal = (id) => {
+      const f = fields.find(x => x.id === id);
+      if (!f) return undefined;
+      return item.values[id] ?? f.value;
+    };
+    const getSafeNum = (id) => {
+      const f = fields.find(x => x.id === id);
+      if (!f || f.waived) return 0;
+      return parseFloat(item.values[id] ?? f.value ?? 0);
+    };
+    const fmtRupee = (v) => {
+      if (v === null || v === undefined) return '-';
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+    };
+    const currentPulse = parseFloat(getVal('pulse')) || 60;
+    const rateUnit = currentPulse === 60 ? 'p/min' : `p/${currentPulse}secs`;
+    const fmtPaise = (v) => {
+      if (v === null || v === undefined) return '-';
+      const num = parseFloat(v);
+      if (isNaN(num)) return String(v);
+      if (num >= 100) return '\u20b9' + (num / 100).toFixed(2) + '/' + (currentPulse === 60 ? 'min' : currentPulse + 'secs');
+      return num + ' ' + rateUnit;
+    };
+    const fmtPaiseMsg = (v) => {
+      if (v === null || v === undefined) return '-';
+      const num = parseFloat(v);
+      if (isNaN(num)) return String(v);
+      if (num >= 100) return '\u20b9' + (num / 100).toFixed(2) + '/msg';
+      return num + 'p/msg';
+    };
+
+    const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+    const W = `<span class="waived-text">${TICK} Waived</span>`;
+    const FREE = `<span class="waived-text">${TICK} Free</span>`;
+    let isFirstSec = true;
+    const hasHTML = (s) => typeof s === 'string' && /<[a-zA-Z]/.test(s);
+    const secRow = (lbl) => {
+      const res = (isFirstSec ? '' : '</tbody>') + `<tbody style="page-break-inside: avoid; break-inside: avoid;"><tr class="section-header-row"><td colspan="2">${lbl}</td></tr>`;
+      isFirstSec = false;
+      return res;
+    };
+    const stdRow = (lbl, val, isWaived) => {
+      const disp = isWaived ? W : hasHTML(val) ? val : sanitize(String(val ?? '-'));
+      return `<tr><td class="sku-row-name">${sanitize(lbl)}</td><td>${disp}</td></tr>`;
+    };
+    const indRow = (lbl, val) => {
+      const disp = hasHTML(val) ? val : sanitize(String(val ?? '-'));
+      return `<tr class="sub-row"><td>${sanitize(lbl)}</td><td>${disp}</td></tr>`;
+    };
+
+
+    let tableHTML = '';
+    const sk = item.sku_key;
+
+    // Startup plan mapping: render using parent SKU's format
+    // If sk is 'startup', resolve via item.tier
+    const resolvedStartupKey = sk === 'startup' ? ('startup_' + (item.tier || 'voice')) : sk;
+    const isStartup = sk === 'startup' || !!STARTUP_PARENT_MAP[sk];
+    const effectiveSk = STARTUP_PARENT_MAP[resolvedStartupKey] || (STARTUP_PARENT_MAP[sk]) || sk;
+
+    const isEditingThisItem = (item.id === QG.activeItemId);
+    const showSms = isEditingThisItem ? document.getElementById('toggle-sms-addon_' + QG.activeItemId)?.checked : (item.smsAddon === true);
+    const showWa  = isEditingThisItem ? document.getElementById('toggle-wa-addon_'  + QG.activeItemId)?.checked : (item.waAddon  === true);
+
+    // Startup banner header (renders before the SKU-format rows)
+    if (effectiveSk === 'voice_exotel_std') {
+      tableHTML += secRow('Plan Details');
+      const baseValidityE = parseFloat(getVal('validity')) || 0;
+      const extraValidityE = getSafeNum('extra_validity') || 0;
+      tableHTML += stdRow('Validity', extraValidityE > 0 ? `${baseValidityE} + ${extraValidityE} months` : getVal('validity') + ' Months');
+      const rentalStd = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+
+      tableHTML += secRow('User Plan');
+      const fu = getVal('free_users');
+      const fuExtra = getSafeNum('extra_users') || 0;
+      const fuDisplay = (fu === null || fu === 'Unlimited') ? 'Unlimited (Included)' : (fuExtra > 0 ? `${fu} + ${fuExtra} Users (Free)` : fu + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuDisplay);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      tableHTML += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
+      const paidNumsE = getSafeNum('num_paid_numbers') || 0;
+      if (paidNumsE > 0) {
+        const extNumCostE = getSafeNum('extra_number');
+        const vMonthsE = (parseFloat(getVal('validity')) || 0) + (getSafeNum('extra_validity') || 0);
+        tableHTML += stdRow('Extra Numbers', `${paidNumsE} Number(s)`);
+        tableHTML += indRow('Calculation', `${paidNumsE} numbers × ${vMonthsE} months × ${fmtRupee(extNumCostE)} = <strong>${fmtRupee(paidNumsE * vMonthsE * extNumCostE)}</strong>`);
+      }
+
+      tableHTML += secRow('Call Credits & Charges');
+      const baseCreditsE = getSafeNum('credits');
+      const extraCreditsE = getSafeNum('extra_credits') || 0;
+      const creditsDisplayE = extraCreditsE > 0
+        ? `${fmtRupee(baseCreditsE)} + ${fmtRupee(extraCreditsE)}`
+        : fmtRupee(baseCreditsE);
+      tableHTML += stdRow('Call Credits', creditsDisplayE);
+      tableHTML += stdRow('Incoming Call Charges', fmtPaise(getSafeNum('incoming')));
+      tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
+
+      if (showSms || showWa) {
+        tableHTML += secRow('Messaging & Communication Services');
+        if (showSms) tableHTML += stdRow('SMS Cost', fmtPaiseMsg(getSafeNum('sms_cost')));
+        if (showWa) {
+          tableHTML += stdRow('WhatsApp Utility Messages', fmtPaiseMsg(getVal('wa_utility')));
+          tableHTML += stdRow('WhatsApp Promotional Messages', fmtPaiseMsg(getVal('wa_promo')));
+          tableHTML += stdRow('WhatsApp API Charge', fmtPaiseMsg(getSafeNum('wa_api')));
+        }
+      }
+    } else if (effectiveSk === 'voice_veeno_std') {
+      const numUsers = getSafeNum('num_users') || 0;
+      const uCharge = getSafeNum('user_charge') || 1000;
+      const validity = parseFloat(getVal('validity')) || 0;
+      const DID_COST = getSafeNum('did_cost') || 1500;
+      const didNums = getSafeNum('did_numbers') || 0;
+      const removStd = getSafeNum('remove_std_numbers') || 0;
+      const rentalOneTime = item.values['rental_onetime'] === 1;
+      const userModelExotel = getSafeNum('user_model_exotel') === 1;
+      const exoFreeUsers = getSafeNum('exotel_free_users') || 6;
+      const exoUserCharge = getSafeNum('exotel_user_charge') || 1999;
+      const chargedUsers = Math.max(0, numUsers - (userModelExotel ? exoFreeUsers : 0));
+      const totalUserCostV = userModelExotel
+        ? chargedUsers * validity * exoUserCharge
+        : numUsers * validity * uCharge;
+
+      tableHTML += secRow('Plan Details');
+      const extraValidityV = getSafeNum('extra_validity') || 0;
+      tableHTML += stdRow('Validity', extraValidityV > 0 ? `${validity} + ${extraValidityV} months` : validity + ' Months');
+      const rVal = getSafeNum('rental');
+      if (rVal === 0) {
+        tableHTML += stdRow('Account Rental', W);
+      } else if (rentalOneTime) {
+        tableHTML += stdRow('Account Rental', fmtRupee(rVal));
+      } else {
+        tableHTML += stdRow('Account Rental', `${fmtRupee(rVal)} ${perUnit('/month')}`);
+        tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
+      }
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+
+      tableHTML += secRow('User Plan');
+      const vStdExtraUsers = getSafeNum('extra_users') || 0;
+      if (userModelExotel) {
+        const freeDisplay = vStdExtraUsers > 0 ? `${exoFreeUsers} + ${vStdExtraUsers} Users (Free)` : `${exoFreeUsers} Users (Free)`;
+        tableHTML += stdRow('Free Users', freeDisplay);
+        tableHTML += indRow('Extra User Cost', `${fmtRupee(exoUserCharge)} ${perUnit('/user/month')}`);
+        if (chargedUsers > 0) {
+          tableHTML += stdRow('Charged Users', chargedUsers + ' users');
+          tableHTML += indRow('Calculation', `${chargedUsers} users × ${validity} months × ${fmtRupee(exoUserCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
+        }
+      } else {
+        const vStdUserLabel = vStdExtraUsers > 0 ? `${vStdExtraUsers} Free, ${numUsers} Charged` : numUsers;
+        tableHTML += stdRow('No. of Users', vStdUserLabel);
+        tableHTML += stdRow('User Charge', `${fmtRupee(uCharge)} ${perUnit('/user/month')}`);
+        tableHTML += indRow('Calculation', `${numUsers} users × ${validity} months × ${fmtRupee(uCharge)} = <strong>${fmtRupee(totalUserCostV)}</strong>`);
+      }
+
+      tableHTML += secRow('Number Plan');
+      if (!removStd) {
+        tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+        tableHTML += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
+        const paidNumsV = getSafeNum('num_paid_numbers') || 0;
+        if (paidNumsV > 0) {
+          const extNumCostV = getSafeNum('extra_number');
+          const effValV = validity + (getSafeNum('extra_validity') || 0);
+          tableHTML += stdRow('Extra Numbers', `${paidNumsV} Number(s)`);
+          tableHTML += indRow('Calculation', `${paidNumsV} numbers × ${effValV} months × ${fmtRupee(extNumCostV)} = <strong>${fmtRupee(paidNumsV * effValV * extNumCostV)}</strong>`);
+        }
+      }
+      if (didNums > 0) {
+        const didTotalV = didNums * validity * DID_COST;
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums} Mobile DID(s)`);
+        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(DID_COST)} ${perUnit('/Mobile DID/month')}`);
+        tableHTML += indRow('Calculation', `${didNums} Mobile DID(s) × ${validity} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotalV)}</strong>`);
+      }
+
+      tableHTML += secRow('Call Credits & Charges');
+      const baseCreditsV = getSafeNum('credits');
+      const extraCreditsV = getSafeNum('extra_credits') || 0;
+      const creditsDisplayV = extraCreditsV > 0
+        ? `${fmtRupee(baseCreditsV)} + ${fmtRupee(extraCreditsV)}`
+        : fmtRupee(baseCreditsV);
+      tableHTML += stdRow('Call Credits', creditsDisplayV);
+      const incomingV = getSafeNum('incoming');
+      tableHTML += stdRow('Incoming Call Charges', incomingV === 0 ? FREE : fmtPaise(incomingV));
+      tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
+
+    } else if (effectiveSk === 'sip_veeno') {
+      tableHTML += secRow('Plan Details');
+      const sipBaseValidity = parseFloat(getVal('validity')) || 0;
+      const sipExtraValidity = getSafeNum('extra_validity') || 0;
+      const sipValidityDisplay = sipExtraValidity > 0
+        ? `${sipBaseValidity} + ${sipExtraValidity} Months`
+        : `${sipBaseValidity} Months`;
+      tableHTML += stdRow('Validity', sipValidityDisplay);
+      const rentalSip = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', rentalSip === 0 ? null : fmtRupee(rentalSip), rentalSip === 0);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+
+      tableHTML += secRow('User Plan');
+      const fu2 = getVal('free_users');
+      const fu2Extra = getSafeNum('extra_users') || 0;
+      const fu2Display = (fu2 === null || fu2 === 'Unlimited') ? 'Unlimited (Included)' : (fu2Extra > 0 ? `${fu2} + ${fu2Extra} Users (Free)` : fu2 + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fu2Display);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(199)} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('Number Plan');
+      const removStdSip = getSafeNum('remove_std_numbers') || 0;
+      const vMonthsS = sipBaseValidity;
+      const effVMonthsS = vMonthsS + sipExtraValidity;
+
+      if (!removStdSip) {
+        tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+        tableHTML += indRow('Extra Number Cost', `${fmtRupee(499)} ${perUnit('/number/month')}`);
+        const paidNumsS = getSafeNum('num_paid_numbers') || 0;
+        if (paidNumsS > 0) {
+          tableHTML += stdRow('Extra Numbers', `${paidNumsS} Number(s)`);
+          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${effVMonthsS} months × ${fmtRupee(499)} = <strong>${fmtRupee(paidNumsS * effVMonthsS * 499)}</strong>`);
+        }
+      }
+      const didNums2 = getSafeNum('did_numbers') || 0;
+      if (didNums2 > 0) {
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums2} Mobile DID(s)`);
+        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(1500)} ${perUnit('/Mobile DID/month')}`);
+        tableHTML += indRow('Calculation', `${didNums2} Mobile DID(s) × ${vMonthsS} months × ${fmtRupee(1500)} = <strong>${fmtRupee(didNums2 * vMonthsS * 1500)}</strong>`);
+      }
+
+      tableHTML += secRow('Call Credits & Charges');
+      const sipBaseCredits = getSafeNum('credits');
+      const sipExtraCredits = getSafeNum('extra_credits') || 0;
+      const sipCreditDisplay = sipExtraCredits > 0
+        ? `${fmtRupee(sipBaseCredits)} + ${fmtRupee(sipExtraCredits)}`
+        : fmtRupee(sipBaseCredits);
+      tableHTML += stdRow('Call Credits', sipCreditDisplay);
+      tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
+      tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+      const sipAttemptVal = getSafeNum('attempt');
+      const sipAttemptDisplay = sipAttemptVal === 0 ? 'Free' : (sipAttemptVal >= 100 ? '₹' + (sipAttemptVal / 100).toFixed(2) + ' / failed call' : sipAttemptVal + 'p / failed call');
+      tableHTML += stdRow('Attempt Charges', sipAttemptDisplay);
+
+    } else if (effectiveSk === 'voice_exotel_user' || sk === 'voice_veeno_user') {
+      const isVeeno = sk === 'voice_veeno_user';
+      const numUsers = getSafeNum('num_users') || 0;
+      const numMonths = getSafeNum('num_months') || 0;
+      const userCharge = getSafeNum('user_charge') || 0;
+      const totalUserCost = numUsers * numMonths * userCharge;
+      const didNums = getSafeNum('did_numbers') || 0;
+      const removStd = getSafeNum('remove_std_numbers') || 0;
+      const DID_COST = getSafeNum('did_cost') || 1500;
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Account Rental', W);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+
+      tableHTML += secRow('User Plan');
+      const userExtraFree = getSafeNum('extra_users') || 0;
+      const userLabel = userExtraFree > 0
+        ? `${userExtraFree} Free, ${numUsers} Charged`
+        : numUsers;
+      tableHTML += stdRow('No. of Users', userLabel);
+      tableHTML += stdRow('No. of Months', numMonths);
+      tableHTML += stdRow('User Charge', `${fmtRupee(userCharge)} ${perUnit('/user/month')}`);
+      tableHTML += indRow('Calculation', `${numUsers} users × ${numMonths} months × ${fmtRupee(userCharge)} = <strong>${fmtRupee(totalUserCost)}</strong>`);
+
+      tableHTML += secRow('Number Plan');
+      if (!isVeeno || !removStd) {
+        tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+        tableHTML += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
+        const paidNumsU = getSafeNum('num_paid_numbers') || 0;
+        if (paidNumsU > 0) {
+          const effValU = numMonths + (getSafeNum('extra_validity') || 0);
+          tableHTML += stdRow('Extra Numbers', `${paidNumsU} Number(s)`);
+          tableHTML += indRow('Calculation', `${paidNumsU} numbers × ${effValU} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsU * effValU * getSafeNum('extra_number'))}</strong>`);
+        }
+      }
+      if (isVeeno && didNums > 0) {
+        const didTotal = didNums * numMonths * DID_COST;
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums} Mobile DID(s)`);
+        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(DID_COST)} ${perUnit('/Mobile DID/month')}`);
+      tableHTML += indRow('Calculation', `${didNums} Mobile DID(s) × ${numMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotal)}</strong>`);
+      }
+
+      tableHTML += secRow('Call Charges');
+      tableHTML += stdRow('Incoming Call Charges', W);
+      tableHTML += stdRow('Outgoing Call Charges', W);
+
+    } else if (effectiveSk === 'voice_exotel_tfn') {
+      const numNums = getSafeNum('num_numbers') || 0;
+      const numMonths2 = getSafeNum('num_months') || 0;
+      const numCost = getSafeNum('number_cost') || 0;
+      const totalNumCost = numNums * numMonths2 * numCost;
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Account Rental', W);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+      tableHTML += stdRow('No. of Months', numMonths2);
+
+      tableHTML += secRow('User Plan');
+      const fuTfn = getVal('free_users');
+      const fuTfnExtra = getSafeNum('extra_users') || 0;
+      const fuTfnDisplay = (fuTfn === null || fuTfn === 'Unlimited') ? 'Unlimited (Included)' : (fuTfnExtra > 0 ? `${fuTfn} + ${fuTfnExtra} Users (Free)` : fuTfn + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuTfnDisplay);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('TFN Number Plan');
+      tableHTML += stdRow('No. of TFN Numbers', numNums);
+      tableHTML += stdRow('TFN Number Cost', `${fmtRupee(numCost)} ${perUnit('/number/month')}`);
+      tableHTML += indRow('Calculation', `${numNums} number(s) × ${numMonths2} months × ${fmtRupee(numCost)} = <strong>${fmtRupee(totalNumCost)}</strong>`);
+
+      const tfnVnEnabled = item.values['add_vn'] === 1;
+      if (tfnVnEnabled) {
+        tableHTML += secRow('Virtual Landline Number Plan');
+        tableHTML += stdRow('Free Virtual Landline Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+        tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
+        const tfnPaidVNs = getSafeNum('num_paid_numbers') || 0;
+        if (tfnPaidVNs > 0) {
+          const tfnVnCost = getSafeNum('extra_number');
+          const tfnEffMonths = numMonths2 + (getSafeNum('extra_validity') || 0);
+          tableHTML += stdRow('Extra Numbers', `${tfnPaidVNs} Number(s)`);
+          tableHTML += indRow('Calculation', `${tfnPaidVNs} numbers × ${tfnEffMonths} months × ${fmtRupee(tfnVnCost)} = <strong>${fmtRupee(tfnPaidVNs * tfnEffMonths * tfnVnCost)}</strong>`);
+        }
+      }
+      tableHTML += secRow('Call Credits & Charges');
+      tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
+      tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
+
+    } else if (effectiveSk === 'voice_exotel_stream' || effectiveSk === 'voice_exotel_voicebot') {
+      const isVoicebot = effectiveSk === 'voice_exotel_voicebot';
+      const numChs = getSafeNum('num_channels') || 0;
+      const numMos = getSafeNum('num_months') || 0;
+      const chCost = getSafeNum('channel_cost') || 0;
+      const freeChs = isVoicebot ? 5 : 0;
+      const paidChs = Math.max(0, numChs - freeChs);
+      const totalCh = paidChs * numMos * chCost;
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('No. of Months', Math.max(1, parseFloat(getVal('num_months') || 0)));
+      const rentalStream = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
+      tableHTML += stdRow('Setup Charges', null, true);
+
+      tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
+      if (isVoicebot) {
+        tableHTML += stdRow('No. of Channels', paidChs > 0 ? `5 Free, ${paidChs} Paid` : `5 Channels (5 Channels Included Free)`);
+        tableHTML += indRow('Additional Channel Cost', `${fmtRupee(chCost)} ${perUnit('/channel/month')}`);
+        if (paidChs > 0) {
+          tableHTML += indRow('Channel Calculation', `${paidChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
+        }
+      } else {
+        tableHTML += stdRow('No. of Channels', numChs);
+        tableHTML += stdRow('Channel Cost', `${fmtRupee(chCost)} ${perUnit('/channel/month')}`);
+        tableHTML += indRow('Calculation', `${numChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
+      }
+
+      tableHTML += secRow('User Plan');
+      const fuStr = getVal('free_users');
+      const fuStrExtra = getSafeNum('extra_users') || 0;
+      const fuStrDisplay = (fuStr === null || fuStr === 'Unlimited') ? 'Unlimited (Included)' : (fuStrExtra > 0 ? `${fuStr} + ${fuStrExtra} Users (Free)` : fuStr + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuStrDisplay);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      tableHTML += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
+      const paidNumsStr = getSafeNum('num_paid_numbers') || 0;
+      if (paidNumsStr > 0) {
+        const streamNumMos = numMos + (getSafeNum('extra_validity') || 0);
+        tableHTML += stdRow('Extra Numbers', `${paidNumsStr} Number(s)`);
+        tableHTML += indRow('Calculation', `${paidNumsStr} numbers × ${streamNumMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNumsStr * streamNumMos * getSafeNum('extra_number'))}</strong>`);
+      }
+      const didNums = getSafeNum('did_numbers') || 0;
+      if (didNums > 0) {
+        const didCost = getSafeNum('did_cost') || 1500;
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums} Number(s)`);
+        tableHTML += indRow('Calculation', `${didNums} numbers × ${numMos} months × ${fmtRupee(didCost)} = <strong>${fmtRupee(didNums * numMos * didCost)}</strong>`);
+      }
+
+      tableHTML += secRow('Call Credits & Charges');
+      const streamBaseCredits = getSafeNum('credits');
+      const streamExtraCredits = getSafeNum('extra_credits') || 0;
+      const streamCreditDisplay = streamExtraCredits > 0
+        ? `${fmtRupee(streamBaseCredits)} + ${fmtRupee(streamExtraCredits)}`
+        : fmtRupee(streamBaseCredits);
+      tableHTML += stdRow('Call Credits', streamCreditDisplay);
+      tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
+      tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+      if (getSafeNum('human_handoff') === 1) {
+        tableHTML += stdRow('Human Handoff Calling Rate', fmtPaise(getSafeNum('outgoing')));
+      }
+      const attemptVal = getSafeNum('attempt');
+      if (attemptVal > 0) {
+        const attemptDisplay = attemptVal >= 100
+          ? '\u20b9' + (attemptVal / 100).toFixed(2) + ' / failed call'
+          : attemptVal + 'p / failed call';
+        tableHTML += stdRow('Attempt Charges', attemptDisplay);
+      }
+
+    } else if (effectiveSk === 'voice_exotel_campaigns' || sk === 'voice_veeno_campaigns') {
+      const campValidity = parseFloat(getVal('validity')) || 0;
+      const campRate = getSafeNum('call_rate') || 0;
+      const campBaseCredits = getSafeNum('credits');
+      const campExtraCredits = getSafeNum('extra_credits') || 0;
+      const campCreditDisplay = campExtraCredits > 0
+        ? `${fmtRupee(campBaseCredits)} + ${fmtRupee(campExtraCredits)}`
+        : fmtRupee(campBaseCredits);
+      const campExtraValidity = getSafeNum('extra_validity') || 0;
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Validity', campValidity + ' Months');
+      tableHTML += stdRow('Account Rental', W);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+      const fuCamp = getVal('free_users');
+      const fuCampExtra = getSafeNum('extra_users') || 0;
+      const fuCampDisplay = (fuCamp === null || fuCamp === 'Unlimited') ? 'Unlimited (Included)' : (fuCampExtra > 0 ? `${fuCamp} + ${fuCampExtra} Users (Free)` : fuCamp + ' Users (Free)');
+      tableHTML += stdRow('Free Users', fuCampDisplay);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      const campPaidNums = getSafeNum('num_paid_numbers') || 0;
+      if (campPaidNums > 0) {
+        const campNumCost = getSafeNum('extra_number');
+        const campEffValidity = campValidity + campExtraValidity;
+        tableHTML += stdRow('Extra Numbers', `${campPaidNums} Number(s)`);
+        tableHTML += indRow('Calculation', `${campPaidNums} × ${campEffValidity} months × ${fmtRupee(campNumCost)} = <strong>${fmtRupee(campPaidNums * campEffValidity * campNumCost)}</strong>`);
+      }
+
+      tableHTML += secRow('Call Credits & Campaign Rate');
+      if (campExtraValidity > 0) {
+        tableHTML += stdRow('Validity', `${campValidity} + ${campExtraValidity} months`);
+      }
+      tableHTML += stdRow('Call Credits', campCreditDisplay);
+      tableHTML += stdRow('Campaign Call Charges', fmtPaise(campRate));
+
+    } else if (effectiveSk === 'sms_exotel') {
+      tableHTML += secRow('Plan Details');
+      const rentalVal = getSafeNum('rental');
+      const isRentalWaived = rentalVal === 0;
+      tableHTML += stdRow('Account Rental', isRentalWaived ? null : (fmtRupee(rentalVal) + '/month'), isRentalWaived);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('No. of Months', getVal('num_months'));
+
+      tableHTML += secRow('User Plan');
+      const smsFuStr = getVal('free_users');
+      const smsExtraUsers = getSafeNum('extra_users') || 0;
+      const smsFuDisplay = (smsFuStr === null || smsFuStr === 'Unlimited') ? 'Unlimited (Included)' : (smsExtraUsers > 0 ? `${smsFuStr} + ${smsExtraUsers} Users (Free)` : smsFuStr + ' Users (Free)');
+      tableHTML += stdRow('Free Users', smsFuDisplay);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
+      const smsPaidNums = getSafeNum('num_paid_numbers') || 0;
+      if (smsPaidNums > 0) {
+        const smsNumMonths = (getSafeNum('num_months') || 0) + (getSafeNum('extra_validity') || 0);
+        const smsExtraCost = getSafeNum('extra_number');
+        tableHTML += stdRow('Extra Numbers', `${smsPaidNums} Number(s)`);
+        tableHTML += indRow('Calculation', `${smsPaidNums} numbers × ${smsNumMonths} months × ${fmtRupee(smsExtraCost)} = <strong>${fmtRupee(smsPaidNums * smsNumMonths * smsExtraCost)}</strong>`);
+      }
+
+      tableHTML += secRow('SMS Credits & Rates');
+      tableHTML += stdRow('SMS Credits', fmtRupee(getSafeNum('credits')));
+      tableHTML += stdRow('SMS Cost', fmtPaiseMsg(getSafeNum('sms_cost')));
+
+    } else if (effectiveSk === 'whatsapp_exotel') {
+      tableHTML += secRow('Plan Details');
+      const waRentalVal = getSafeNum('rental');
+      const isWaRentalWaived = waRentalVal === 0;
+      tableHTML += stdRow('Account Rental', isWaRentalWaived ? null : (`${fmtRupee(waRentalVal)} per month`), isWaRentalWaived);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('No. of Months', getVal('num_months'));
+
+      tableHTML += secRow('User Plan');
+      const waFuStr = getVal('free_users');
+      const waExtraUsers = getSafeNum('extra_users') || 0;
+      const waFuDisplay = (waFuStr === null || waFuStr === 'Unlimited') ? 'Unlimited (Included)' : (waExtraUsers > 0 ? `${waFuStr} + ${waExtraUsers} Users (Free)` : waFuStr + ' Users (Free)');
+      tableHTML += stdRow('Free Users', waFuDisplay);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+      tableHTML += indRow('Extra Number Cost', fmtRupee(getSafeNum('extra_number')) + perUnit('/number/month'));
+      const waPaidNums = getSafeNum('num_paid_numbers') || 0;
+      if (waPaidNums > 0) {
+        const waNumMonths = (getSafeNum('num_months') || 0) + (getSafeNum('extra_validity') || 0);
+        const waExtraCost = getSafeNum('extra_number');
+        tableHTML += stdRow('Extra Numbers', `${waPaidNums} Number(s)`);
+        tableHTML += indRow('Calculation', `${waPaidNums} numbers × ${waNumMonths} months × ${fmtRupee(waExtraCost)} = <strong>${fmtRupee(waPaidNums * waNumMonths * waExtraCost)}</strong>`);
+      }
+
+      tableHTML += secRow('WhatsApp Credits & Rates');
+      tableHTML += stdRow('WA Credits', fmtRupee(getSafeNum('credits')));
+      tableHTML += stdRow('Utility Message Cost', fmtPaiseMsg(getSafeNum('wa_utility')));
+      tableHTML += stdRow('Promotional Message Cost', fmtPaiseMsg(getSafeNum('wa_promo')));
+      tableHTML += stdRow('API Charge (per msg)', fmtPaiseMsg(getSafeNum('wa_api')));
+
+    } else if (effectiveSk === 'rcs_exotel') {
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Brand Registration Fee', fmtRupee(getSafeNum('brand_fee')));
+      tableHTML += stdRow('Account Rental', W);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('No. of Months', getVal('num_months'));
+
+      tableHTML += secRow('User Plan');
+      const rcsFuStr = getVal('free_users');
+      const rcsExtraUsers = getSafeNum('extra_users') || 0;
+      const rcsFuDisplay = (rcsFuStr === null || rcsFuStr === 'Unlimited') ? 'Unlimited (Included)' : (rcsExtraUsers > 0 ? `${rcsFuStr} + ${rcsExtraUsers} Users (Free)` : rcsFuStr + ' Users (Free)');
+      tableHTML += stdRow('Free Users', rcsFuDisplay);
+      tableHTML += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+      tableHTML += secRow('Number Plan');
+      const rcsNumCost = getSafeNum('number_cost');
+      const isRcsNumWaived = rcsNumCost === 0;
+      tableHTML += stdRow('Number Cost', isRcsNumWaived ? null : (fmtRupee(rcsNumCost) + '/month'), isRcsNumWaived);
+      tableHTML += secRow('RCS Credits & Rates');
+      tableHTML += stdRow('RCS Credits', fmtRupee(getSafeNum('credits')));
+      tableHTML += stdRow('Business Messaging', fmtPaiseMsg(getSafeNum('rcs_biz')));
+      tableHTML += stdRow('Rich Media Messaging', fmtPaiseMsg(getSafeNum('rcs_rich')));
+      tableHTML += stdRow('User Reply Charge', fmtPaiseMsg(getSafeNum('rcs_reply')));
+
+    } else if (effectiveSk === 'num_1400' || sk === 'num_1600') {
+      const numRental = getSafeNum('rental') || 0;
+      const numMosN = getSafeNum('num_months') || 0;
+      const numChsN = getSafeNum('num_channels') || 0;
+      const chCostN = getSafeNum('channel_cost') || 0;
+      const procurement = getSafeNum('procurement') || 0;
+      const totalRental = numRental * numMosN;
+      const totalChs = numChsN * numMosN * chCostN;
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Number Procurement', fmtRupee(procurement));
+      tableHTML += stdRow('Number Rental', `${fmtRupee(numRental)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per month</span>`);
+      tableHTML += indRow('Rental Calculation', `${numMosN} months × ${fmtRupee(numRental)} = <strong>${fmtRupee(totalRental)}</strong>`);
+      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('No. of Months', numMosN);
+      tableHTML += secRow('Channels');
+      tableHTML += stdRow('No. of Channels', numChsN);
+      tableHTML += stdRow('Channel Cost', `${fmtRupee(chCostN)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per month</span>`);
+      tableHTML += indRow('Channel Calculation', `${numChsN} channels × ${numMosN} months × ${fmtRupee(chCostN)} = <strong>${fmtRupee(totalChs)}</strong>`);
+      tableHTML += secRow('Call Credits & Charges');
+      tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
+      tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+
+    } else if (sk.startsWith('startup_')) {
+      // ── Startup Plan: all rows shown as complimentary ────────
+      tableHTML += `<tr><td colspan="2" style="padding:8px 14px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-weight:700; font-size:0.88rem; border-radius:4px 4px 0 0;">
+        🌱  Complimentary Startup Bundle - ₹0 to client
+      </td></tr>`;
+      fields.forEach(f => {
+        const val = item.values[f.id] ?? f.value;
+        let displayVal = val;
+        if (f.type === 'boolean') {
+          displayVal = val === 1 ? 'Yes' : 'No';
+        }
+        tableHTML += `<tr style="background:#f0fdf4;">
+          <td style="padding:7px 14px; font-size:0.85rem; color:#374151; border-bottom:1px solid #bbf7d0; width:45%;">${sanitize(cleanLabel(f.label))}</td>
+          <td style="padding:7px 14px; font-size:0.85rem; color:#374151; border-bottom:1px solid #bbf7d0;">${f.waived ? '<span style="color:#16a34a;font-weight:600;">Waived</span>' : `<strong>${displayVal}</strong>`}</td>
+        </tr>`;
+        if (f.id === 'human_handoff' && val === 1) {
+          tableHTML += `<tr style="background:#f0fdf4;">
+            <td style="padding:7px 14px; font-size:0.85rem; color:#374151; border-bottom:1px solid #bbf7d0; width:45%;">Human Handoff Calling Rate</td>
+            <td style="padding:7px 14px; font-size:0.85rem; color:#374151; border-bottom:1px solid #bbf7d0;"><strong>${fmtPaise(getSafeNum('outgoing'))}</strong></td>
+          </tr>`;
+        }
+      });
+      tableHTML += `<tr style="background:#dcfce7;"><td style="padding:8px 14px; font-size:0.85rem; font-weight:700; color:#15803d;">Total Cost to Client</td>
+        <td style="padding:8px 14px; font-size:0.9rem; font-weight:700; color:#15803d;">Complimentary (₹0)</td></tr>`;
+
+    } else {
+      fields.forEach(f => {
+        if (f.note === 'SMS Add-on' && !showSms) return;
+        if (f.note === 'WA Add-on' && !showWa) return;
+        const val = item.values[f.id] ?? f.value;
+        tableHTML += stdRow(cleanLabel(f.label), f.waived ? null : val, f.waived === true);
+      });
+    }
+
+
+    if (!isFirstSec) tableHTML += '</tbody>';
+
+    const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
+    const credits = getSafeNum('credits');
+    let rental = getSafeNum('rental');
+    const rentalF = fields.find(x => x.id === 'rental');
+    // voice_exotel_std rental is always a one-time flat fee in the subtotal (not × months)
+    const isRentalOneTime = item.values['rental_onetime'] === 1 || item.sku_key === 'voice_exotel_std';
+    if (rentalF && rentalF.type === 'rental_toggle' && !isRentalOneTime) {
+      rental = rental * months;
+    } else if (rentalF && rentalF.label.toLowerCase().includes('/month')) {
+      rental = rental * months;
+    }
+    const brand = getSafeNum('brand_fee');
+    const procure = getSafeNum('procurement');
+    const setup = getSafeNum('setup');
+    const isVoicebotItem = item.sku_key === 'voice_exotel_voicebot';
+    const freeChsItem = isVoicebotItem ? 5 : 0;
+    const paidChsItem = Math.max(0, parseFloat(item.values['num_channels'] ?? (isVoicebotItem ? 5 : 0)) - freeChsItem);
+    const chCostItem = getSafeNum('channel_cost') * paidChsItem * months;
+    const numUsersItem = parseFloat(item.values['num_users'] ?? 0);
+    const userChargeItem = getSafeNum('user_charge');
+    const numNumbersItem = parseFloat(item.values['num_numbers'] ?? 1);
+    const numberCostItem = getSafeNum('number_cost') * numNumbersItem * months;
+
+    let subtotal = credits + rental + brand + procure + setup + chCostItem + numberCostItem;
+    if (item.sku_key === 'voice_veeno_std') {
+      const useExotelModel = item.values['user_model_exotel'] === 1;
+      if (useExotelModel) {
+        const exoFree = parseFloat(item.values['exotel_free_users'] ?? 6) || 6;
+        const exoCharge = parseFloat(item.values['exotel_user_charge'] ?? 199) || 199;
+        const charged = Math.max(0, numUsersItem - exoFree);
+        if (charged > 0) subtotal += charged * exoCharge * months;
+      } else {
+        if (numUsersItem && userChargeItem) subtotal += numUsersItem * userChargeItem * months;
+      }
+    } else {
+      if (numUsersItem && userChargeItem) subtotal += numUsersItem * userChargeItem * months;
+    }
+    const numPaidNumsItem = parseFloat(item.values['num_paid_numbers'] ?? 0);
+    const extraNumCostItem = getSafeNum('extra_number');
+    if (numPaidNumsItem && extraNumCostItem) subtotal += numPaidNumsItem * extraNumCostItem * (months + (getSafeNum('extra_validity') || 0));
+    const didNumbersItem = parseFloat(item.values['did_numbers'] ?? 0);
+    if (didNumbersItem > 0) subtotal += didNumbersItem * (parseFloat(item.values['did_cost']) || 1500) * months;
+
+    grandSubtotal += isStartup ? 0 : subtotal;
+
+    const tierLabel = sku.hasTiers && item.tier
+      ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
+      : '';
+
+    allSectionsHTML += `
+    <div class="quote-doc-section sku-card" style="margin-top:24px;">
+      <div class="quote-doc-section-title" style="font-size:1.05rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
+        ${sanitize(sku.label)}${sanitize(tierLabel)}
+      </div>
+      <table class="quote-sku-table">
+        <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
+        ${tableHTML}
+      </table>
+      ${subtotal > 0 ? `<div style="text-align:right; font-weight:600; padding:10px 14px; font-size:0.88rem; color:#0f172a; border-top:1px solid #f1f5f9;">Item Subtotal: ${fmtRupee(subtotal)}</div>` : ''}
+    </div>`;
+  }
+
+  return { allSectionsHTML, grandSubtotal };
+}
+
 
 function updatePreview() {
   if (QG.currentSku === 'startup') window.updateStartupBudget();
@@ -3333,25 +4140,25 @@ function updatePreview() {
       tableRows += cmpRow('Incoming Call Charges', colData.map(({ getSN, getVal }) => fmtP(getSN('incoming'), parseFloat(getVal('pulse')) || 60)));
       tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
 
-      // Messaging Services (Add-ons) - only shown if any tier has them enabled
-      const hasSms = colData.some(({ item }) => item.values['sms_cost'] !== undefined);
-      const hasWa = colData.some(({ item }) => item.values['wa_api'] !== undefined);
+      // Messaging Services (Add-ons) - only shown if explicitly opted in by the user
+      const hasSms = colData.some(({ item }) => item.smsAddon === true);
+      const hasWa  = colData.some(({ item }) => item.waAddon  === true);
       if (hasSms || hasWa) {
         tableRows += cmpRow('Messaging Services', [], true);
         if (hasSms) {
           tableRows += cmpRow('SMS Cost', colData.map(({ item }) =>
-            item.values['sms_cost'] !== undefined ? fmtMsg(item.values['sms_cost']) : '<span style="color:#94a3b8;">-</span>'
+            item.smsAddon ? fmtMsg(item.values['sms_cost']) : '<span style="color:#94a3b8;">-</span>'
           ));
         }
         if (hasWa) {
           tableRows += cmpRow('WhatsApp Utility Messages', colData.map(({ item }) =>
-            item.values['wa_utility'] !== undefined ? fmtMsg(item.values['wa_utility']) : '<span style="color:#94a3b8;">-</span>'
+            item.waAddon ? fmtMsg(item.values['wa_utility']) : '<span style="color:#94a3b8;">-</span>'
           ));
           tableRows += cmpRow('WhatsApp Promotional Messages', colData.map(({ item }) =>
-            item.values['wa_promo'] !== undefined ? fmtMsg(item.values['wa_promo']) : '<span style="color:#94a3b8;">-</span>'
+            item.waAddon ? fmtMsg(item.values['wa_promo']) : '<span style="color:#94a3b8;">-</span>'
           ));
           tableRows += cmpRow('WhatsApp API Charge', colData.map(({ item }) =>
-            item.values['wa_api'] !== undefined ? fmtMsg(item.values['wa_api']) : '<span style="color:#94a3b8;">-</span>'
+            item.waAddon ? fmtMsg(item.values['wa_api']) : '<span style="color:#94a3b8;">-</span>'
           ));
         }
       }
@@ -3478,6 +4285,103 @@ function updatePreview() {
   }
   // ── End Compare Mode ──────────────────────────────────────────────────────
 
+  // ── Bundle Compare Mode ─────────────────────────────────────────────────
+  if (QG.bundleCompareMode) {
+    const curBundle = QG.activeBundle === 'A' ? QG.bundleA : QG.bundleB;
+    if (curBundle) { curBundle.skuItems = QG.skuItems; curBundle.activeItemId = QG.activeItemId; }
+
+    const itemsA = QG.bundleA?.skuItems || [];
+    const itemsB = QG.bundleB?.skuItems || [];
+    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+
+    const resultA = _renderBundleItemsHTML(itemsA);
+    const resultB = _renderBundleItemsHTML(itemsB);
+    const gstA = Math.round(resultA.grandSubtotal * 0.18);
+    const totalA = resultA.grandSubtotal + gstA;
+    const gstB = Math.round(resultB.grandSubtotal * 0.18);
+    const totalB = resultB.grandSubtotal + gstB;
+    const hasA = itemsA.filter(i => i.sku_key).length > 0;
+    const hasB = itemsB.filter(i => i.sku_key).length > 0;
+
+    const emptyMsg = (label) => `<div style="text-align:center;color:#94a3b8;font-style:italic;padding:40px 20px;border:1.5px dashed #e2e8f0;border-radius:10px;margin-top:24px;background:#fafbfc;">No SKUs in ${label} yet — switch to this option and add SKUs</div>`;
+
+    doc.innerHTML = `
+    <table class="print-master-table">
+      <thead><tr><td><div class="print-master-header"></div></td></tr></thead>
+      <tbody><tr><td>
+      <div class="quote-doc-header">
+        <img src="${logoSrc}" class="quote-doc-logo ${firstSku.entity.toLowerCase()}-logo" alt="${firstSku.entity} Logo" onerror="this.style.display='none'">
+        <div class="quote-doc-meta">
+          <div class="quote-number-badge">${sanitize(quoteNum)}</div>
+          <div style="margin-top:4px;">Date: ${sanitize(dateStr)}</div>
+          <div style="margin-top:2px;font-weight:600;color:#0284c7;">${firstSku.entity}</div>
+        </div>
+      </div>
+      <div class="quote-doc-title">Commercial Proposal: Bundle Comparison</div>
+      <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:18px;">Prepared For: ${sanitize(company)}</p>
+      <div class="quote-doc-section">
+        <div class="quote-doc-section-title">Introduction</div>
+        <div class="quote-intro-text">${introMap[firstSku.entity]}</div>
+      </div>
+      <div class="quote-doc-section">
+        <div class="quote-doc-section-title">Parties</div>
+        <div class="quote-participant-grid">
+          <div class="quote-participant-box">
+            <div class="label">Prepared By (${firstSku.entity})</div>
+            <div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div>
+            <div class="sub">${sanitize(seEmail)}</div>
+            ${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}
+          </div>
+          <div class="quote-participant-box">
+            <div class="label">Prepared For (Client)</div>
+            <div class="value">${sanitize(company)}</div>
+            ${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''}
+            ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''}
+            ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''}
+            ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="quote-doc-section" style="margin-top:24px;">
+        <div class="quote-doc-section-title" style="margin-bottom:18px;">Comparative Packages</div>
+        <div class="bundle-compare-container">
+          <div class="bundle-col">
+            <div class="bundle-col-header" style="background:linear-gradient(135deg,#0284c7,#0369a1);">&#65313; &nbsp; Option A</div>
+            <div>${hasA ? resultA.allSectionsHTML : emptyMsg('Option A')}</div>
+            ${hasA ? `<div class="bundle-subtotal-card" style="border-color:#bae6fd;page-break-inside:avoid;break-inside:avoid;">
+              <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#475569;margin-bottom:5px;"><span>Subtotal (excl. GST)</span><strong>${fmtR(resultA.grandSubtotal)}</strong></div>
+              <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#64748b;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #cbd5e1;"><span>GST @ 18%</span><strong>${fmtR(gstA)}</strong></div>
+              <div style="display:flex;justify-content:space-between;font-size:1.05rem;font-weight:800;color:#0284c7;margin-top:8px;padding-top:8px;border-top:2px solid #0284c7;"><span>Total (incl. GST)</span><span>${fmtR(totalA)}</span></div>
+            </div>` : ''}
+          </div>
+          <div class="bundle-compare-divider"><div class="bundle-compare-divider-badge">VS</div></div>
+          <div class="bundle-col">
+            <div class="bundle-col-header" style="background:linear-gradient(135deg,#7c3aed,#6d28d9);">&#65314; &nbsp; Option B</div>
+            <div>${hasB ? resultB.allSectionsHTML : emptyMsg('Option B')}</div>
+            ${hasB ? `<div class="bundle-subtotal-card" style="border-color:#ede9fe;page-break-inside:avoid;break-inside:avoid;">
+              <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#475569;margin-bottom:5px;"><span>Subtotal (excl. GST)</span><strong>${fmtR(resultB.grandSubtotal)}</strong></div>
+              <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#64748b;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #c4b5fd;"><span>GST @ 18%</span><strong>${fmtR(gstB)}</strong></div>
+              <div style="display:flex;justify-content:space-between;font-size:1.05rem;font-weight:800;color:#7c3aed;margin-top:8px;padding-top:8px;border-top:2px solid #7c3aed;"><span>Total (incl. GST)</span><span>${fmtR(totalB)}</span></div>
+            </div>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="quote-doc-section" style="margin-top:30px;">
+        <div class="quote-doc-section-title">Terms &amp; Conditions</div>
+        <div class="quote-tnc" style="font-size:0.85rem;color:#475569;line-height:1.5;">
+          ${generateTncHtml([...itemsA, ...itemsB].filter(i => i.sku_key), firstSku.entity)}
+        </div>
+      </div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e0f2fe;font-size:0.78rem;color:#94a3b8;text-align:center;">
+        This is a system-generated commercial proposal. For queries, contact your ${firstSku.entity} account manager.
+      </div>
+      </td></tr></tbody>
+      <tfoot><tr><td><div class="print-master-footer"></div></td></tr></tfoot>
+    </table>`;
+    return;
+  }
+  // ── End Bundle Compare Mode ────────────────────────────────────
+
   let allSectionsHTML = '';
   let grandSubtotal = 0;
   const perUnit = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
@@ -3549,8 +4453,8 @@ function updatePreview() {
     const effectiveSk = STARTUP_PARENT_MAP[resolvedStartupKey] || (STARTUP_PARENT_MAP[sk]) || sk;
 
     const isEditingThisItem = (item.id === QG.activeItemId);
-    const showSms = isEditingThisItem ? document.getElementById('toggle-sms-addon_' + QG.activeItemId)?.checked : !!getVal('sms_cost');
-    const showWa = isEditingThisItem ? document.getElementById('toggle-wa-addon_' + QG.activeItemId)?.checked : !!getVal('wa_api');
+    const showSms = isEditingThisItem ? document.getElementById('toggle-sms-addon_' + QG.activeItemId)?.checked : (item.smsAddon === true);
+    const showWa  = isEditingThisItem ? document.getElementById('toggle-wa-addon_'  + QG.activeItemId)?.checked : (item.waAddon  === true);
 
     // Startup banner header (renders before the SKU-format rows)
     if (effectiveSk === 'voice_exotel_std') {
@@ -4079,7 +4983,8 @@ function updatePreview() {
     const credits = getSafeNum('credits');
     let rental = getSafeNum('rental');
     const rentalF = fields.find(x => x.id === 'rental');
-    const isRentalOneTime = item.values['rental_onetime'] === 1;
+    // voice_exotel_std rental is always a one-time flat fee in the subtotal (not × months)
+    const isRentalOneTime = item.values['rental_onetime'] === 1 || item.sku_key === 'voice_exotel_std';
     if (rentalF && rentalF.type === 'rental_toggle' && !isRentalOneTime) {
       // Veeno STD monthly rental — multiply by validity months
       rental = rental * months;
@@ -4235,6 +5140,11 @@ window.printQuote = async function () {
     const originalText = renderBtn ? renderBtn.innerHTML : '';
     if(renderBtn) renderBtn.innerHTML = '⚙️ Generating Perfect PDF...';
 
+    // Force a fresh render of the preview RIGHT NOW so the PDF snapshot
+    // exactly matches what the user sees — the async prompt above could have
+    // allowed a background updatePreview() to change the DOM.
+    updatePreview();
+
     // Compile robust backend HTML payload leveraging the exact live DOM state
     let htmlPayload = `
 <!DOCTYPE html>
@@ -4248,7 +5158,7 @@ window.printQuote = async function () {
   <link rel="stylesheet" href="${window.location.origin}/quote-generator.css">
   <style>
      /* ── Global PDF Reset ─────────────────────────────────────── */
-     @page { margin: 10mm 12mm; }
+     @page { margin: ${QG.bundleCompareMode ? '6mm 8mm' : '10mm 12mm'}; size: A4 portrait; }
      body { background: white !important; margin: 0 !important; padding: 0 !important; font-size: 10px !important; -webkit-print-color-adjust: exact; }
 
      /* Strip screen paper styling */
@@ -4302,12 +5212,70 @@ window.printQuote = async function () {
 
      /* ── Waived / free badges ──────────────────────────────────── */
      .waived-text { font-size: 0.68rem !important; }
+
+     ${QG.bundleCompareMode ? `
+     /* ── Bundle Compare: force side-by-side layout ─────────────── */
+     .bundle-compare-container {
+       display: grid !important;
+       grid-template-columns: 1fr auto 1fr !important;
+       gap: 10px !important;
+       width: 100% !important;
+       margin-top: 8px !important;
+       page-break-inside: avoid !important;
+       break-inside: avoid !important;
+     }
+     .bundle-col {
+       display: flex !important;
+       flex-direction: column !important;
+       min-width: 0 !important;
+       gap: 10px !important;
+     }
+     .bundle-col-header {
+       padding: 8px 10px !important;
+       font-size: 0.82rem !important;
+       border-radius: 7px !important;
+       -webkit-print-color-adjust: exact !important;
+       print-color-adjust: exact !important;
+     }
+     .bundle-compare-divider {
+       display: flex !important;
+       flex-direction: column !important;
+       align-items: center !important;
+       justify-content: center !important;
+       width: 28px !important;
+       padding: 0 4px !important;
+     }
+     .bundle-compare-divider::before {
+       content: '' !important;
+       width: 1.5px !important;
+       height: 100% !important;
+       background: #e2e8f0 !important;
+       display: block !important;
+     }
+     .bundle-compare-divider-badge {
+       position: absolute !important;
+       top: 50% !important;
+       left: auto !important;
+       transform: translateY(-50%) !important;
+       font-size: 0.65rem !important;
+       width: 26px !important;
+       height: 26px !important;
+     }
+     /* Compact table rows for bundle compare — portrait A4 each col ~82mm wide */
+     .quote-sku-table th, .quote-sku-table td { font-size: 0.58rem !important; padding: 2px 4px !important; }
+     .quote-sku-table .section-header-row td { font-size: 0.56rem !important; padding: 2px 4px !important; }
+     .quote-sku-table .sub-row td { font-size: 0.54rem !important; padding: 1px 4px !important; }
+     .bundle-subtotal-card { padding: 6px 8px !important; font-size: 0.6rem !important; }
+     .sku-row-name { width: 50% !important; }
+     body { font-size: 8.5px !important; }
+     ` : ''}
   </style>
 </head>
 <body>
   ${docElement.outerHTML}
 </body>
 </html>`;
+
 
     // Replace unicode characters with HTML entities to prevent mojibake in PDF
     htmlPayload = htmlPayload.replace(/₹/g, '&#8377;').replace(/✓/g, '&#10003;').replace(/×/g, '&#215;');
