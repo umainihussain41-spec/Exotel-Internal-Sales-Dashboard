@@ -287,32 +287,109 @@
     }
 
     /* Floating preview button */
-    .preview-toggle-btn {
-        position: fixed;
-        bottom: 80px; /* above bottom nav */
-        right: 20px;
-        background: linear-gradient(135deg, #0ea5e9, #0284c7);
-        color: white;
-        border: none;
-        border-radius: 30px;
-        padding: 12px 24px;
-        font-family: var(--font-stack);
-        font-weight: 600;
-        font-size: 0.95rem;
-        box-shadow: 0 4px 15px rgba(2, 132, 199, 0.4);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        z-index: 900;
-        transition: transform 0.2s, background 0.2s;
+    /* Floating action panel containing Split View and Fullscreen Preview */
+    .mobile-quote-actions {
+        display: flex !important;
+        position: fixed !important;
+        bottom: 80px !important; /* above bottom nav */
+        right: 20px !important;
+        background: #ffffff !important;
+        border: 1px solid #bae6fd !important;
+        border-radius: 30px !important;
+        box-shadow: 0 8px 30px rgba(2, 132, 199, 0.18) !important;
+        padding: 5px !important;
+        gap: 4px !important;
+        z-index: 900 !important;
+        box-sizing: border-box !important;
     }
 
-    .preview-toggle-btn:active {
-        transform: scale(0.96);
+    .mobile-qaction-btn {
+        background: transparent !important;
+        color: #0284c7 !important;
+        border: none !important;
+        border-radius: 25px !important;
+        padding: 8px 14px !important;
+        font-family: var(--font-stack) !important;
+        font-weight: 700 !important;
+        font-size: 0.8rem !important;
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        -webkit-tap-highlight-color: transparent !important;
+        min-height: auto !important; /* override global min-height */
+        width: auto !important;
     }
-    
-    .preview-toggle-btn.sheet-open {
+
+    .mobile-qaction-btn svg {
+        width: 14px;
+        height: 14px;
+    }
+
+    .mobile-qaction-btn:active {
+        transform: scale(0.95);
+    }
+
+    .mobile-qaction-btn.active {
+        background: linear-gradient(135deg, #0ea5e9, #0284c7) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.3) !important;
+    }
+
+    /* Mobile Split View Layout */
+    .quote-layout.mobile-split-view {
+        display: flex !important;
+        flex-direction: column !important;
+        height: calc(100vh - 128px) !important; /* Account for top bar + bottom nav */
+        overflow: hidden !important;
+    }
+
+    .quote-layout.mobile-split-view .quote-form-panel {
+        flex: 1 1 50% !important;
+        height: 50% !important;
+        overflow-y: auto !important;
+        border-bottom: 2.5px solid #0284c7 !important;
+        padding: 12px 14px !important;
+        box-sizing: border-box !important;
+    }
+
+    .quote-layout.mobile-split-view .quote-preview-panel {
+        position: static !important;
+        transform: none !important;
+        height: 50% !important;
+        flex: 1 1 50% !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        transition: none !important;
+        display: flex !important;
+        flex-direction: column !important;
+        background: #f8fafc !important;
+        overflow: hidden !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    }
+
+    .quote-layout.mobile-split-view .quote-preview-panel::before {
+        display: none !important; /* Hide drag handle */
+    }
+
+    .quote-layout.mobile-split-view .preview-sheet-backdrop {
         display: none !important;
+    }
+
+    .quote-layout.mobile-split-view #quote-document {
+        padding: 12px 10px 40px !important;
+        width: 100% !important;
+        margin: 0 !important;
+        transform: scale(0.93);
+        transform-origin: top center;
+        box-shadow: none !important;
+        border: none !important;
+    }
+
+    .quote-layout.mobile-split-view .preview-header {
+        border-radius: 0 !important;
     }
 
     /* Backdrop for bottom sheet */

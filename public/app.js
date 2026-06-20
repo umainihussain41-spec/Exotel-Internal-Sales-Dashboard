@@ -348,6 +348,14 @@ function setupNavigation() {
             if (target) openApp(target);
         });
     });
+
+    // Mobile Bottom Navigation clicks
+    document.querySelectorAll('.mbn-item[data-target]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-target');
+            if (target) openApp(target);
+        });
+    });
 }
 
 // ==========================================
@@ -383,52 +391,97 @@ function setupMobileSidebar() {
         });
     });
 
-    // ── Quote Generator Preview Toggle (mobile) ──
-    const previewBtn = document.createElement('button');
-    previewBtn.className = 'preview-toggle-btn';
-    previewBtn.id = 'preview-toggle-btn';
-    previewBtn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-            <polyline points="14 2 14 8 20 8"></polyline>
-        </svg>
-        Preview`;
-    document.body.appendChild(previewBtn);
+    // ── Quote Generator Preview/Split Toggles (mobile) ──
+    const mobilePanel = document.createElement('div');
+    mobilePanel.id = 'mobile-quote-actions';
+    mobilePanel.className = 'mobile-quote-actions';
+    mobilePanel.innerHTML = `
+        <button class="mobile-qaction-btn" id="btn-toggle-split" title="Split Screen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+            </svg>
+            Split View
+        </button>
+        <button class="mobile-qaction-btn" id="preview-toggle-btn" title="Fullscreen Preview">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            Preview
+        </button>
+    `;
+    document.body.appendChild(mobilePanel);
 
+    const splitBtn = mobilePanel.querySelector('#btn-toggle-split');
+    const previewBtn = mobilePanel.querySelector('#preview-toggle-btn');
+    const previewPanel = document.getElementById('quote-preview-panel');
+    const backdrop = document.getElementById('preview-sheet-backdrop');
+
+    // Split Screen Toggle
+    splitBtn.addEventListener('click', () => {
+        const quoteLayout = document.querySelector('.quote-layout');
+        if (!quoteLayout) return;
+
+        const isSplit = quoteLayout.classList.toggle('mobile-split-view');
+        splitBtn.classList.toggle('active', isSplit);
+
+        // Turn off fullscreen sheet if it was open
+        if (previewPanel) previewPanel.classList.remove('sheet-open');
+        if (backdrop) backdrop.classList.remove('active');
+        previewBtn.classList.remove('sheet-open');
+        document.body.classList.remove('no-scroll');
+    });
+
+    // Fullscreen Preview Toggle
     previewBtn.addEventListener('click', () => {
-        const panel = document.getElementById('quote-preview-panel');
-        const backdrop = document.getElementById('preview-sheet-backdrop');
-        if (!panel) return;
-        
-        const isOpening = !panel.classList.contains('sheet-open');
-        panel.classList.toggle('sheet-open', isOpening);
+        if (!previewPanel) return;
+
+        // Turn off split view if it was active
+        const quoteLayout = document.querySelector('.quote-layout');
+        if (quoteLayout) quoteLayout.classList.remove('mobile-split-view');
+        splitBtn.classList.remove('active');
+
+        // Toggle sheet open
+        const isOpening = !previewPanel.classList.contains('sheet-open');
+        previewPanel.classList.toggle('sheet-open', isOpening);
         if (backdrop) backdrop.classList.toggle('active', isOpening);
         previewBtn.classList.toggle('sheet-open', isOpening);
         document.body.classList.toggle('no-scroll', isOpening);
     });
 
-    // Close bottom sheet
+    // Close bottom sheet helper
     function closePreviewSheet() {
-        const panel = document.getElementById('quote-preview-panel');
-        const backdrop = document.getElementById('preview-sheet-backdrop');
-        if (panel) panel.classList.remove('sheet-open');
+        if (previewPanel) previewPanel.classList.remove('sheet-open');
         if (backdrop) backdrop.classList.remove('active');
         previewBtn.classList.remove('sheet-open');
         document.body.classList.remove('no-scroll');
     }
 
-    const backdrop = document.getElementById('preview-sheet-backdrop');
     if (backdrop) backdrop.addEventListener('click', closePreviewSheet);
 
     const closeBtn = document.getElementById('btn-close-preview-sheet');
     if (closeBtn) closeBtn.addEventListener('click', closePreviewSheet);
 
-    // Only show preview toggle when on quotes tab
+    // Only show action buttons when on quotes -> new-quote tab
     function updatePreviewBtnVisibility() {
         const onMobile = window.innerWidth <= 768;
-        const onQuotes = document.getElementById('quotes-applet')?.classList.contains('active') ||
-                         !document.getElementById('quotes-applet')?.classList.contains('hidden');
-        previewBtn.style.display = (onMobile && onQuotes) ? 'flex' : 'none';
+        const onQuotes = document.getElementById('quotes-applet') && !document.getElementById('quotes-applet').classList.contains('hidden');
+        
+        const activeTab = document.querySelector('.quote-tab.active');
+        const isNewQuoteTab = activeTab && activeTab.getAttribute('data-qtab') === 'new-quote';
+        
+        if (onMobile && onQuotes && isNewQuoteTab) {
+            mobilePanel.style.display = 'flex';
+        } else {
+            mobilePanel.style.display = 'none';
+            // Deactivate split view and fullscreen sheet when not on the Builder tab
+            const quoteLayout = document.querySelector('.quote-layout');
+            if (quoteLayout) quoteLayout.classList.remove('mobile-split-view');
+            splitBtn.classList.remove('active');
+            
+            closePreviewSheet();
+        }
     }
     window.addEventListener('resize', updatePreviewBtnVisibility);
     document.addEventListener('click', updatePreviewBtnVisibility);
