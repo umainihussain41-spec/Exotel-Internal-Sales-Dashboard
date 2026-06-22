@@ -2023,7 +2023,7 @@ input[type="number"] {
     background: #f8fafc;
     border: 1.5px solid #e2e8f0;
     border-radius: 10px;
-    margin-top: auto;
+    margin-top: 16px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
@@ -2062,7 +2062,7 @@ input[type="number"] {
     transform: translateY(-50%);
 }
 
-@media (max-width: 991px) {
+@media (max-width: 600px) {
     .bundle-compare-container {
         grid-template-columns: 1fr;
         gap: 24px;

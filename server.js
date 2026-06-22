@@ -499,7 +499,7 @@ app.post('/api/export-pdf', ensureAuthenticated, async (req, res) => {
         const launchOpts = {
             headless: 'new',
             args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
-            defaultViewport: { width: 1024, height: 800 }
+            defaultViewport: { width: 1400, height: 900 }
         };
         // On Railway (Linux), use the system-installed Chromium pointed to by env var
         if (process.env.PUPPETEER_EXECUTABLE_PATH) {

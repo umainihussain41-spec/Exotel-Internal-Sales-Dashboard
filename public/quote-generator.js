@@ -83,7 +83,7 @@ const TIER_DEFAULTS = {
   elite:      { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 },
 };
 // SKUs that support a custom plan name rename
-const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno'];
+const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600'];
 // Standard display names for tiers (can be overridden per-item via item.customName)
 const TIER_DISPLAY_NAMES = { dabbler: 'Dabbler', believer: 'Believer', influencer: 'Influencer', elite: 'Unnamed' };
 
@@ -3989,7 +3989,7 @@ function updatePreview() {
 
   const isCompareTiers = !isUserCompare && QG.compareMode && validItems.length >= 2 &&
     validItems.every(i => i.sku_key === validItems[0].sku_key) &&
-    ['voice_exotel_std', 'sip_veeno'].includes(validItems[0].sku_key);
+    ['voice_exotel_std', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot'].includes(validItems[0].sku_key);
 
   // ── User-based comparison (side-by-side configs) ─────────────────────────
   if (isUserCompare) {
@@ -4168,8 +4168,14 @@ function updatePreview() {
   if (isCompareTiers) {
     const skuKey0 = validItems[0].sku_key;
     const sku0 = SKUS.find(s => s.key === skuKey0);
-    const tiers = validItems.map(i => i.tier);
-    const tierLabels = Object.fromEntries(tiers.map(t => [t, (QG.skuItems.find(i=>i.tier===t)?.customName) || TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase()+t.slice(1))]));
+    const isNonTierSku = skuKey0 === 'voice_exotel_stream' || skuKey0 === 'voice_exotel_voicebot';
+    // For non-tier SKUs use item index as key; for tier SKUs use the tier string
+    const tiers = isNonTierSku
+      ? validItems.map((_, idx) => String(idx))
+      : validItems.map(i => i.tier);
+    const tierLabels = isNonTierSku
+      ? Object.fromEntries(validItems.map((item, idx) => [String(idx), item.customName || `Option ${String.fromCharCode(65 + idx)}`]))
+      : Object.fromEntries(tiers.map(t => [t, (QG.skuItems.find(i=>i.tier===t)?.customName) || TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase()+t.slice(1))]));
     void 0; // (tierLabels defined above)
     const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
     const fmtP = (v, pulse = 60) => {
@@ -4332,6 +4338,69 @@ function updatePreview() {
         const a = getSN('attempt');
         return a === 0 ? FREE : (a >= 100 ? '₹' + (a/100).toFixed(2) + '/failed call' : a + 'p / failed call');
       }));
+    } else if (skuKey0 === 'voice_exotel_stream' || skuKey0 === 'voice_exotel_voicebot') {
+      const isVBotCmp = skuKey0 === 'voice_exotel_voicebot';
+      tableRows += cmpRow('Plan Details', [], true);
+      tableRows += cmpRow('No. of Months', colData.map(({ getSN }) => getSN('num_months') + ' Months'));
+      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => {
+        const r = getSN('rental');
+        return r === 0 ? W : fmtR(r) + perUnit('/month');
+      }));
+      tableRows += cmpRow('Setup Charges', colData.map(() => W));
+
+      tableRows += cmpRow(isVBotCmp ? 'Voicebot Channels' : 'Streaming Channels', [], true);
+      tableRows += cmpRow('No. of Channels', colData.map(({ getSN }) => {
+        const chs = getSN('num_channels');
+        if (isVBotCmp) {
+          const paid = Math.max(0, chs - 5);
+          return paid > 0 ? `5 Free, ${paid} Paid` : `5 Channels (Free)`;
+        }
+        return chs;
+      }));
+      tableRows += cmpRow('Channel Cost', colData.map(({ getSN }) => fmtR(getSN('channel_cost')) + perUnit('/channel/month')));
+      tableRows += cmpRow('Channel Calculation', colData.map(({ getSN }) => {
+        const mos = getSN('num_months');
+        const cost = getSN('channel_cost');
+        const chs = getSN('num_channels');
+        const paid = isVBotCmp ? Math.max(0, chs - 5) : chs;
+        return `${paid} ch × ${mos} mo × ${fmtR(cost)} = ${fmtR(paid * mos * cost)}`;
+      }), false, true);
+
+      tableRows += cmpRow('User Plan', [], true);
+      tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => {
+        const fu = getVal('free_users');
+        const fuEx = parseFloat(item.values['extra_users'] ?? 0);
+        return (fu === null || fu === 'Unlimited') ? 'Unlimited (Included)' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)');
+      }));
+      tableRows += cmpRow('Extra User Cost', colData.map(({ getSN }) => fmtR(getSN('extra_user_cost')) + perUnit('/user/month')), false, true);
+
+      tableRows += cmpRow('Number Plan', [], true);
+      tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => (getVal('free_numbers') ?? '-') + ' Number(s) (Free)'));
+      tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
+      const anyPaidStreamNums = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
+      if (anyPaidStreamNums) {
+        tableRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
+        tableRows += cmpRow('Num. Calculation', colData.map(({ getSN }) => {
+          const p = getSN('num_paid_numbers'), m = getSN('num_months') + (getSN('extra_validity') || 0), c = getSN('extra_number');
+          return p > 0 ? `${p} × ${m} mo × ${fmtR(c)} = ${fmtR(p * m * c)}` : '';
+        }), false, true);
+      }
+
+      tableRows += cmpRow('Call Credits & Charges', [], true);
+      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
+        const base = getSN('credits');
+        const extra = parseFloat(item.values['extra_credits'] ?? 0);
+        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
+      }));
+      tableRows += cmpRow('Incoming Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('incoming'), parseFloat(getVal('pulse')) || 60)));
+      tableRows += cmpRow('Outgoing Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
+      const hasAttempt = colData.some(({ getSN }) => getSN('attempt') > 0);
+      if (hasAttempt) {
+        tableRows += cmpRow('Attempt Charges', colData.map(({ getSN }) => {
+          const a = getSN('attempt');
+          return a === 0 ? FREE : (a >= 100 ? '₹' + (a/100).toFixed(2) + '/failed call' : a + 'p/failed call');
+        }));
+      }
     }
 
 
@@ -4376,7 +4445,7 @@ function updatePreview() {
           <thead>
             <tr>
               <th style="width:32%;background:#0f172a;color:#fff;">Component</th>
-              ${tiers.map(t => `<th style="background:${t === 'believer' ? '#0284c7' : t === 'influencer' ? '#0369a1' : '#38bdf8'};color:#fff;text-align:center;">${tierLabels[t] || t}</th>`).join('')}
+              ${tiers.map((t, tidx) => `<th style="background:${skuKey0 === 'voice_exotel_stream' || skuKey0 === 'voice_exotel_voicebot' ? (tidx === 0 ? '#0284c7' : tidx === 1 ? '#0369a1' : '#38bdf8') : (t === 'believer' ? '#0284c7' : t === 'influencer' ? '#0369a1' : '#38bdf8')};color:#fff;text-align:center;">${tierLabels[t] || t}</th>`).join('')}
             </tr>
           </thead>
           <tbody>
@@ -5299,8 +5368,9 @@ window.printQuote = async function () {
      @page { margin: ${QG.bundleCompareMode ? '6mm 8mm' : '10mm 12mm'}; size: A4 portrait; }
      body { background: white !important; margin: 0 !important; padding: 0 !important; font-size: 10px !important; -webkit-print-color-adjust: exact; }
 
-     /* Strip screen paper styling */
-     #quote-document { width: 100% !important; min-height: auto !important; margin: 0 !important; border: none !important; box-shadow: none !important; padding: 0 !important; }
+     /* Strip screen paper styling — use high specificity to beat the 210mm width rule */
+     html body #quote-document,
+     #quote-document { width: 100% !important; min-height: 0 !important; height: auto !important; margin: 0 !important; border: none !important; box-shadow: none !important; padding: 0 !important; flex-shrink: 0 !important; }
 
      /* Precise vector rendering */
      * { text-rendering: geometricPrecision !important; -webkit-font-smoothing: antialiased !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
@@ -5346,10 +5416,70 @@ window.printQuote = async function () {
      .section-header-row { break-after: avoid !important; page-break-after: avoid !important; }
 
      /* ── Print header/footer collapse ─────────────────────────── */
-     .print-master-header, .print-master-footer { height: 0 !important; overflow: hidden !important; }
+     .print-master-header, .print-master-footer { height: 0 !important; padding: 0 !important; overflow: hidden !important; display: block !important; }
+     .print-master-table { width: 100% !important; border-collapse: collapse !important; }
+     .print-master-table thead, .print-master-table tfoot { display: none !important; }
 
      /* ── Waived / free badges ──────────────────────────────────── */
      .waived-text { font-size: 0.68rem !important; }
+
+     /* ── Fix overflow clipping for side-by-side compare tables ─── */
+     [style*="overflow-x:auto"] {
+       overflow: visible !important;
+       overflow-x: visible !important;
+     }
+     .quote-sku-table {
+       width: 100% !important;
+       table-layout: fixed !important;
+     }
+
+     /* ── Fix bundle compare blank-space gap in Puppeteer ────────── */
+     /* These rules apply unconditionally and OVERRIDE the responsive    */
+     /* collapse that fires when Puppeteer renders at A4 width (~793px) */
+     .bundle-compare-container,
+     .bundle-compare-container * + .bundle-compare-container {
+       display: grid !important;
+       grid-template-columns: 1fr auto 1fr !important;
+       gap: 10px !important;
+       width: 100% !important;
+       align-items: start !important;
+     }
+     .bundle-col {
+       display: flex !important;
+       flex-direction: column !important;
+       min-width: 0 !important;
+     }
+     /* CRITICAL: Remove margin-top:auto which causes huge blank gaps */
+     .bundle-subtotal-card {
+       margin-top: 8px !important;
+     }
+     .bundle-compare-divider {
+       display: flex !important;
+       flex-direction: column !important;
+       align-items: center !important;
+       justify-content: flex-start !important;
+       padding-top: 16px !important;
+       width: 28px !important;
+       min-height: 100px !important;
+     }
+     /* Override the @media (max-width:991px) collapse rule that fires at A4 width */
+     @media (max-width: 9999px) {
+       .bundle-compare-container {
+         grid-template-columns: 1fr auto 1fr !important;
+         gap: 10px !important;
+       }
+       .bundle-compare-divider {
+         flex-direction: column !important;
+         width: 28px !important;
+         height: auto !important;
+         min-height: 100px !important;
+         padding: 0 4px !important;
+       }
+       .bundle-compare-divider::before {
+         width: 1.5px !important;
+         height: 100% !important;
+       }
+     }
 
      ${QG.bundleCompareMode ? `
      /* ── Bundle Compare: force side-by-side layout ─────────────── */
@@ -5894,7 +6024,6 @@ window.viewQuoteHistory = async function (id, qNumber) {
     showAlert('Failed to load version history.', { type: 'error', title: 'Error' });
   }
 };
-
 window.previewHistoricalVersion = function (vId) {
   const searchId = vId === 'current' ? 'current' : parseInt(vId, 10);
   const vObj = window._histVersions?.find(v => v.id === searchId);
@@ -6001,34 +6130,75 @@ window.printHistoricalQuote = async function (id) {
     }
     if (!q) return showAlert('Quote not found.', { type: 'error', title: 'Not Found' });
 
-    // Track which tab was active so we can restore it
-    const activeTab = document.querySelector('.quote-tab.active');
-    const activeTabTarget = activeTab?.dataset?.qtab || 'my-quotes';
-
-    // Backup current workspace
-    const bkup = {
-      sku: QG.currentSku, tier: QG.currentTier, vals: { ...QG.skuValues },
-      company: document.getElementById('q-client-company')?.value,
-      contact: document.getElementById('q-client-contact')?.value,
-      email: document.getElementById('q-client-email')?.value,
-      phone: document.getElementById('q-client-phone')?.value,
-      tenantId: document.getElementById('q-client-tenantid')?.value || '',
-      qNum: document.getElementById('q-quote-number')?.textContent,
-      date: document.getElementById('q-date')?.textContent
-    };
-
     const data = typeof q.quote_data === 'string' ? JSON.parse(q.quote_data) : q.quote_data;
 
-    // Switch to New Quote tab securely using router helper (no history push)
-    switchQuoteTab('new-quote', false);
+    // ── Backup full current QG state ──────────────────────────────
+    const bkup = {
+      skuItems: JSON.parse(JSON.stringify(QG.skuItems)),
+      activeItemId: QG.activeItemId,
+      compareMode: QG.compareMode,
+      bundleCompareMode: QG.bundleCompareMode,
+      bundleA: QG.bundleA ? JSON.parse(JSON.stringify(QG.bundleA)) : null,
+      bundleB: QG.bundleB ? JSON.parse(JSON.stringify(QG.bundleB)) : null,
+      activeBundle: QG.activeBundle,
+      multiSkuMode: QG.multiSkuMode,
+      lockedEntity: QG.lockedEntity,
+      currentSku: QG.currentSku,
+      currentTier: QG.currentTier,
+      skuValues: { ...QG.skuValues },
+      quoteNumber: QG.quoteNumber,
+      currentQuoteId: QG.currentQuoteId,
+      company:  document.getElementById('q-client-company')?.value,
+      contact:  document.getElementById('q-client-contact')?.value,
+      email:    document.getElementById('q-client-email')?.value,
+      phone:    document.getElementById('q-client-phone')?.value,
+      tenantId: document.getElementById('q-client-tenantid')?.value || '',
+      qNum:     document.getElementById('q-quote-number')?.textContent,
+      date:     document.getElementById('q-date')?.textContent,
+    };
 
-    // Inject historical snapshot
-
-    if (data.sku_items && data.sku_items.length > 0) {
+    // ── Restore historical state exactly as viewQuote does ────────
+    if (data.bundleCompareMode && data.bundle_a_items?.length > 0) {
+      QG.bundleA = {
+        skuItems: data.bundle_a_items,
+        activeItemId: data.bundle_a_items[0]?.id || 'item_a_0',
+        lockedEntity: SKUS.find(s => s.key === data.bundle_a_items[0]?.sku_key)?.entity || null,
+      };
+      QG.bundleB = {
+        skuItems: data.bundle_b_items || [],
+        activeItemId: (data.bundle_b_items || [])[0]?.id || 'item_b_0',
+        lockedEntity: data.bundle_b_items?.[0]?.sku_key ? (SKUS.find(s => s.key === data.bundle_b_items[0].sku_key)?.entity || null) : null,
+      };
+      QG.activeBundle = data.activeBundle || 'A';
+      QG.bundleCompareMode = true;
+      QG.multiSkuMode = true;
+      const activeData = QG.activeBundle === 'A' ? QG.bundleA : QG.bundleB;
+      QG.skuItems = activeData.skuItems;
+      QG.activeItemId = activeData.activeItemId;
+      QG.lockedEntity = activeData.lockedEntity;
+      syncActiveAliases();
+      [...QG.bundleA.skuItems, ...QG.bundleB.skuItems].forEach(item => {
+        if (!item.sku_key) return;
+        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        fields.forEach(f => { if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value; });
+      });
+    } else if (data.sku_items && data.sku_items.length > 0) {
+      QG.bundleCompareMode = false;
+      QG.compareMode = data.compareMode || false;
       QG.skuItems = data.sku_items;
       QG.activeItemId = data.sku_items[0].id;
+      QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       syncActiveAliases();
+      QG.skuItems.forEach(item => {
+        if (!item.sku_key) return;
+        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        fields.forEach(f => { if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value; });
+      });
     } else {
+      QG.bundleCompareMode = false;
+      QG.compareMode = false;
       QG.currentSku = data.sku_key;
       QG.currentTier = data.tier || 'dabbler';
       QG.skuValues = data.fields || {};
@@ -6036,45 +6206,57 @@ window.printHistoricalQuote = async function (id) {
       QG.activeItemId = 'item_0';
     }
 
-
-    if (document.getElementById('q-client-company')) document.getElementById('q-client-company').value = data.client?.company || '';
-    if (document.getElementById('q-client-contact')) document.getElementById('q-client-contact').value = data.client?.contact || '';
-    if (document.getElementById('q-client-email')) document.getElementById('q-client-email').value = data.client?.email || '';
-    if (document.getElementById('q-client-phone')) document.getElementById('q-client-phone').value = data.client?.phone || '';
+    // ── Set client + metadata fields ──────────────────────────────
+    if (document.getElementById('q-client-company'))  document.getElementById('q-client-company').value  = data.client?.company  || '';
+    if (document.getElementById('q-client-contact'))  document.getElementById('q-client-contact').value  = data.client?.contact  || '';
+    if (document.getElementById('q-client-email'))    document.getElementById('q-client-email').value    = data.client?.email    || '';
+    if (document.getElementById('q-client-phone'))    document.getElementById('q-client-phone').value    = data.client?.phone    || '';
     if (document.getElementById('q-client-tenantid')) document.getElementById('q-client-tenantid').value = data.client?.tenantId || '';
-    if (document.getElementById('q-quote-number')) document.getElementById('q-quote-number').textContent = q.quote_number;
-    if (document.getElementById('q-date')) document.getElementById('q-date').textContent = new Date(q.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (document.getElementById('q-quote-number'))    document.getElementById('q-quote-number').textContent = q.quote_number;
+    if (document.getElementById('q-date'))            document.getElementById('q-date').textContent = new Date(q.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+    if (document.getElementById('q-se-email'))        document.getElementById('q-se-email').textContent = q.user_email;
+    if (document.getElementById('q-se-name') && data.se?.name)  document.getElementById('q-se-name').textContent = data.se.name;
+    if (document.getElementById('q-se-phone') && data.se?.phone) document.getElementById('q-se-phone').value = data.se.phone;
+    if (data.fields) {
+      Object.assign(QG.skuValues, data.fields);
+      Object.keys(data.fields).forEach(fid => { const inp = document.getElementById('qf_' + fid); if (inp) inp.value = data.fields[fid]; });
+    }
+    QG.quoteNumber = q.quote_number;
 
-    // Render the historical document into #quote-document
     updatePreview();
 
-    // Give the DOM brief time to fully render the quote physically before triggering print
     setTimeout(async () => {
-      // window.print() is sync/blocking in most modern browsers. 
-      // It halts JS until the dialog captures the DOM or closes.
       await window.printQuote();
 
-      // Execution resumes here after print dialog closes, restore immediately
-      QG.currentSku = bkup.sku;
-      QG.currentTier = bkup.tier;
-      QG.skuValues = bkup.vals;
-      if (document.getElementById('q-client-company')) document.getElementById('q-client-company').value = bkup.company || '';
-      if (document.getElementById('q-client-contact')) document.getElementById('q-client-contact').value = bkup.contact || '';
-      if (document.getElementById('q-client-email')) document.getElementById('q-client-email').value = bkup.email || '';
-      if (document.getElementById('q-client-phone')) document.getElementById('q-client-phone').value = bkup.phone || '';
+      // ── Restore original QG state ─────────────────────────────────
+      QG.skuItems        = bkup.skuItems;
+      QG.activeItemId    = bkup.activeItemId;
+      QG.compareMode     = bkup.compareMode;
+      QG.bundleCompareMode = bkup.bundleCompareMode;
+      QG.bundleA         = bkup.bundleA;
+      QG.bundleB         = bkup.bundleB;
+      QG.activeBundle    = bkup.activeBundle;
+      QG.multiSkuMode    = bkup.multiSkuMode;
+      QG.lockedEntity    = bkup.lockedEntity;
+      QG.currentSku      = bkup.currentSku;
+      QG.currentTier     = bkup.currentTier;
+      QG.skuValues       = bkup.skuValues;
+      QG.quoteNumber     = bkup.quoteNumber;
+      QG.currentQuoteId  = bkup.currentQuoteId;
+      syncActiveAliases();
+      if (document.getElementById('q-client-company'))  document.getElementById('q-client-company').value  = bkup.company  || '';
+      if (document.getElementById('q-client-contact'))  document.getElementById('q-client-contact').value  = bkup.contact  || '';
+      if (document.getElementById('q-client-email'))    document.getElementById('q-client-email').value    = bkup.email    || '';
+      if (document.getElementById('q-client-phone'))    document.getElementById('q-client-phone').value    = bkup.phone    || '';
       if (document.getElementById('q-client-tenantid')) document.getElementById('q-client-tenantid').value = bkup.tenantId || '';
-      if (document.getElementById('q-quote-number')) document.getElementById('q-quote-number').textContent = bkup.qNum;
-      if (document.getElementById('q-date')) document.getElementById('q-date').textContent = bkup.date;
-
+      if (document.getElementById('q-quote-number'))    document.getElementById('q-quote-number').textContent = bkup.qNum  || '';
+      if (document.getElementById('q-date'))            document.getElementById('q-date').textContent       = bkup.date    || '';
       updatePreview();
+    }, 400);
 
-      // Return to the previous tab seamlessly
-      switchQuoteTab(activeTabTarget, false);
-
-    }, 300); // Only a brief 300ms wait to ensure CSS/DOM parsed
   } catch (e) {
     console.error(e);
-    showAlert("Failed to generate PDF for historical quote.", { type: 'error', title: 'PDF Error' });
+    showAlert('Failed to generate PDF for historical quote.', { type: 'error', title: 'PDF Error' });
   }
 };
 
