@@ -398,6 +398,30 @@
     color: #059669;
 }
 
+/* International (USD) Commercial card */
+.sku-intl .sku-option-icon {
+    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+    color: #0284c7;
+}
+
+.sku-intl:hover {
+    border-color: #0284c7;
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    box-shadow: 0 2px 10px rgba(2, 132, 199, 0.2);
+}
+
+.sku-intl.selected {
+    border-color: #0284c7;
+    background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 40%);
+    box-shadow: 0 2px 14px rgba(2, 132, 199, 0.3);
+}
+
+.sku-entity-tag.intl {
+    background: linear-gradient(90deg, #e0f2fe, #bae6fd);
+    color: #0369a1;
+    font-weight: 800;
+}
+
 /* Bundle Compare card */
 .sku-bundle .sku-option-icon {
     background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%);

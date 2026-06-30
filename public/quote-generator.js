@@ -61,6 +61,9 @@ const SKUS = [
   { key: 'sms_exotel', label: 'SMS Plan', sub: 'Exotel SMS', entity: 'Exotel', icon: I_MSG, hasTiers: false },
   { key: 'whatsapp_exotel', label: 'WhatsApp Plan', sub: 'Exotel WA', entity: 'Exotel', icon: I_WA, hasTiers: false },
   { key: 'rcs_exotel', label: 'RCS Plan', sub: 'Exotel RCS', entity: 'Exotel', icon: I_DIAMOND, hasTiers: false },
+
+  // ── International Commercial (USD pricing) ────────────────────────
+  { key: 'voice_intl', label: 'International', sub: 'USD · Country-Specific', entity: 'Exotel', theme: 'intl', icon: I_GLOBE, hasTiers: false, isIntl: true },
   
   // ── Startup Plan (single SKU, sub-product via tier selector) ─────
   { key: 'startup', label: 'Startup Plan', sub: 'Free Trial Bundle', entity: 'Exotel', theme: 'startup', icon: I_PHONE, hasTiers: true, isStartup: true },
@@ -83,7 +86,276 @@ const TIER_DEFAULTS = {
   elite:      { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 },
 };
 // SKUs that support a custom plan name rename
-const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600'];
+const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl'];
+
+// ── International Rate Card (USD/min, 60s pulse) ─────────────────
+// Source: International Voice April'24 Outbound Price (USD) PDF
+const INTL_RATE_CARD = [
+  { country: 'Afghanistan', type: 'All', rate: 0.73, iso: 'AF' },
+  { country: 'Albania', type: 'Fixed', rate: 0.75, iso: 'AL' },
+  { country: 'Albania', type: 'Mobile', rate: 1.39, iso: 'AL' },
+  { country: 'Algeria', type: 'Fixed', rate: 0.32, iso: 'DZ' },
+  { country: 'Algeria', type: 'Mobile', rate: 2.61, iso: 'DZ' },
+  { country: 'American Samoa', type: 'All', rate: 0.11, iso: 'AS' },
+  { country: 'Andorra', type: 'Fixed', rate: 0.07, iso: 'AD' },
+  { country: 'Andorra', type: 'Mobile', rate: 0.67, iso: 'AD' },
+  { country: 'Angola', type: 'Fixed', rate: 0.28, iso: 'AO' },
+  { country: 'Angola', type: 'Mobile', rate: 0.70, iso: 'AO' },
+  { country: 'Anguilla', type: 'All', rate: 0.75, iso: 'AI' },
+  { country: 'Antigua And Barbuda', type: 'All', rate: 0.79, iso: 'AG' },
+  { country: 'Argentina', type: 'All', rate: 0.48, iso: 'AR' },
+  { country: 'Armenia', type: 'All', rate: 0.82, iso: 'AM' },
+  { country: 'Aruba', type: 'All', rate: 0.58, iso: 'AW' },
+  { country: 'Australia', type: 'Fixed', rate: 0.07, iso: 'AU' },
+  { country: 'Australia', type: 'Mobile', rate: 0.11, iso: 'AU' },
+  { country: 'Austria', type: 'Fixed', rate: 0.33, iso: 'AT' },
+  { country: 'Austria', type: 'Mobile', rate: 0.94, iso: 'AT' },
+  { country: 'Azerbaijan', type: 'All', rate: 0.94, iso: 'AZ' },
+  { country: 'Bahamas', type: 'All', rate: 0.66, iso: 'BS' },
+  { country: 'Bahrain', type: 'All', rate: 0.67, iso: 'BH' },
+  { country: 'Bangladesh', type: 'All', rate: 0.06, iso: 'BD' },
+  { country: 'Barbados', type: 'All', rate: 0.96, iso: 'BB' },
+  { country: 'Belarus', type: 'All', rate: 0.75, iso: 'BY' },
+  { country: 'Belgium', type: 'Fixed', rate: 1.24, iso: 'BE' },
+  { country: 'Belgium', type: 'Mobile', rate: 1.30, iso: 'BE' },
+  { country: 'Belize', type: 'All', rate: 0.69, iso: 'BZ' },
+  { country: 'Benin', type: 'All', rate: 1.20, iso: 'BJ' },
+  { country: 'Bermuda', type: 'All', rate: 0.11, iso: 'BM' },
+  { country: 'Bhutan', type: 'All', rate: 0.29, iso: 'BT' },
+  { country: 'Bolivia', type: 'All', rate: 0.75, iso: 'BO' },
+  { country: 'Bosnia And Herzegovina', type: 'All', rate: 1.27, iso: 'BA' },
+  { country: 'Botswana', type: 'All', rate: 0.89, iso: 'BW' },
+  { country: 'Brazil', type: 'All', rate: 0.09, iso: 'BR' },
+  { country: 'British Virgin Islands', type: 'All', rate: 0.47, iso: 'VG' },
+  { country: 'Brunei', type: 'All', rate: 0.06, iso: 'BN' },
+  { country: 'Bulgaria', type: 'Fixed', rate: 0.29, iso: 'BG' },
+  { country: 'Bulgaria', type: 'Mobile', rate: 1.12, iso: 'BG' },
+  { country: 'Burkina Faso', type: 'All', rate: 1.70, iso: 'BF' },
+  { country: 'Burundi', type: 'All', rate: 1.94, iso: 'BI' },
+  { country: 'Cambodia', type: 'All', rate: 0.27, iso: 'KH' },
+  { country: 'Cameroon', type: 'All', rate: 1.30, iso: 'CM' },
+  { country: 'Canada', type: 'All', rate: 0.02, iso: 'CA' },
+  { country: 'Cape Verde', type: 'All', rate: 0.79, iso: 'CV' },
+  { country: 'Cayman Islands', type: 'Fixed', rate: 0.35, iso: 'KY' },
+  { country: 'Cayman Islands', type: 'Mobile', rate: 0.54, iso: 'KY' },
+  { country: 'Central African Republic', type: 'All', rate: 2.85, iso: 'CF' },
+  { country: 'Chad', type: 'All', rate: 2.23, iso: 'TD' },
+  { country: 'Chile', type: 'All', rate: 1.72, iso: 'CL' },
+  { country: 'China', type: 'All', rate: 1.43, iso: 'CN' },
+  { country: 'Colombia', type: 'All', rate: 0.10, iso: 'CO' },
+  { country: 'Comoros', type: 'All', rate: 2.53, iso: 'KM' },
+  { country: 'Congo', type: 'All', rate: 0.87, iso: 'CG' },
+  { country: 'Congo (DR)', type: 'All', rate: 2.23, iso: 'CD' },
+  { country: 'Costa Rica', type: 'All', rate: 0.24, iso: 'CR' },
+  { country: 'Cote D\'Ivoire', type: 'All', rate: 1.79, iso: 'CI' },
+  { country: 'Croatia', type: 'Fixed', rate: 0.56, iso: 'HR' },
+  { country: 'Croatia', type: 'Mobile', rate: 1.27, iso: 'HR' },
+  { country: 'Cuba', type: 'All', rate: 1.51, iso: 'CU' },
+  { country: 'Cyprus', type: 'All', rate: 0.64, iso: 'CY' },
+  { country: 'Czech Republic', type: 'All', rate: 0.27, iso: 'CZ' },
+  { country: 'Denmark', type: 'All', rate: 1.39, iso: 'DK' },
+  { country: 'Djibouti', type: 'All', rate: 1.05, iso: 'DJ' },
+  { country: 'Dominica', type: 'All', rate: 0.70, iso: 'DM' },
+  { country: 'Dominican Republic', type: 'All', rate: 0.33, iso: 'DO' },
+  { country: 'Ecuador', type: 'All', rate: 0.59, iso: 'EC' },
+  { country: 'Egypt', type: 'All', rate: 0.39, iso: 'EG' },
+  { country: 'El Salvador', type: 'All', rate: 0.47, iso: 'SV' },
+  { country: 'Eritrea', type: 'All', rate: 0.78, iso: 'ER' },
+  { country: 'Estonia', type: 'All', rate: 1.73, iso: 'EE' },
+  { country: 'Ethiopia', type: 'All', rate: 0.76, iso: 'ET' },
+  { country: 'Faroe Islands', type: 'All', rate: 0.33, iso: 'FO' },
+  { country: 'Fiji', type: 'All', rate: 0.92, iso: 'FJ' },
+  { country: 'Finland', type: 'All', rate: 1.23, iso: 'FI' },
+  { country: 'France', type: 'Fixed', rate: 0.12, iso: 'FR' },
+  { country: 'France', type: 'Mobile', rate: 0.78, iso: 'FR' },
+  { country: 'French Guiana', type: 'Fixed', rate: 0.14, iso: 'GF' },
+  { country: 'French Guiana', type: 'Mobile', rate: 0.83, iso: 'GF' },
+  { country: 'French Polynesia', type: 'All', rate: 0.86, iso: 'PF' },
+  { country: 'Gabon', type: 'All', rate: 3.56, iso: 'GA' },
+  { country: 'Gambia', type: 'All', rate: 1.78, iso: 'GM' },
+  { country: 'Georgia', type: 'All', rate: 0.96, iso: 'GE' },
+  { country: 'Germany', type: 'All', rate: 1.30, iso: 'DE' },
+  { country: 'Ghana', type: 'All', rate: 0.87, iso: 'GH' },
+  { country: 'Gibraltar', type: 'Fixed', rate: 0.10, iso: 'GI' },
+  { country: 'Gibraltar', type: 'Mobile', rate: 0.43, iso: 'GI' },
+  { country: 'Greece', type: 'All', rate: 0.25, iso: 'GR' },
+  { country: 'Greenland', type: 'All', rate: 0.81, iso: 'GL' },
+  { country: 'Grenada', type: 'Fixed', rate: 0.46, iso: 'GD' },
+  { country: 'Grenada', type: 'Mobile', rate: 0.78, iso: 'GD' },
+  { country: 'Guam', type: 'All', rate: 0.06, iso: 'GU' },
+  { country: 'Guatemala', type: 'All', rate: 0.50, iso: 'GT' },
+  { country: 'Guinea', type: 'All', rate: 2.44, iso: 'GN' },
+  { country: 'Guinea-Bissau', type: 'All', rate: 2.96, iso: 'GW' },
+  { country: 'Guyana', type: 'All', rate: 0.69, iso: 'GY' },
+  { country: 'Haiti', type: 'All', rate: 1.76, iso: 'HT' },
+  { country: 'Honduras', type: 'All', rate: 0.56, iso: 'HN' },
+  { country: 'Hong Kong', type: 'All', rate: 0.11, iso: 'HK' },
+  { country: 'Hungary', type: 'All', rate: 0.27, iso: 'HU' },
+  { country: 'Iceland', type: 'All', rate: 0.08, iso: 'IS' },
+  { country: 'India', type: 'All', rate: 0.08, iso: 'IN' },
+  { country: 'Indonesia', type: 'All', rate: 0.22, iso: 'ID' },
+  { country: 'Iran', type: 'All', rate: 0.38, iso: 'IR' },
+  { country: 'Iraq', type: 'All', rate: 0.62, iso: 'IQ' },
+  { country: 'Ireland', type: 'Fixed', rate: 0.03, iso: 'IE' },
+  { country: 'Ireland', type: 'Mobile', rate: 1.46, iso: 'IE' },
+  { country: 'Israel', type: 'All', rate: 0.63, iso: 'IL' },
+  { country: 'Italy', type: 'Fixed', rate: 0.01, iso: 'IT' },
+  { country: 'Italy', type: 'Mobile', rate: 1.75, iso: 'IT' },
+  { country: 'Jamaica', type: 'All', rate: 0.64, iso: 'JM' },
+  { country: 'Japan', type: 'All', rate: 0.21, iso: 'JP' },
+  { country: 'Jordan', type: 'All', rate: 0.60, iso: 'JO' },
+  { country: 'Kazakhstan', type: 'Fixed', rate: 0.18, iso: 'KZ' },
+  { country: 'Kazakhstan', type: 'Mobile', rate: 1.53, iso: 'KZ' },
+  { country: 'Kenya', type: 'All', rate: 1.01, iso: 'KE' },
+  { country: 'Kosovo', type: 'All', rate: 1.51, iso: 'XK' },
+  { country: 'Kuwait', type: 'All', rate: 0.17, iso: 'KW' },
+  { country: 'Kyrgyzstan', type: 'All', rate: 1.18, iso: 'KG' },
+  { country: 'Laos', type: 'All', rate: 0.26, iso: 'LA' },
+  { country: 'Latvia', type: 'All', rate: 1.80, iso: 'LV' },
+  { country: 'Lebanon', type: 'All', rate: 0.54, iso: 'LB' },
+  { country: 'Lesotho', type: 'All', rate: 1.75, iso: 'LS' },
+  { country: 'Liberia', type: 'All', rate: 1.76, iso: 'LR' },
+  { country: 'Libya', type: 'All', rate: 1.10, iso: 'LY' },
+  { country: 'Liechtenstein', type: 'All', rate: 0.52, iso: 'LI' },
+  { country: 'Lithuania', type: 'All', rate: 1.24, iso: 'LT' },
+  { country: 'Luxembourg', type: 'All', rate: 1.17, iso: 'LU' },
+  { country: 'Macau', type: 'All', rate: 0.60, iso: 'MO' },
+  { country: 'Macedonia', type: 'All', rate: 1.09, iso: 'MK' },
+  { country: 'Madagascar', type: 'All', rate: 2.72, iso: 'MG' },
+  { country: 'Malawi', type: 'All', rate: 1.62, iso: 'MW' },
+  { country: 'Malaysia', type: 'All', rate: 0.08, iso: 'MY' },
+  { country: 'Maldives', type: 'All', rate: 3.05, iso: 'MV' },
+  { country: 'Mali', type: 'All', rate: 2.15, iso: 'ML' },
+  { country: 'Malta', type: 'Fixed', rate: 0.81, iso: 'MT' },
+  { country: 'Malta', type: 'Mobile', rate: 1.78, iso: 'MT' },
+  { country: 'Marshall Islands', type: 'All', rate: 0.79, iso: 'MH' },
+  { country: 'Martinique', type: 'Fixed', rate: 0.14, iso: 'MQ' },
+  { country: 'Martinique', type: 'Mobile', rate: 0.71, iso: 'MQ' },
+  { country: 'Mauritania', type: 'All', rate: 3.40, iso: 'MR' },
+  { country: 'Mauritius', type: 'All', rate: 0.49, iso: 'MU' },
+  { country: 'Mexico', type: 'All', rate: 0.04, iso: 'MX' },
+  { country: 'Micronesia', type: 'All', rate: 1.70, iso: 'FM' },
+  { country: 'Moldova', type: 'All', rate: 1.51, iso: 'MD' },
+  { country: 'Monaco', type: 'All', rate: 1.55, iso: 'MC' },
+  { country: 'Mongolia', type: 'All', rate: 0.05, iso: 'MN' },
+  { country: 'Montenegro', type: 'All', rate: 2.11, iso: 'ME' },
+  { country: 'Morocco', type: 'Fixed', rate: 0.59, iso: 'MA' },
+  { country: 'Morocco', type: 'Mobile', rate: 2.32, iso: 'MA' },
+  { country: 'Mozambique', type: 'All', rate: 1.68, iso: 'MZ' },
+  { country: 'Myanmar', type: 'All', rate: 1.01, iso: 'MM' },
+  { country: 'Namibia', type: 'All', rate: 0.57, iso: 'NA' },
+  { country: 'Nepal', type: 'All', rate: 0.63, iso: 'NP' },
+  { country: 'Netherlands', type: 'All', rate: 1.29, iso: 'NL' },
+  { country: 'New Zealand', type: 'Fixed', rate: 0.03, iso: 'NZ' },
+  { country: 'New Zealand', type: 'Mobile', rate: 0.09, iso: 'NZ' },
+  { country: 'Nicaragua', type: 'All', rate: 0.82, iso: 'NI' },
+  { country: 'Niger', type: 'All', rate: 1.02, iso: 'NE' },
+  { country: 'Nigeria', type: 'All', rate: 0.50, iso: 'NG' },
+  { country: 'Norway', type: 'All', rate: 0.05, iso: 'NO' },
+  { country: 'Oman', type: 'All', rate: 0.90, iso: 'OM' },
+  { country: 'Pakistan', type: 'All', rate: 0.18, iso: 'PK' },
+  { country: 'Palau', type: 'All', rate: 1.33, iso: 'PW' },
+  { country: 'Palestine', type: 'All', rate: 0.35, iso: 'PS' },
+  { country: 'Panama', type: 'All', rate: 0.43, iso: 'PA' },
+  { country: 'Paraguay', type: 'Fixed', rate: 0.13, iso: 'PY' },
+  { country: 'Paraguay', type: 'Mobile', rate: 0.25, iso: 'PY' },
+  { country: 'Peru', type: 'All', rate: 0.62, iso: 'PE' },
+  { country: 'Philippines', type: 'All', rate: 0.33, iso: 'PH' },
+  { country: 'Poland', type: 'All', rate: 0.74, iso: 'PL' },
+  { country: 'Portugal', type: 'Fixed', rate: 0.07, iso: 'PT' },
+  { country: 'Portugal', type: 'Mobile', rate: 1.34, iso: 'PT' },
+  { country: 'Puerto Rico', type: 'All', rate: 0.03, iso: 'PR' },
+  { country: 'Qatar', type: 'All', rate: 0.61, iso: 'QA' },
+  { country: 'Reunion', type: 'Fixed', rate: 0.16, iso: 'RE' },
+  { country: 'Reunion', type: 'Mobile', rate: 2.01, iso: 'RE' },
+  { country: 'Romania', type: 'Fixed', rate: 0.01, iso: 'RO' },
+  { country: 'Romania', type: 'Mobile', rate: 0.05, iso: 'RO' },
+  { country: 'Russia', type: 'All', rate: 0.47, iso: 'RU' },
+  { country: 'Rwanda', type: 'All', rate: 1.19, iso: 'RW' },
+  { country: 'Saint Kitts And Nevis', type: 'All', rate: 0.74, iso: 'KN' },
+  { country: 'Saint Lucia', type: 'All', rate: 0.62, iso: 'LC' },
+  { country: 'Saint Vincent And The Grenadines', type: 'All', rate: 0.59, iso: 'VC' },
+  { country: 'Samoa', type: 'All', rate: 0.88, iso: 'WS' },
+  { country: 'Saudi Arabia', type: 'All', rate: 0.44, iso: 'SA' },
+  { country: 'Senegal', type: 'All', rate: 1.58, iso: 'SN' },
+  { country: 'Serbia', type: 'All', rate: 1.21, iso: 'RS' },
+  { country: 'Seychelles', type: 'All', rate: 2.24, iso: 'SC' },
+  { country: 'Sierra Leone', type: 'All', rate: 1.85, iso: 'SL' },
+  { country: 'Singapore', type: 'All', rate: 0.04, iso: 'SG' },
+  { country: 'Slovakia', type: 'All', rate: 0.40, iso: 'SK' },
+  { country: 'Slovenia', type: 'All', rate: 1.56, iso: 'SI' },
+  { country: 'Somalia', type: 'All', rate: 1.81, iso: 'SO' },
+  { country: 'South Africa', type: 'Fixed', rate: 0.36, iso: 'ZA' },
+  { country: 'South Africa', type: 'Mobile', rate: 1.06, iso: 'ZA' },
+  { country: 'South Korea', type: 'All', rate: 0.08, iso: 'KR' },
+  { country: 'South Sudan', type: 'All', rate: 1.12, iso: 'SS' },
+  { country: 'Spain', type: 'All', rate: 1.95, iso: 'ES' },
+  { country: 'Sri Lanka', type: 'All', rate: 1.05, iso: 'LK' },
+  { country: 'Sudan', type: 'All', rate: 0.83, iso: 'SD' },
+  { country: 'Suriname', type: 'All', rate: 1.50, iso: 'SR' },
+  { country: 'Swaziland', type: 'All', rate: 0.73, iso: 'SZ' },
+  { country: 'Sweden', type: 'Fixed', rate: 0.14, iso: 'SE' },
+  { country: 'Sweden', type: 'Mobile', rate: 1.06, iso: 'SE' },
+  { country: 'Switzerland', type: 'Fixed', rate: 0.54, iso: 'CH' },
+  { country: 'Switzerland', type: 'Mobile', rate: 2.55, iso: 'CH' },
+  { country: 'Syria', type: 'All', rate: 0.27, iso: 'SY' },
+  { country: 'Taiwan', type: 'Fixed', rate: 0.17, iso: 'TW' },
+  { country: 'Taiwan', type: 'Mobile', rate: 0.33, iso: 'TW' },
+  { country: 'Tajikistan', type: 'All', rate: 0.65, iso: 'TJ' },
+  { country: 'Tanzania', type: 'All', rate: 0.86, iso: 'TZ' },
+  { country: 'Thailand', type: 'All', rate: 0.14, iso: 'TH' },
+  { country: 'Togo', type: 'All', rate: 1.20, iso: 'TG' },
+  { country: 'Tonga', type: 'All', rate: 4.60, iso: 'TO' },
+  { country: 'Trinidad And Tobago', type: 'All', rate: 0.47, iso: 'TT' },
+  { country: 'Tunisia', type: 'All', rate: 2.96, iso: 'TN' },
+  { country: 'Turkey', type: 'Fixed', rate: 0.12, iso: 'TR' },
+  { country: 'Turkey', type: 'Mobile', rate: 0.97, iso: 'TR' },
+  { country: 'Turkmenistan', type: 'Fixed', rate: 0.36, iso: 'TM' },
+  { country: 'Turkmenistan', type: 'Mobile', rate: 0.59, iso: 'TM' },
+  { country: 'Uganda', type: 'All', rate: 1.56, iso: 'UG' },
+  { country: 'Ukraine', type: 'Fixed', rate: 0.69, iso: 'UA' },
+  { country: 'Ukraine', type: 'Mobile', rate: 0.89, iso: 'UA' },
+  { country: 'United Arab Emirates', type: 'All', rate: 0.41, iso: 'AE' },
+  { country: 'United Kingdom', type: 'All', rate: 1.24, iso: 'GB' },
+  { country: 'United States', type: 'All', rate: 0.02, iso: 'US' },
+  { country: 'Uruguay', type: 'Fixed', rate: 0.18, iso: 'UY' },
+  { country: 'Uruguay', type: 'Mobile', rate: 0.50, iso: 'UY' },
+  { country: 'Uzbekistan', type: 'All', rate: 0.30, iso: 'UZ' },
+  { country: 'Venezuela', type: 'Fixed', rate: 0.07, iso: 'VE' },
+  { country: 'Venezuela', type: 'Mobile', rate: 0.31, iso: 'VE' },
+  { country: 'Vietnam', type: 'All', rate: 0.30, iso: 'VN' },
+  { country: 'Yemen', type: 'All', rate: 0.39, iso: 'YE' },
+  { country: 'Zambia', type: 'All', rate: 22.16, iso: 'ZM' },
+  { country: 'Zimbabwe', type: 'All', rate: 1.54, iso: 'ZW' },
+];
+
+// Helper: get unique countries from rate card
+function getIntlCountries() {
+  const seen = new Set();
+  return INTL_RATE_CARD.filter(r => {
+    if (seen.has(r.country)) return false;
+    seen.add(r.country);
+    return true;
+  }).map(r => ({ country: r.country, iso: r.iso })).sort((a, b) => a.country.localeCompare(b.country));
+}
+
+// Helper: get rate entries for a country
+function getIntlCountryRates(country) {
+  return INTL_RATE_CARD.filter(r => r.country === country);
+}
+
+// Helper: get best (lowest fixed, then mobile) outbound rate for a country
+function getIntlDefaultRate(country) {
+  const rates = getIntlCountryRates(country);
+  if (!rates.length) return 0;
+  const fixed = rates.find(r => r.type === 'Fixed' || r.type === 'All');
+  return fixed ? fixed.rate : rates[0].rate;
+}
+
+// India outbound rate (for PSTN leg calculation)
+const INTL_INDIA_RATE = 0.08; // $0.08/min
+// US VoIP leg rate
+const INTL_US_VOIP_RATE = 0.02; // $0.02/min
 // Standard display names for tiers (can be overridden per-item via item.customName)
 const TIER_DISPLAY_NAMES = { dabbler: 'Dabbler', believer: 'Believer', influencer: 'Influencer', elite: 'Unnamed' };
 
@@ -1116,6 +1388,45 @@ function getSkuTncHtml(item, entity = 'Exotel') {
       </div>
     `;
   }
+  if (tncKey === 'voice_intl') {
+    const prepaid = getVal('prepaid_usd') || 400;
+    const users = getVal('num_users') || 1;
+    const numbers = getVal('num_numbers') || 1;
+    const country = getVal('intl_country') || 'United States';
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>USD Pricing & Account Billing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Pricing and billing for this plan are denominated exclusively in US Dollars (USD).</li>
+            <li>Fixed Prepaid model: Minimum initial prepay amount is $${prepaid}. Account access is subject to maintaining a positive balance.</li>
+            <li>Billing cycle: Monthly subscription fees are deducted automatically from the prepaid balance on the 1st of each month.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Monthly Rentals</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>User access fee: $15 per agent profile per month.</li>
+            <li>Number rental fee: $15 per virtual number per month.</li>
+            <li>Monthly rentals are deducted from the prepaid credits. If the balance falls below zero, outgoing calls may be suspended.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>International Call Routing & Leg-based Billing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>VoIP Calling:</strong> Incoming calls to VoIP client are Free. Outgoing calls are charged at the outbound destination country rate.</li>
+            <li><strong>PSTN Calling:</strong> Incoming calls forwarded to Indian numbers are charged at $0.08/min (the India leg) as the US leg is free. Outgoing calls are billed for both legs: the destination country leg plus the Indian telecaller leg ($0.08/min).</li>
+            <li>Pulse rate: All calls are billed on a 60-second pulse.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Compliance & Virtual Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Virtual numbers remain the property of Exotel and are subject to destination country regulations and KYC guidelines.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential and proprietary information of Exotel Techcom Private Limited. It is intended solely for the recipient. Any unauthorized sharing, use, or reproduction is strictly prohibited.
+      </div>
+    `;
+  }
 
   return null;
 }
@@ -1568,6 +1879,25 @@ function getSkuFields(skuKey, tier) {
         { id: 'call_rate', label: 'Campaign Rate (p/min)', value: 60, locked: false },
       ];
 
+    // ── International Commercial (USD) ─────────────────────────────
+    case 'voice_intl':
+      return [
+        // Plan Overview
+        { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
+        // User Plan
+        { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
+        { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
+        // Number Plan
+        { id: 'num_numbers', label: 'No. of US/Intl Numbers', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
+        { id: 'number_charge_usd', label: 'Number Rental (USD/number/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
+        // Call Charges
+        { id: 'intl_country', label: 'Destination Country', value: 'United States', locked: false, type: 'country_select' },
+        { id: 'voip_incoming_usd', label: 'VoIP Incoming (USD/min)', value: 0, locked: true, nonEditable: true },
+        { id: 'voip_outgoing_usd', label: 'VoIP Outgoing (USD/min)', value: 0.02, locked: false },
+        { id: 'pstn_incoming_usd', label: 'PSTN Incoming (USD/min)', value: 0.08, locked: false },
+        { id: 'pstn_outgoing_usd', label: 'PSTN Outgoing (USD/min)', value: 0.10, locked: false },
+      ];
+
     default: return [];
   }
 }
@@ -1631,6 +1961,37 @@ function sanitize(str) {
 function today() {
   const d = new Date();
   return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function updateIntlRates(item, card) {
+  const country = item.values['intl_country'] || 'United States';
+  const countryRates = getIntlCountryRates(country);
+
+  // Priority: Fixed > All > Mobile (use lowest available)
+  let destRate = 0;
+  if (countryRates.length > 0) {
+    const fixed = countryRates.find(r => r.type === 'Fixed');
+    const all   = countryRates.find(r => r.type === 'All');
+    const mobile = countryRates.find(r => r.type === 'Mobile');
+    destRate = (fixed || all || mobile)?.rate ?? 0;
+  }
+
+  // VoIP Outgoing = destination leg rate
+  // PSTN Incoming = India leg only ($0.08)
+  // PSTN Outgoing = destination + India leg
+  item.values['voip_outgoing_usd'] = destRate;
+  item.values['pstn_incoming_usd'] = 0.08;
+  item.values['pstn_outgoing_usd'] = parseFloat((destRate + 0.08).toFixed(4));
+
+  // Update inputs in the card
+  const voipOutEl = card.querySelector('#qf_voip_outgoing_usd_' + item.id);
+  if (voipOutEl) voipOutEl.value = item.values['voip_outgoing_usd'];
+
+  const pstnIncEl = card.querySelector('#qf_pstn_incoming_usd_' + item.id);
+  if (pstnIncEl) pstnIncEl.value = item.values['pstn_incoming_usd'];
+
+  const pstnOutEl = card.querySelector('#qf_pstn_outgoing_usd_' + item.id);
+  if (pstnOutEl) pstnOutEl.value = item.values['pstn_outgoing_usd'];
 }
 
 // ── Confetti burst (same animation as Task Hub completion) ──────
@@ -2241,6 +2602,16 @@ function selectSku(key) {
     return;
   }
 
+  // Currency check: prevent mixing International (USD) with standard plans (INR)
+  if (QG.multiSkuMode && !QG.bundleCompareMode && QG.skuItems.length > 1) {
+    const hasIntl = QG.skuItems.some(i => i.sku_key === 'voice_intl' && i.id !== QG.activeItemId);
+    const isSelectingIntl = key === 'voice_intl';
+    if ((hasIntl && !isSelectingIntl) || (!hasIntl && isSelectingIntl)) {
+      showAlert("International USD plans cannot be mixed with standard INR plans in a single quote.", { type: 'warning', title: 'Currency Mismatch' });
+      return;
+    }
+  }
+
   // Update active item
   const item = getActiveItem();
   item.sku_key = key;
@@ -2829,6 +3200,20 @@ function renderSkuForm(skuKey, tier) {
           return;
         }
 
+        // Country selector and call type selector for International SKU
+        if (f.type === 'country_select') {
+          const selectEl = card.querySelector(`#qf_${f.id}_${item.id}`);
+          if (selectEl) {
+            selectEl.addEventListener('change', () => {
+              item.values[f.id] = selectEl.value;
+              // Recalculate rates for new country
+              updateIntlRates(item, card);
+              updatePreview();
+            });
+          }
+          return;
+        }
+
         const input = card.querySelector('#qf_' + f.id + '_' + item.id);
         if (!input) return;
         input.addEventListener('input', async () => {
@@ -2905,6 +3290,13 @@ function renderSkuForm(skuKey, tier) {
   setTimeout(() => {
     setupLockButtons();
     itemsToRender.forEach(item => window.toggleAddons(item.id, item.sku_key || skuKey, item.tier || tier));
+    // Initialize International rates if voice_intl
+    itemsToRender.forEach(item => {
+      if (item.sku_key === 'voice_intl') {
+        const card = document.getElementById('sku-fields-card-' + item.id);
+        if (card) updateIntlRates(item, card);
+      }
+    });
     updatePreview();
   }, 10);
 }
@@ -3031,6 +3423,34 @@ function isBreaching(f, numVal, item) {
 function renderFieldRow(f, item) {
   const v = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : '');
 
+  if (f.type === 'country_select') {
+    const countries = getIntlCountries();
+    const optionsHtml = countries.map(c => `<option value="${sanitize(c.country)}" ${v === c.country ? 'selected' : ''}>${sanitize(c.country)}</option>`).join('');
+    return `
+      <div class="q-field-row" data-addon="${f.note || ''}">
+        <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+        <div class="q-field-value">
+          <select class="q-input" id="qf_${f.id}_${item.id}" style="width:100%;">
+            ${optionsHtml}
+          </select>
+        </div>
+      </div>`;
+  }
+
+  if (f.type === 'call_type_select') {
+    const callTypes = ['Fixed', 'Mobile'];
+    const optionsHtml = callTypes.map(ct => `<option value="${ct}" ${v === ct ? 'selected' : ''}>${ct}</option>`).join('');
+    return `
+      <div class="q-field-row" data-addon="${f.note || ''}">
+        <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+        <div class="q-field-value">
+          <select class="q-input" id="qf_${f.id}_${item.id}" style="width:100%;">
+            ${optionsHtml}
+          </select>
+        </div>
+      </div>`;
+  }
+
   if (f.nonEditable) {
     const display = f.waived
       ? `<span class="q-waived"><svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:2px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg> Waived</span>`
@@ -3124,15 +3544,20 @@ function renderFieldsGrouped(fields, item) {
     num_months: 'Plan Overview',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
+    user_charge_usd: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
+    number_charge_usd: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
+    prepaid_usd: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
     pulse: 'Call Charges', human_handoff: 'Call Charges',
+    intl_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
+    voip_outgoing_usd: 'Call Charges', pstn_incoming_usd: 'Call Charges', pstn_outgoing_usd: 'Call Charges',
   };
   const sectionOrder = [];
   const sectionMap = {};
@@ -3831,6 +4256,49 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += secRow('Call Credits & Charges');
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+
+    } else if (sk === 'voice_intl') {
+      // ── International Commercial (USD pricing) ──────────────────
+      const fmtUsd = (v) => {
+        if (v === null || v === undefined) return '-';
+        const n = parseFloat(v);
+        if (isNaN(n)) return String(v);
+        return '$' + n.toFixed(4).replace(/\.?0+$/, '');
+      };
+      const fmtUsdFixed = (v, dec = 2) => {
+        if (v === null || v === undefined) return '-';
+        return '$' + parseFloat(v).toFixed(dec);
+      };
+      const prepaid = getSafeNum('prepaid_usd') || 400;
+      const numUsers = getSafeNum('num_users') || 1;
+      const numNumbers = getSafeNum('num_numbers') || 1;
+      const userCharge = getSafeNum('user_charge_usd') || 15;
+      const numCharge = getSafeNum('number_charge_usd') || 15;
+      const country = getVal('intl_country') || 'United States';
+      const voipOut = getSafeNum('voip_outgoing_usd');
+      const pstnInc = getSafeNum('pstn_incoming_usd');
+      const pstnOut = getSafeNum('pstn_outgoing_usd');
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
+      tableHTML += stdRow('Setup Charges', null, true);
+
+      tableHTML += secRow('User Plan');
+      tableHTML += stdRow('No. of Agents', `${numUsers}`);
+      tableHTML += stdRow('User Charge', `${fmtUsdFixed(userCharge)} / agent / month`);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('No. of Numbers', `${numNumbers}`);
+      tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numCharge)} / number / month`);
+
+      tableHTML += secRow(`Call Charges (${sanitize(country)})`);
+      tableHTML += stdRow('VoIP Incoming', FREE);
+      tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOut)} / min`);
+      tableHTML += indRow(`${sanitize(country)} outgoing leg`, `Destination rate — billed to ${sanitize(country)} number`);
+      tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnInc)} / min`);
+      tableHTML += indRow('India agent leg', `${sanitize(country)} leg is free; India-side leg charged at $0.08/min`);
+      tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOut)} / min`);
+      tableHTML += indRow('Breakdown', `${sanitize(country)} leg (${fmtUsd(voipOut)}) + India agent leg ($0.08) = <strong>${fmtUsd(pstnOut)}/min</strong>`);
 
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
@@ -5146,6 +5614,49 @@ function updatePreview() {
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
 
+    } else if (sk === 'voice_intl') {
+      // ── International Commercial (USD pricing) ──────────────────
+      const fmtUsd = (v) => {
+        if (v === null || v === undefined) return '-';
+        const n = parseFloat(v);
+        if (isNaN(n)) return String(v);
+        return '$' + n.toFixed(4).replace(/\.?0+$/, '');
+      };
+      const fmtUsdFixed = (v, dec = 2) => {
+        if (v === null || v === undefined) return '-';
+        return '$' + parseFloat(v).toFixed(dec);
+      };
+      const prepaid = getSafeNum('prepaid_usd') || 400;
+      const numUsersI = getSafeNum('num_users') || 1;
+      const numNumbersI = getSafeNum('num_numbers') || 1;
+      const userChargeI = getSafeNum('user_charge_usd') || 15;
+      const numChargeI = getSafeNum('number_charge_usd') || 15;
+      const countryI = getVal('intl_country') || 'United States';
+      const voipOutI = getSafeNum('voip_outgoing_usd');
+      const pstnIncI = getSafeNum('pstn_incoming_usd');
+      const pstnOutI = getSafeNum('pstn_outgoing_usd');
+
+      tableHTML += secRow('Plan Details');
+      tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
+      tableHTML += stdRow('Setup Charges', null, true);
+
+      tableHTML += secRow('User Plan');
+      tableHTML += stdRow('No. of Agents', `${numUsersI}`);
+      tableHTML += stdRow('User Charge', `${fmtUsdFixed(userChargeI)} / agent / month`);
+
+      tableHTML += secRow('Number Plan');
+      tableHTML += stdRow('No. of Numbers', `${numNumbersI}`);
+      tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numChargeI)} / number / month`);
+
+      tableHTML += secRow(`Call Charges (${sanitize(countryI)})`);
+      tableHTML += stdRow('VoIP Incoming', FREE);
+      tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOutI)} / min`);
+      tableHTML += indRow(`${sanitize(countryI)} outgoing leg`, `Destination rate — billed to ${sanitize(countryI)} number`);
+      tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnIncI)} / min`);
+      tableHTML += indRow('India agent leg', `${sanitize(countryI)} leg is free; India-side leg charged at $0.08/min`);
+      tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOutI)} / min`);
+      tableHTML += indRow('Breakdown', `${sanitize(countryI)} leg (${fmtUsd(voipOutI)}) + India agent leg ($0.08) = <strong>${fmtUsd(pstnOutI)}/min</strong>`);
+
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
       tableHTML += `<tr><td colspan="2" style="padding:8px 14px; background:linear-gradient(135deg,#16a34a,#15803d); color:#fff; font-weight:700; font-size:0.88rem; border-radius:4px 4px 0 0;">
@@ -5183,6 +5694,37 @@ function updatePreview() {
 
     if (!isFirstSec) {
       tableHTML += '</tbody>';
+    }
+
+    // ── International SKU: USD subtotal (not added to INR grand total) ──────
+    if (sk === 'voice_intl') {
+      const prepaidV = getSafeNum('prepaid_usd') || 400;
+
+      grandSubtotal += 0; // USD SKU excluded from INR grand total
+
+      const tierLabel = sku.hasTiers && item.tier
+        ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
+        : '';
+      const sectionTitle = (!sku.hasTiers && item.customName) ? item.customName : `${sku.label}${tierLabel}`;
+      const gstV = Math.round(prepaidV * 0.18 * 100) / 100;
+      const totalV = Math.round((prepaidV + gstV) * 100) / 100;
+
+      allSectionsHTML += `
+      <div class="quote-doc-section sku-card" style="margin-top:24px;">
+        <div class="quote-doc-section-title" style="font-size:1.15rem; background:#e0f2fe; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
+          ${sanitize(sectionTitle)}
+        </div>
+        <table class="quote-sku-table">
+          <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
+          ${tableHTML}
+        </table>
+        <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
+          <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${prepaidV.toFixed(2)}</strong></div>
+          <div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstV.toFixed(2)}</div>
+          <div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total (incl. GST): $${totalV.toFixed(2)}</div>
+        </div>
+      </div>`;
+      continue;
     }
 
     const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
