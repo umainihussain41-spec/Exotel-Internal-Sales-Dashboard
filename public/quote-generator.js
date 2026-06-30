@@ -1884,6 +1884,7 @@ function getSkuFields(skuKey, tier) {
       return [
         // Plan Overview
         { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
+        { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
         // User Plan
         { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
@@ -3567,7 +3568,7 @@ function renderFieldsGrouped(fields, item) {
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
     number_charge_usd: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
-    prepaid_usd: 'Plan Overview',
+    prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
@@ -4318,6 +4319,26 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += indRow(`${sanitize(rmCountry)} agent leg`, `${sanitize(country)} leg is free; ${sanitize(rmCountry)} agent leg charged at ${fmtUsd(rmRate)}/min`);
       tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOut)} / min`);
       tableHTML += indRow('Breakdown', `${sanitize(country)} leg (${fmtUsd(voipOut)}) + ${sanitize(rmCountry)} agent leg (${fmtUsd(rmRate)}) = <strong>${fmtUsd(pstnOut)}/min</strong>`);
+
+      // PDF attachment card (shown when toggle is on)
+      if (getSafeNum('attach_intl_pdf') === 1) {
+        tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
+          <a href="/intl-voice-rates.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+              <rect width="24" height="24" rx="4" fill="#dc2626"/>
+              <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
+              <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
+              <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
+            </svg>
+            <span>International Voice Rate Card &mdash; Outbound Pricing (USD)</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+              <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="10" y1="14" x2="21" y2="3" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </a>
+        </td></tr>`;
+      }
 
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
@@ -5677,6 +5698,26 @@ function updatePreview() {
       tableHTML += indRow(`${sanitize(rmCountryI)} agent leg`, `${sanitize(countryI)} leg is free; ${sanitize(rmCountryI)} agent leg charged at ${fmtUsd(rmRateI)}/min`);
       tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOutI)} / min`);
       tableHTML += indRow('Breakdown', `${sanitize(countryI)} leg (${fmtUsd(voipOutI)}) + ${sanitize(rmCountryI)} agent leg (${fmtUsd(rmRateI)}) = <strong>${fmtUsd(pstnOutI)}/min</strong>`);
+
+      // PDF attachment card (shown when toggle is on)
+      if (getSafeNum('attach_intl_pdf') === 1) {
+        tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
+          <a href="/intl-voice-rates.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+              <rect width="24" height="24" rx="4" fill="#dc2626"/>
+              <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
+              <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
+              <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
+            </svg>
+            <span>International Voice Rate Card &mdash; Outbound Pricing (USD)</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+              <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="10" y1="14" x2="21" y2="3" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </a>
+        </td></tr>`;
+      }
 
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
