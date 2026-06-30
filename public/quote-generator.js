@@ -1892,6 +1892,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'number_charge_usd', label: 'Number Rental (USD/number/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
         // Call Charges
         { id: 'intl_country', label: 'Destination Country', value: 'United States', locked: false, type: 'country_select' },
+        { id: 'rm_country', label: 'RM / Agent Location', value: 'India', locked: false, type: 'country_select' },
         { id: 'voip_incoming_usd', label: 'VoIP Incoming (USD/min)', value: 0, locked: true, nonEditable: true },
         { id: 'voip_outgoing_usd', label: 'VoIP Outgoing (USD/min)', value: 0.02, locked: false },
         { id: 'pstn_incoming_usd', label: 'PSTN Incoming (USD/min)', value: 0.08, locked: false },
@@ -1965,23 +1966,39 @@ function today() {
 
 function updateIntlRates(item, card) {
   const country = item.values['intl_country'] || 'United States';
-  const countryRates = getIntlCountryRates(country);
+  const rmCountry = item.values['rm_country'] || 'India';
 
-  // Priority: Fixed > All > Mobile (use lowest available)
+  // Destination leg rate — Priority: Fixed > All > Mobile
+  const destRates = getIntlCountryRates(country);
   let destRate = 0;
-  if (countryRates.length > 0) {
-    const fixed = countryRates.find(r => r.type === 'Fixed');
-    const all   = countryRates.find(r => r.type === 'All');
-    const mobile = countryRates.find(r => r.type === 'Mobile');
+  if (destRates.length > 0) {
+    const fixed = destRates.find(r => r.type === 'Fixed');
+    const all   = destRates.find(r => r.type === 'All');
+    const mobile = destRates.find(r => r.type === 'Mobile');
     destRate = (fixed || all || mobile)?.rate ?? 0;
   }
 
-  // VoIP Outgoing = destination leg rate
-  // PSTN Incoming = India leg only ($0.08)
-  // PSTN Outgoing = destination + India leg
+  // RM / Agent leg rate — lookup from rate card (India = $0.08 hardcoded as default)
+  let rmRate = 0.08; // India default
+  if (rmCountry !== 'India') {
+    const rmRates = getIntlCountryRates(rmCountry);
+    if (rmRates.length > 0) {
+      const fixed = rmRates.find(r => r.type === 'Fixed');
+      const all   = rmRates.find(r => r.type === 'All');
+      const mobile = rmRates.find(r => r.type === 'Mobile');
+      rmRate = (fixed || all || mobile)?.rate ?? 0.08;
+    }
+  }
+
+  // VoIP Outgoing = destination leg rate only
+  // PSTN Incoming = RM/agent leg only (destination leg is free)
+  // PSTN Outgoing = destination leg + RM/agent leg
   item.values['voip_outgoing_usd'] = destRate;
-  item.values['pstn_incoming_usd'] = 0.08;
-  item.values['pstn_outgoing_usd'] = parseFloat((destRate + 0.08).toFixed(4));
+  item.values['pstn_incoming_usd'] = parseFloat(rmRate.toFixed(4));
+  item.values['pstn_outgoing_usd'] = parseFloat((destRate + rmRate).toFixed(4));
+
+  // Store the resolved rm rate for preview use
+  item.values['_rm_rate'] = rmRate;
 
   // Update inputs in the card
   const voipOutEl = card.querySelector('#qf_voip_outgoing_usd_' + item.id);
@@ -3556,7 +3573,7 @@ function renderFieldsGrouped(fields, item) {
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
     pulse: 'Call Charges', human_handoff: 'Call Charges',
-    intl_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
+    intl_country: 'Call Charges', rm_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
     voip_outgoing_usd: 'Call Charges', pstn_incoming_usd: 'Call Charges', pstn_outgoing_usd: 'Call Charges',
   };
   const sectionOrder = [];
@@ -4275,6 +4292,8 @@ function _renderBundleItemsHTML(bundleItems) {
       const userCharge = getSafeNum('user_charge_usd') || 15;
       const numCharge = getSafeNum('number_charge_usd') || 15;
       const country = getVal('intl_country') || 'United States';
+      const rmCountry = getVal('rm_country') || 'India';
+      const rmRate = getSafeNum('_rm_rate') || 0.08;
       const voipOut = getSafeNum('voip_outgoing_usd');
       const pstnInc = getSafeNum('pstn_incoming_usd');
       const pstnOut = getSafeNum('pstn_outgoing_usd');
@@ -4296,9 +4315,9 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOut)} / min`);
       tableHTML += indRow(`${sanitize(country)} outgoing leg`, `Destination rate — billed to ${sanitize(country)} number`);
       tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnInc)} / min`);
-      tableHTML += indRow('India agent leg', `${sanitize(country)} leg is free; India-side leg charged at $0.08/min`);
+      tableHTML += indRow(`${sanitize(rmCountry)} agent leg`, `${sanitize(country)} leg is free; ${sanitize(rmCountry)} agent leg charged at ${fmtUsd(rmRate)}/min`);
       tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOut)} / min`);
-      tableHTML += indRow('Breakdown', `${sanitize(country)} leg (${fmtUsd(voipOut)}) + India agent leg ($0.08) = <strong>${fmtUsd(pstnOut)}/min</strong>`);
+      tableHTML += indRow('Breakdown', `${sanitize(country)} leg (${fmtUsd(voipOut)}) + ${sanitize(rmCountry)} agent leg (${fmtUsd(rmRate)}) = <strong>${fmtUsd(pstnOut)}/min</strong>`);
 
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
@@ -5632,6 +5651,8 @@ function updatePreview() {
       const userChargeI = getSafeNum('user_charge_usd') || 15;
       const numChargeI = getSafeNum('number_charge_usd') || 15;
       const countryI = getVal('intl_country') || 'United States';
+      const rmCountryI = getVal('rm_country') || 'India';
+      const rmRateI = getSafeNum('_rm_rate') || 0.08;
       const voipOutI = getSafeNum('voip_outgoing_usd');
       const pstnIncI = getSafeNum('pstn_incoming_usd');
       const pstnOutI = getSafeNum('pstn_outgoing_usd');
@@ -5653,9 +5674,9 @@ function updatePreview() {
       tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOutI)} / min`);
       tableHTML += indRow(`${sanitize(countryI)} outgoing leg`, `Destination rate — billed to ${sanitize(countryI)} number`);
       tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnIncI)} / min`);
-      tableHTML += indRow('India agent leg', `${sanitize(countryI)} leg is free; India-side leg charged at $0.08/min`);
+      tableHTML += indRow(`${sanitize(rmCountryI)} agent leg`, `${sanitize(countryI)} leg is free; ${sanitize(rmCountryI)} agent leg charged at ${fmtUsd(rmRateI)}/min`);
       tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOutI)} / min`);
-      tableHTML += indRow('Breakdown', `${sanitize(countryI)} leg (${fmtUsd(voipOutI)}) + India agent leg ($0.08) = <strong>${fmtUsd(pstnOutI)}/min</strong>`);
+      tableHTML += indRow('Breakdown', `${sanitize(countryI)} leg (${fmtUsd(voipOutI)}) + ${sanitize(rmCountryI)} agent leg (${fmtUsd(rmRateI)}) = <strong>${fmtUsd(pstnOutI)}/min</strong>`);
 
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
