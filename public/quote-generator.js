@@ -1895,7 +1895,7 @@ function getSkuFields(skuKey, tier) {
         // Plan Overview
         { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
         { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
-        { id: 'fee_type', label: 'Apply Fee to Quote', value: 1, type: 'fee_select' },
+        { id: 'fee_type', label: 'Apply Fee to Quote', value: 2, type: 'fee_select' },
         // User Plan
         { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
@@ -3535,7 +3535,7 @@ function renderFieldRow(f, item) {
   }
 
   if (f.type === 'fee_select') {
-    const feeVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 1);
+    const feeVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 2);
     return `
       <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
         <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
