@@ -1467,8 +1467,9 @@ function getSkuFields(skuKey, tier) {
     // ── Exotel STD (minute-based, with addons) ──────────────────────
     case 'voice_exotel_std': {
       return [
-        { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
+        { id: 'validity', label: 'Validity (months)', value: t.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'attach_isd_pdf', label: 'Attach ISD Rate Card PDF', value: 0, type: 'boolean' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
@@ -1494,6 +1495,7 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'validity', label: 'Validity (months)', value: 11, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: 1000, type: 'rental_toggle', locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'attach_isd_pdf', label: 'Attach ISD Rate Card PDF', value: 0, type: 'boolean' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
@@ -1683,7 +1685,7 @@ function getSkuFields(skuKey, tier) {
     case 'sip_veeno': {
       const t2 = TIER_DEFAULTS[tier] || TIER_DEFAULTS.dabbler;
       return [
-        { id: 'validity', label: 'Validity (months)', value: t2.validity, locked: true, nonEditable: true },
+        { id: 'validity', label: 'Validity (months)', value: t2.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t2.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
@@ -1721,7 +1723,7 @@ function getSkuFields(skuKey, tier) {
       ];
     case 'voice_exotel_campaigns': {
       return [
-        { id: 'validity', label: 'Validity (months)', value: t.validity, locked: true, nonEditable: true },
+        { id: 'validity', label: 'Validity (months)', value: t.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
@@ -1789,18 +1791,26 @@ function getSkuFields(skuKey, tier) {
       ];
     case 'startup_stream':
       return [
+        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'num_channels', label: 'No. of Channels', value: 2, locked: false },
-        { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: false },
-        { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
-        { id: 'credits', label: 'Call Credits (₹)', value: 3000, locked: false, stopType: 'upper', stopVal: 6000 },
-        { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: false },
-        { id: 'incoming', label: 'Incoming Call Charge (p/min)', value: 20, locked: false },
+        { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
+        { id: 'num_channels', label: 'No. of Channels', value: 5, locked: true, stopType: 'lower', stopVal: 3 },
+        { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
+        { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 4000 },
+        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
+        { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
         { id: 'human_handoff', label: 'Enable Human Handoff? (Voicebot to Agent)', type: 'boolean', value: 0 },
-        { id: 'attempt', label: 'Failed Calls (p/min)', value: 6, locked: false },
+        { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 6, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
+        { id: 'free_users', label: 'Free Users', value: 3, locked: true, stopType: 'upper', stopVal: 5 },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'did_numbers', label: 'No. of Mobile DID Numbers', value: 0, locked: false },
-        { id: 'did_cost', label: 'Mobile DID Cost (₹/number/month)', value: 1500, locked: false },
+        { id: 'did_cost', label: 'Mobile DID Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
       ];
     case 'startup_tfn':
       return [
@@ -1885,6 +1895,7 @@ function getSkuFields(skuKey, tier) {
         // Plan Overview
         { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
         { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
+        { id: 'fee_type', label: 'Apply Fee to Quote', value: 0, type: 'fee_select' },
         // User Plan
         { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
@@ -3176,7 +3187,7 @@ function renderSkuForm(skuKey, tier) {
           return;
         }
 
-        if (f.type === 'boolean' || f.type === 'model_toggle') {
+        if (f.type === 'boolean' || f.type === 'model_toggle' || f.type === 'fee_select') {
           const toggleGroup = card.querySelector(`#qf_toggle_${f.id}_${item.id}`);
           toggleGroup?.querySelectorAll('.q-toggle-opt').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -3523,6 +3534,21 @@ function renderFieldRow(f, item) {
       </div>`;
   }
 
+  if (f.type === 'fee_select') {
+    const feeVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
+    return `
+      <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
+        <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+        <div class="q-field-value" style="justify-content:flex-end;">
+          <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}" style="font-size:0.72rem;">
+            <button type="button" class="q-toggle-opt${feeVal == 0 ? ' active' : ''}" data-val="0">None</button>
+            <button type="button" class="q-toggle-opt${feeVal == 1 ? ' active' : ''}" data-val="1">3% Conv.</button>
+            <button type="button" class="q-toggle-opt${feeVal == 2 ? ' active' : ''}" data-val="2">18% GST</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   if (f.type === 'rental_toggle') {
     const rtVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
     const rtOneTime = (item.values['rental_onetime'] ?? 0) == 1;
@@ -3568,7 +3594,7 @@ function renderFieldsGrouped(fields, item) {
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
     number_charge_usd: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
-    prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview',
+    prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
@@ -3837,6 +3863,26 @@ function _renderBundleItemsHTML(bundleItems) {
           tableHTML += stdRow('WhatsApp API Charge', fmtPaiseMsg(getSafeNum('wa_api')));
         }
       }
+
+      // ISD PDF attachment card (shown when toggle is on)
+      if (getSafeNum('attach_isd_pdf') === 1) {
+        tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
+          <a href="${window.location.origin}/country-wise-isd-pricing.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+              <rect width="24" height="24" rx="4" fill="#dc2626"/>
+              <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
+              <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
+              <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
+            </svg>
+            <span>ISD Voice Rate Card - Country-wise Outbound Pricing</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+              <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="10" y1="14" x2="21" y2="3" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </a>
+        </td></tr>`;
+      }
     } else if (effectiveSk === 'voice_veeno_std') {
       const numUsers = getSafeNum('num_users') || 0;
       const uCharge = getSafeNum('user_charge') || 1000;
@@ -3915,6 +3961,26 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Incoming Call Charges', incomingV === 0 ? FREE : fmtPaise(incomingV));
       tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
       if (showCt) tableHTML += stdRow('Call Transfer Add-on', `${fmtRupee(getSafeNum('call_transfer'))}/month`);
+
+      // ISD PDF attachment card (shown when toggle is on)
+      if (getSafeNum('attach_isd_pdf') === 1) {
+        tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
+          <a href="${window.location.origin}/country-wise-isd-pricing.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+              <rect width="24" height="24" rx="4" fill="#dc2626"/>
+              <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
+              <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
+              <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
+            </svg>
+            <span>ISD Voice Rate Card - Country-wise Outbound Pricing</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+              <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="10" y1="14" x2="21" y2="3" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </a>
+        </td></tr>`;
+      }
 
     } else if (effectiveSk === 'sip_veeno') {
       tableHTML += secRow('Plan Details');
@@ -4314,7 +4380,7 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += secRow(`Call Charges (${sanitize(country)})`);
       tableHTML += stdRow('VoIP Incoming', FREE);
       tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOut)} / min`);
-      tableHTML += indRow(`${sanitize(country)} outgoing leg`, `Destination rate — billed to ${sanitize(country)} number`);
+      tableHTML += indRow(`${sanitize(country)} outgoing leg`, `Destination rate - billed to ${sanitize(country)} number`);
       tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnInc)} / min`);
       tableHTML += indRow(`${sanitize(rmCountry)} agent leg`, `${sanitize(country)} leg is free; ${sanitize(rmCountry)} agent leg charged at ${fmtUsd(rmRate)}/min`);
       tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOut)} / min`);
@@ -4323,14 +4389,14 @@ function _renderBundleItemsHTML(bundleItems) {
       // PDF attachment card (shown when toggle is on)
       if (getSafeNum('attach_intl_pdf') === 1) {
         tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
-          <a href="/intl-voice-rates.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+          <a href="${window.location.origin}/intl-voice-rates.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
               <rect width="24" height="24" rx="4" fill="#dc2626"/>
               <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
               <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
               <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
             </svg>
-            <span>International Voice Rate Card &mdash; Outbound Pricing (USD)</span>
+            <span>International Voice Rate Card - Outbound Pricing (USD)</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
               <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
               <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4339,6 +4405,25 @@ function _renderBundleItemsHTML(bundleItems) {
           </a>
         </td></tr>`;
       }
+
+      // Convenience fee / GST subtotal card
+      const feeTypeB = getSafeNum('fee_type'); // 0=none, 1=3% conv fee, 2=18% GST
+      const convFeeB = feeTypeB === 1 ? Math.round(prepaid * 0.03 * 100) / 100 : 0;
+      const gstFeeB  = feeTypeB === 2 ? Math.round(prepaid * 0.18 * 100) / 100 : 0;
+      const totalFeeB = convFeeB + gstFeeB;
+      const totalWithFeeB = Math.round((prepaid + totalFeeB) * 100) / 100;
+      tableHTML += `<tr><td colspan="2" style="padding:0;"></td></tr>`; // spacer
+
+      // Build the subtotal card inline (appended as a section below the table)
+      const intlSubtotalCardB = `<div style="margin-top:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
+        <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${prepaid.toFixed(2)}</strong></div>
+        ${feeTypeB === 1 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Convenience Fee (3%): $${convFeeB.toFixed(2)}</div>` : ''}
+        ${feeTypeB === 2 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstFeeB.toFixed(2)}</div>` : ''}
+        ${feeTypeB > 0 ? `<div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total: $${totalWithFeeB.toFixed(2)}</div>` : ''}
+      </div>`;
+
+      // Inject subtotal card as a trailing element (stored for allSectionsHTML)
+      item._intlSubtotalCardB = intlSubtotalCardB;
 
     } else if (sk.startsWith('startup_')) {
       // ── Startup Plan: all rows shown as complimentary ────────
@@ -4437,7 +4522,7 @@ function _renderBundleItemsHTML(bundleItems) {
         <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
         ${tableHTML}
       </table>
-      ${subtotal > 0 ? `<div style="text-align:right; font-weight:600; padding:10px 14px; font-size:0.88rem; color:#0f172a; border-top:1px solid #f1f5f9;">Item Subtotal: ${fmtRupee(subtotal)}</div>` : ''}
+      ${sk === 'voice_intl' ? (item._intlSubtotalCardB || '') : (subtotal > 0 ? `<div style="text-align:right; font-weight:600; padding:10px 14px; font-size:0.88rem; color:#0f172a; border-top:1px solid #f1f5f9;">Item Subtotal: ${fmtRupee(subtotal)}</div>` : '')}
     </div>`;
   }
 
@@ -5215,6 +5300,26 @@ function updatePreview() {
           tableHTML += stdRow('WhatsApp API Charge', fmtPaiseMsg(getSafeNum('wa_api')));
         }
       }
+
+      // ISD PDF attachment card (shown when toggle is on)
+      if (getSafeNum('attach_isd_pdf') === 1) {
+        tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
+          <a href="${window.location.origin}/country-wise-isd-pricing.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+              <rect width="24" height="24" rx="4" fill="#dc2626"/>
+              <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
+              <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
+              <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
+            </svg>
+            <span>ISD Voice Rate Card - Country-wise Outbound Pricing</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+              <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="10" y1="14" x2="21" y2="3" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </a>
+        </td></tr>`;
+      }
     } else if (effectiveSk === 'voice_veeno_std') {
       const numUsers = getSafeNum('num_users') || 0;
       const uCharge = getSafeNum('user_charge') || 1000;
@@ -5293,6 +5398,26 @@ function updatePreview() {
       tableHTML += stdRow('Incoming Call Charges', incomingV === 0 ? FREE : fmtPaise(incomingV));
       tableHTML += stdRow('Outgoing Call Charges', fmtPaise(getSafeNum('outgoing')));
       if (showCt) tableHTML += stdRow('Call Transfer Add-on', `${fmtRupee(getSafeNum('call_transfer'))}/month`);
+
+      // ISD PDF attachment card (shown when toggle is on)
+      if (getSafeNum('attach_isd_pdf') === 1) {
+        tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
+          <a href="${window.location.origin}/country-wise-isd-pricing.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+              <rect width="24" height="24" rx="4" fill="#dc2626"/>
+              <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
+              <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
+              <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
+            </svg>
+            <span>ISD Voice Rate Card - Country-wise Outbound Pricing</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
+              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+              <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="10" y1="14" x2="21" y2="3" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </a>
+        </td></tr>`;
+      }
 
     } else if (effectiveSk === 'sip_veeno') {
       tableHTML += secRow('Plan Details');
@@ -5693,7 +5818,7 @@ function updatePreview() {
       tableHTML += secRow(`Call Charges (${sanitize(countryI)})`);
       tableHTML += stdRow('VoIP Incoming', FREE);
       tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOutI)} / min`);
-      tableHTML += indRow(`${sanitize(countryI)} outgoing leg`, `Destination rate — billed to ${sanitize(countryI)} number`);
+      tableHTML += indRow(`${sanitize(countryI)} outgoing leg`, `Destination rate - billed to ${sanitize(countryI)} number`);
       tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnIncI)} / min`);
       tableHTML += indRow(`${sanitize(rmCountryI)} agent leg`, `${sanitize(countryI)} leg is free; ${sanitize(rmCountryI)} agent leg charged at ${fmtUsd(rmRateI)}/min`);
       tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOutI)} / min`);
@@ -5702,14 +5827,14 @@ function updatePreview() {
       // PDF attachment card (shown when toggle is on)
       if (getSafeNum('attach_intl_pdf') === 1) {
         tableHTML += `<tr><td colspan="2" style="padding:10px 14px;">
-          <a href="/intl-voice-rates.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
+          <a href="${window.location.origin}/intl-voice-rates.pdf" target="_blank" style="display:inline-flex; align-items:center; gap:10px; padding:10px 16px; background:linear-gradient(135deg,#f0f9ff,#e0f2fe); border:1.5px solid #7dd3fc; border-radius:8px; text-decoration:none; color:#0369a1; font-size:0.82rem; font-weight:600; box-shadow:0 1px 4px rgba(2,132,199,0.10);">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
               <rect width="24" height="24" rx="4" fill="#dc2626"/>
               <path d="M6 4h8l4 4v12a1 1 0 01-1 1H6a1 1 0 01-1-1V5a1 1 0 011-1z" fill="white" opacity="0.9"/>
               <path d="M14 4l4 4h-4V4z" fill="#fca5a5"/>
               <text x="7" y="17" font-family="Arial" font-size="4.5" font-weight="bold" fill="#dc2626">PDF</text>
             </svg>
-            <span>International Voice Rate Card &mdash; Outbound Pricing (USD)</span>
+            <span>International Voice Rate Card - Outbound Pricing (USD)</span>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="margin-left:4px; opacity:0.6">
               <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" stroke="#0369a1" stroke-width="2" stroke-linecap="round"/>
               <polyline points="15 3 21 3 21 9" stroke="#0369a1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -5764,12 +5889,16 @@ function updatePreview() {
 
       grandSubtotal += 0; // USD SKU excluded from INR grand total
 
+      const feeTypeV = getSafeNum('fee_type'); // 0=none, 1=3% conv fee, 2=18% GST
+      const convFeeV = feeTypeV === 1 ? Math.round(prepaidV * 0.03 * 100) / 100 : 0;
+      const gstFeeV  = feeTypeV === 2 ? Math.round(prepaidV * 0.18 * 100) / 100 : 0;
+      const totalFeeV = convFeeV + gstFeeV;
+      const totalWithFeeV = Math.round((prepaidV + totalFeeV) * 100) / 100;
+
       const tierLabel = sku.hasTiers && item.tier
         ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
         : '';
       const sectionTitle = (!sku.hasTiers && item.customName) ? item.customName : `${sku.label}${tierLabel}`;
-      const gstV = Math.round(prepaidV * 0.18 * 100) / 100;
-      const totalV = Math.round((prepaidV + gstV) * 100) / 100;
 
       allSectionsHTML += `
       <div class="quote-doc-section sku-card" style="margin-top:24px;">
@@ -5782,8 +5911,9 @@ function updatePreview() {
         </table>
         <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
           <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${prepaidV.toFixed(2)}</strong></div>
-          <div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstV.toFixed(2)}</div>
-          <div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total (incl. GST): $${totalV.toFixed(2)}</div>
+          ${feeTypeV === 1 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Convenience Fee (3%): $${convFeeV.toFixed(2)}</div>` : ''}
+          ${feeTypeV === 2 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstFeeV.toFixed(2)}</div>` : ''}
+          ${feeTypeV > 0 ? `<div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total: $${totalWithFeeV.toFixed(2)}</div>` : ''}
         </div>
       </div>`;
       continue;
