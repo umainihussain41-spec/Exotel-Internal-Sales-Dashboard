@@ -29,6 +29,7 @@ const QG = {
   bundleB: null,
   activeBundle: 'A',
   savedSingleState: null,
+  bundleMergeMode: false,  // true when Bundle Merge (club SKUs) mode is active
 };
 
 // ── SKU Definitions ────────────────────────────────────────
@@ -49,6 +50,16 @@ const I_VS = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns=
   <rect x="14" y="3" width="9" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
   <circle cx="12" cy="12" r="4.5" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.5"/>
   <text x="12" y="15.5" text-anchor="middle" font-size="5.5" font-weight="800" fill="currentColor" font-family="system-ui,sans-serif" letter-spacing="-0.3">VS</text>
+</svg>`;
+
+// Bundle Merge — package/bundle icon
+const I_MERGE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="1" y="3" width="6" height="8" rx="1.5"/>
+  <rect x="9" y="3" width="6" height="8" rx="1.5"/>
+  <rect x="17" y="3" width="6" height="8" rx="1.5"/>
+  <path d="M4 11 L4 14 Q4 17 7 17 L17 17 Q20 17 20 14 L20 11"/>
+  <line x1="12" y1="17" x2="12" y2="21"/>
+  <circle cx="12" cy="21" r="1.5" fill="currentColor" stroke="none"/>
 </svg>`;
 
 const SKUS = [
@@ -76,6 +87,9 @@ const SKUS = [
 
   // ── Bundle Compare — special toggle card (not a real SKU) ────────
   { key: 'bundle_compare', label: 'Bundle Compare', sub: 'Compare Option A vs B', entity: 'Both', theme: 'bundle', icon: I_VS, hasTiers: false, isBundleCompare: true },
+
+  // ── Bundle Merge — special toggle card (not a real SKU) ─────────
+  { key: 'bundle_merge', label: 'Bundle Package', sub: 'Club SKUs into one proposal', entity: 'Both', theme: 'bundle', icon: I_MERGE, hasTiers: false, isBundleMerge: true },
 ];
 
 // Tier defaults
@@ -1615,7 +1629,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
-        { id: 'num_channels', label: 'No. of Channels', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
+        { id: 'num_channels', label: 'Free Channels (Included)', value: 5, locked: true, stopType: 'lower', stopVal: 1 },
+        { id: 'num_paid_channels', label: 'No. of Paid Channels', value: 0, locked: false, note: 'Additional channels charged at the rate below' },
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
         { id: 'volume', label: 'Monthly Call Volume (mins)', value: 1000, locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: 50000, locked: true, stopType: 'lower', stopVal: 50000, note: 'Volume × Rate × Months (Min ₹50,000)' },
@@ -1899,16 +1914,17 @@ function getSkuFields(skuKey, tier) {
         // User Plan
         { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
-        // Number Plan
-        { id: 'num_numbers', label: 'No. of US/Intl Numbers', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
-        { id: 'number_charge_usd', label: 'Number Rental (USD/number/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
-        // Call Charges
-        { id: 'intl_country', label: 'Destination Country', value: 'United States', locked: false, type: 'country_select' },
-        { id: 'rm_country', label: 'RM / Agent Location', value: 'India', locked: false, type: 'country_select' },
-        { id: 'voip_incoming_usd', label: 'VoIP Incoming (USD/min)', value: 0, locked: true, nonEditable: true },
-        { id: 'voip_outgoing_usd', label: 'VoIP Outgoing (USD/min)', value: 0.02, locked: false },
-        { id: 'pstn_incoming_usd', label: 'PSTN Incoming (USD/min)', value: 0.08, locked: false },
-        { id: 'pstn_outgoing_usd', label: 'PSTN Outgoing (USD/min)', value: 0.10, locked: false },
+        // Number Plan — multi-entry table
+        { id: 'intl_entries', label: 'International Numbers & Rates', type: 'intl_numbers_table', value: [] },
+        // Legacy single-entry kept for backward compat (hidden by table)
+        { id: 'num_numbers', label: 'No. of US/Intl Numbers', value: 1, locked: false, stopType: 'lower', stopVal: 1, note: '_legacy_intl' },
+        { id: 'number_charge_usd', label: 'Number Rental (USD/number/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10, note: '_legacy_intl' },
+        { id: 'intl_country', label: 'Destination Country', value: 'United States', locked: false, type: 'country_select', note: '_legacy_intl' },
+        { id: 'rm_country', label: 'RM / Agent Location', value: 'India', locked: false, type: 'country_select', note: '_legacy_intl' },
+        { id: 'voip_incoming_usd', label: 'VoIP Incoming (USD/min)', value: 0, locked: true, nonEditable: true, note: '_legacy_intl' },
+        { id: 'voip_outgoing_usd', label: 'VoIP Outgoing (USD/min)', value: 0.02, locked: false, note: '_legacy_intl' },
+        { id: 'pstn_incoming_usd', label: 'PSTN Incoming (USD/min)', value: 0.08, locked: false, note: '_legacy_intl' },
+        { id: 'pstn_outgoing_usd', label: 'PSTN Outgoing (USD/min)', value: 0.10, locked: false, note: '_legacy_intl' },
       ];
 
     default: return [];
@@ -1918,7 +1934,7 @@ function getSkuFields(skuKey, tier) {
 
 // ── Multi-SKU Helpers ──────────────────────────────────────
 function _makeItem(id) {
-  return { id, sku_key: null, tier: 'dabbler', values: {}, stopLockOverrides: [], customName: '' };
+  return { id, sku_key: null, tier: 'dabbler', values: {}, stopLockOverrides: [], customName: '', excluded: false };
 }
 
 function initSkuItems() {
@@ -2177,16 +2193,20 @@ function renderSkuItemManager() {
     if (lockName) lockName.textContent = QG.lockedEntity;
     if (hint) hint.textContent = QG.bundleCompareMode
       ? `Option ${QG.activeBundle} is using ${QG.lockedEntity} SKUs. Switch to the other option to pick a different entity.`
-      : `You can only add ${QG.lockedEntity} SKUs to this quote.`;
+      : QG.bundleMergeMode
+        ? `Bundle Package mode — add SKUs then use "✕ Take Out" to exclude any from the final proposal.`
+        : `You can only add ${QG.lockedEntity} SKUs to this quote.`;
   } else {
     if (lockBadge) lockBadge.style.display = 'none';
-    if (hint) hint.textContent = 'Choose the product plan for this quote. The logo and entity will switch automatically.';
+    if (hint) hint.textContent = QG.bundleMergeMode
+      ? 'Bundle Package mode — add multiple SKUs to create one combined proposal. Use "✕ Take Out" to exclude any sub-SKU.'
+      : 'Choose the product plan for this quote. The logo and entity will switch automatically.';
   }
 
   // Item rows — inline rename: pencil click swaps label into an input in-place
   if (!QG._renamingItemId) QG._renamingItemId = null;
 
-  list.innerHTML = QG.skuItems.map((item, idx) => {
+  let itemsHtml = QG.skuItems.map((item, idx) => {
     const sku = SKUS.find(s => s.key === item.sku_key);
     const isActive = item.id === QG.activeItemId;
     const tierDisplayName = TIER_DISPLAY_NAMES[item.tier] || (item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : '');
@@ -2197,10 +2217,11 @@ function renderSkuItemManager() {
     const fullLabel = sku ? `${skuLabel}${suffix}` : 'Not configured';
     const entityColor = sku?.entity === 'Veeno' ? '#be185d' : '#0369a1';
     const entityBg = sku?.entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
-    const showRemove = QG.skuItems.length > 1;
+    const showRemove = QG.skuItems.length > 1 && !QG.bundleMergeMode;
     const canRename = sku && CUSTOM_NAME_SKUS.includes(item.sku_key);
     const hasCustomName = !!(item.customName);
     const isRenaming = QG._renamingItemId === item.id;
+    const isExcluded = !!(item.excluded && QG.bundleMergeMode);
 
     // Placeholder for the rename input = default tier name (not custom)
     const defaultName = TIER_DISPLAY_NAMES[item.tier] || (item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : skuLabel);
@@ -2217,22 +2238,48 @@ function renderSkuItemManager() {
            onkeydown="if(event.key==='Enter'||event.key==='Escape'){event.preventDefault();window.commitItemRename('${item.id}')}"
            style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};border:none;border-bottom:2px solid #0284c7;background:transparent;outline:none;font-family:inherit;width:100%;padding:0;"
          >`
-      : `<div style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sku ? sanitize(fullLabel) : '<span style="color:#94a3b8;font-style:italic;">Not configured</span>'}</div>`;
+      : `<div style="font-weight:600;font-size:0.88rem;color:${isExcluded ? '#94a3b8' : isActive ? '#0284c7' : '#1e293b'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isExcluded ? 'text-decoration:line-through;' : ''}">${sku ? sanitize(fullLabel) : '<span style="color:#94a3b8;font-style:italic;">Not configured</span>'}</div>`;
+
+    // Take-Out button: only shown in bundle merge mode (replaces remove)
+    const takeOutBtn = QG.bundleMergeMode && sku ? `<button
+      onclick="event.stopPropagation();window.toggleSkuExclusion('${item.id}')"
+      title="${isExcluded ? 'Add back to bundle' : 'Take out from bundle'}"
+      style="flex-shrink:0;border:none;border-radius:6px;padding:2px 7px;font-size:0.68rem;font-weight:700;cursor:pointer;transition:all 0.15s;background:${isExcluded ? '#dcfce7' : '#fef3c7'};color:${isExcluded ? '#15803d' : '#b45309'};"
+      onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"
+    >${isExcluded ? '+ Add Back' : '✕ Take Out'}</button>` : (showRemove ? `<button onclick="window.removeSkuItem('${item.id}')" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-size:15px;line-height:1;transition:background 0.15s;" onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'" title="Remove item">×</button>` : '<div style="width:24px;flex-shrink:0;"></div>');
+
+    // Indicator dot: amber when excluded in merge mode
+    const dotColor = isExcluded ? '#f59e0b' : isActive ? '#0284c7' : '#cbd5e1';
 
     return `
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;">
-        <div class="sku-item-row ${isActive ? 'active' : ''}" onclick="window.switchActiveItem('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1.5px solid ${isRenaming ? '#0284c7' : isActive ? '#0284c7' : '#e2e8f0'};background:${isActive ? '#f0f9ff' : '#fff'};transition:all 0.15s;flex:1;min-width:0;">
-          <div style="width:8px;height:8px;border-radius:50%;background:${isActive ? '#0284c7' : '#cbd5e1'};flex-shrink:0;"></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;${isExcluded ? 'opacity:0.65;' : ''}">
+        <div class="sku-item-row ${isActive ? 'active' : ''}" onclick="window.switchActiveItem('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1.5px solid ${isRenaming ? '#0284c7' : isExcluded ? '#fde68a' : isActive ? '#0284c7' : '#e2e8f0'};background:${isExcluded ? '#fffbeb' : isActive ? '#f0f9ff' : '#fff'};transition:all 0.15s;flex:1;min-width:0;">
+          <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
           <div style="flex:1;min-width:0;">
             ${labelArea}
-            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1} · ${sku.entity}${hasCustomName && !isRenaming ? ' · <span style="color:#0284c7;">renamed</span>' : ''}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
+            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1} · ${sku.entity}${isExcluded ? ' · <span style="color:#b45309;font-style:italic;">excluded</span>' : (hasCustomName && !isRenaming ? ' · <span style="color:#0284c7;">renamed</span>' : '')}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
           </div>
           ${sku ? `<span style="padding:2px 7px;border-radius:20px;font-size:0.68rem;font-weight:700;background:${entityBg};color:${entityColor};">${sku.entity}</span>` : ''}
         </div>
-        ${canRename ? `<button onclick="event.stopPropagation();window.openItemRename('${item.id}')" title="${isRenaming ? 'Finish renaming' : 'Rename plan'}" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'};color:${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;" onmouseover="this.style.background='#e0f2fe';this.style.color='#0284c7'" onmouseout="this.style.background='${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'}';this.style.color='${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '<div style="width:24px;flex-shrink:0;"></div>'}
-        ${showRemove ? `<button onclick="window.removeSkuItem('${item.id}')" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-size:15px;line-height:1;transition:background 0.15s;" onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'" title="Remove item">×</button>` : '<div style="width:24px;flex-shrink:0;"></div>'}
+        ${canRename && !QG.bundleMergeMode ? `<button onclick="event.stopPropagation();window.openItemRename('${item.id}')" title="${isRenaming ? 'Finish renaming' : 'Rename plan'}" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'};color:${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;" onmouseover="this.style.background='#e0f2fe';this.style.color='#0284c7'" onmouseout="this.style.background='${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'}';this.style.color='${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '<div style="width:24px;flex-shrink:0;"></div>'}
+        ${takeOutBtn}
       </div>`;
   }).join('');
+
+  if (QG.multiSkuMode && QG.skuItems.length < 3) {
+    itemsHtml += `
+      <div style="display:flex; justify-content:center; margin-top:8px;">
+        <button class="btn btn-secondary" onclick="window.addSkuItem()" style="padding:6px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; width:100%; justify-content:center; border: 1.5px dashed #cbd5e1; background:#f8fafc; color:#475569; transition:all 0.15s;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#94a3b8';" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+          Add SKU / Item
+        </button>
+      </div>
+    `;
+  }
+  list.innerHTML = itemsHtml;
 
   // Auto-focus the inline input if we're in rename mode
   if (QG._renamingItemId) {
@@ -2410,9 +2457,12 @@ window.toggleMultiSkuMode = function (enabled) {
 
 
 window.toggleBundleCompareMode = function (enabled) {
-  // Mutual exclusion: exit tier-compare mode before entering bundle compare
+  // Mutual exclusion: exit tier-compare and bundle merge modes before entering bundle compare
   if (enabled && QG.compareMode) {
     window.toggleCompareMode(false);
+  }
+  if (enabled && QG.bundleMergeMode) {
+    window.toggleBundleMergeMode(false);
   }
 
   QG.bundleCompareMode = enabled;
@@ -2465,6 +2515,76 @@ window.toggleBundleCompareMode = function (enabled) {
       else { cfgArea.innerHTML = ''; renderSkuForm(QG.currentSku, QG.currentTier); }
     } else { cfgArea.innerHTML = ''; }
   }
+  updatePreview();
+};
+
+// ── Bundle Merge Mode ──────────────────────────────────────────────────────
+window.toggleBundleMergeMode = function (enabled) {
+  // Mutual exclusion: exit other compare/bundle modes first
+  if (enabled) {
+    if (QG.compareMode) window.toggleCompareMode(false);
+    if (QG.bundleCompareMode) window.toggleBundleCompareMode(false);
+  }
+
+  QG.bundleMergeMode = enabled;
+  const multiSkuLabel = document.getElementById('toggle-multi-sku-mode')?.closest('label');
+  const manager = document.getElementById('sku-item-manager');
+
+  if (enabled) {
+    // Save current state
+    QG.savedMergeState = {
+      skuItems: JSON.parse(JSON.stringify(QG.skuItems)),
+      activeItemId: QG.activeItemId,
+      lockedEntity: QG.lockedEntity,
+      multiSkuMode: QG.multiSkuMode
+    };
+    if (multiSkuLabel) multiSkuLabel.style.display = 'none';
+    QG.multiSkuMode = true;
+    // Reset all excluded flags and sub-SKU exclusions
+    QG.skuItems.forEach(i => { i.excluded = false; i.excludedFields = {}; });
+    if (manager) manager.style.display = '';
+  } else {
+    if (QG.savedMergeState) {
+      QG.skuItems = QG.savedMergeState.skuItems;
+      QG.activeItemId = QG.savedMergeState.activeItemId;
+      QG.lockedEntity = QG.savedMergeState.lockedEntity;
+      QG.multiSkuMode = QG.savedMergeState.multiSkuMode;
+    }
+    if (multiSkuLabel) {
+      multiSkuLabel.style.display = '';
+      const cb = document.getElementById('toggle-multi-sku-mode');
+      if (cb) cb.checked = QG.multiSkuMode;
+    }
+    if (manager) manager.style.display = QG.multiSkuMode ? '' : 'none';
+  }
+  syncActiveAliases();
+  renderSkuItemManager();
+  renderSkuSelector();
+  const cfgArea = document.getElementById('sku-config-area');
+  if (cfgArea) {
+    if (QG.currentSku) {
+      const sku = SKUS.find(s => s.key === QG.currentSku);
+      if (sku?.hasTiers && !QG.compareMode) { renderTierSelector(); }
+      else { cfgArea.innerHTML = ''; renderSkuForm(QG.currentSku, QG.currentTier); }
+    } else { cfgArea.innerHTML = ''; }
+  }
+  updatePreview();
+};
+
+window.toggleSkuExclusion = function (itemId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  item.excluded = !item.excluded;
+  renderSkuItemManager();
+  updatePreview();
+};
+
+// ── Sub-SKU (row-level) exclusion for Bundle Package mode ──────────────────
+window.toggleSubSkuExclusion = function (itemId, fieldId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.excludedFields) item.excludedFields = {};
+  item.excludedFields[fieldId] = !item.excludedFields[fieldId];
   updatePreview();
 };
 
@@ -2538,11 +2658,11 @@ function renderSkuSelector() {
   const grid = document.getElementById('sku-selector-grid');
   if (!grid) return;
 
-  // In bundle compare mode each bundle is independent — show all SKUs, no cross-entity lock
-  // Always include the bundle_compare card regardless of entity lock
+  // In bundle compare/merge mode each bundle is independent — show all SKUs, no cross-entity lock
+  // Always include the bundle_compare and bundle_merge cards regardless of entity lock
   let filtered;
-  if (QG.multiSkuMode && QG.lockedEntity && !QG.bundleCompareMode) {
-    filtered = SKUS.filter(s => s.isBundleCompare || s.entity === QG.lockedEntity || s.entity === 'Both');
+  if (QG.multiSkuMode && QG.lockedEntity && !QG.bundleCompareMode && !QG.bundleMergeMode) {
+    filtered = SKUS.filter(s => s.isBundleCompare || s.isBundleMerge || s.entity === QG.lockedEntity || s.entity === 'Both');
   } else {
     filtered = SKUS.filter(s => !s.hidden);
   }
@@ -2567,6 +2687,11 @@ function renderSkuSelector() {
       </div>`;
     }
 
+    if (s.isBundleMerge) {
+      // Temporarily disabled/hidden from UI
+      return '';
+    }
+
     const canCmp = compareCapable.includes(s.key);
     const isCmpActive = QG.compareMode && QG.currentSku === s.key;
     const cmpBtn = canCmp
@@ -2588,9 +2713,12 @@ function renderSkuSelector() {
 
 // Enable compare mode for a specific SKU (called from the per-card icon button)
 window.enableCompareFor = function(key) {
-  // Mutual exclusion: exit bundle compare mode before entering same-SKU tier compare
+  // Mutual exclusion: exit bundle compare/merge modes before entering same-SKU tier compare
   if (QG.bundleCompareMode) {
     window.toggleBundleCompareMode(false);
+  }
+  if (QG.bundleMergeMode) {
+    window.toggleBundleMergeMode(false);
   }
 
   // Toggle off if already comparing this SKU
@@ -2626,7 +2754,7 @@ function selectSku(key) {
   if (!sku) return;
 
   // Entity lock enforcement — only applies within a bundle (not across bundles in compare mode)
-  if (QG.multiSkuMode && QG.lockedEntity && sku.entity !== QG.lockedEntity && sku.entity !== 'Both' && !QG.bundleCompareMode) {
+  if (QG.multiSkuMode && QG.lockedEntity && sku.entity !== QG.lockedEntity && sku.entity !== 'Both' && !QG.bundleCompareMode && !QG.bundleMergeMode) {
     showAlert(`This quote is locked to ${QG.lockedEntity} plans. Remove all items to start a new quote with a different entity.`, { type: 'warning', title: 'Entity Lock' });
     return;
   }
@@ -3449,8 +3577,195 @@ function isBreaching(f, numVal, item) {
   return false;
 }
 
+// ── International numbers table helpers ──────────────────────
+function intlComputeRates(dest, rm) {
+  const getRate = (country) => {
+    const rates = getIntlCountryRates(country);
+    if (!rates.length) return country === 'India' ? 0.08 : 0;
+    const fixed = rates.find(r => r.type === 'Fixed');
+    const all   = rates.find(r => r.type === 'All');
+    const mob   = rates.find(r => r.type === 'Mobile');
+    return (fixed || all || mob)?.rate ?? 0;
+  };
+  const destRate = getRate(dest);
+  const rmRate   = getRate(rm) || 0.08;
+  return {
+    voipOut:  parseFloat(destRate.toFixed(4)),
+    pstnIn:   parseFloat(rmRate.toFixed(4)),
+    pstnOut:  parseFloat((destRate + rmRate).toFixed(4)),
+    rmRate,
+  };
+}
+
+function intlRenderTable(entries, itemId) {
+  const countries = getIntlCountries().map(c => c.country);
+
+  const cardsHtml = entries.map((e, idx) => {
+    const destOpts = countries.map(c =>
+      `<option value="${sanitize(c)}" ${e.dest === c ? 'selected' : ''}>${sanitize(c)}</option>`).join('');
+    const rmOpts = countries.map(c =>
+      `<option value="${sanitize(c)}" ${e.rm === c ? 'selected' : ''}>${sanitize(c)}</option>`).join('');
+      
+    return `
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:10px; display:flex; flex-direction:column; gap:8px; position:relative; box-shadow:0 1px 2px rgba(0,0,0,0.02);">
+        <!-- Delete Button -->
+        <button type="button" style="position:absolute; top:8px; right:8px; background:none; border:none; color:#ef4444; cursor:pointer; font-size:1.25rem; line-height:1; font-weight:bold; padding:2px 6px; border-radius:4px;"
+          onclick="window.intlRemoveEntry('${itemId}',${idx})" title="Remove Number">×</button>
+          
+        <!-- Configuration Row -->
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-right:20px;">
+          <div style="flex:2; min-width:130px;">
+            <span style="font-size:0.72rem; color:#64748b; font-weight:600; display:block; margin-bottom:2px;">Destination Country</span>
+            <select class="q-input" style="width:100%; font-size:0.8rem; padding:4px 6px; height:28px;"
+              onchange="window.intlUpdateEntry('${itemId}',${idx},'dest',this.value)">
+              ${destOpts}
+            </select>
+          </div>
+          <div style="flex:2; min-width:130px;">
+            <span style="font-size:0.72rem; color:#64748b; font-weight:600; display:block; margin-bottom:2px;">RM / Agent Location</span>
+            <select class="q-input" style="width:100%; font-size:0.8rem; padding:4px 6px; height:28px;"
+              onchange="window.intlUpdateEntry('${itemId}',${idx},'rm',this.value)">
+              ${rmOpts}
+            </select>
+          </div>
+          <div style="width:50px; flex-shrink:0;">
+            <span style="font-size:0.72rem; color:#64748b; font-weight:600; display:block; margin-bottom:2px; text-align:center;">Count</span>
+            <input type="text" inputmode="decimal" class="q-input" style="width:100%; text-align:center; font-size:0.8rem; padding:4px; height:28px;"
+              value="${e.count || 1}"
+              onchange="window.intlUpdateEntry('${itemId}',${idx},'count',parseFloat(this.value)||1)">
+          </div>
+        </div>
+        
+        <!-- Editable Rates Row -->
+        <div style="display:flex; align-items:center; gap:12px; background:#fff; padding:8px 10px; border-radius:6px; border:1px solid #f1f5f9; flex-wrap:wrap;">
+          <div style="flex:1; min-width:90px; display:flex; align-items:center; gap:6px;">
+            <span style="font-size:0.7rem; color:#475569; font-weight:600; white-space:nowrap;">VoIP Out ($):</span>
+            <input type="text" class="q-input" style="flex:1; min-width:45px; font-size:0.76rem; padding:3px; height:22px; text-align:right;" 
+              value="${e.voipOut}" onchange="window.intlUpdateEntry('${itemId}',${idx},'voipOut',parseFloat(this.value)||0)">
+          </div>
+          <div style="flex:1; min-width:90px; display:flex; align-items:center; gap:6px;">
+            <span style="font-size:0.7rem; color:#475569; font-weight:600; white-space:nowrap;">PSTN In ($):</span>
+            <input type="text" class="q-input" style="flex:1; min-width:45px; font-size:0.76rem; padding:3px; height:22px; text-align:right;" 
+              value="${e.pstnIn}" onchange="window.intlUpdateEntry('${itemId}',${idx},'pstnIn',parseFloat(this.value)||0)">
+          </div>
+          <div style="flex:1; min-width:95px; display:flex; align-items:center; gap:6px;">
+            <span style="font-size:0.7rem; color:#475569; font-weight:600; white-space:nowrap;">PSTN Out ($):</span>
+            <input type="text" class="q-input" style="flex:1; min-width:45px; font-size:0.76rem; padding:3px; height:22px; text-align:right;" 
+              value="${e.pstnOut}" onchange="window.intlUpdateEntry('${itemId}',${idx},'pstnOut',parseFloat(this.value)||0)">
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const rental = `<div style="font-size:0.74rem;color:#64748b;margin-top:4px;margin-bottom:8px;">Number Rental: <strong>$15/number/month</strong></div>`;
+
+  return `
+    <div class="q-field-row" style="flex-direction:column;align-items:stretch;gap:6px;" data-intl-table="${itemId}">
+      <span class="q-field-label" style="font-size:0.85rem;font-weight:600;color:#1e40af;margin-bottom:4px;">International Numbers &amp; Rates</span>
+      <div style="display:flex; flex-direction:column;">
+        ${cardsHtml}
+      </div>
+      ${rental}
+      <button type="button"
+        style="align-self:flex-start;padding:6px 14px;font-size:0.8rem;background:#e0f2fe;color:#0369a1;border:1px solid #7dd3fc;border-radius:6px;cursor:pointer;font-weight:600;box-shadow:0 1px 2px rgba(3,105,161,0.05);"
+        onclick="window.intlAddEntry('${itemId}')">+ Add Number</button>
+    </div>`;
+}
+
+// Global entry management (called via inline onclick)
+window.intlAddEntry = function(itemId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  if (!Array.isArray(item.values.intl_entries)) item.values.intl_entries = [];
+  const rates = intlComputeRates('United States', 'India');
+  item.values.intl_entries.push({ dest: 'United States', rm: 'India', count: 1, ...rates });
+  // Sync legacy num_numbers
+  item.values.num_numbers = item.values.intl_entries.reduce((s, e) => s + (e.count || 1), 0);
+  renderSkuForm();
+  updatePreview();
+};
+
+window.intlRemoveEntry = function(itemId, idx) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item || !Array.isArray(item.values.intl_entries)) return;
+  item.values.intl_entries.splice(idx, 1);
+  item.values.num_numbers = item.values.intl_entries.reduce((s, e) => s + (e.count || 1), 0) || 1;
+  renderSkuForm();
+  updatePreview();
+};
+
+window.intlUpdateEntry = function(itemId, idx, key, val) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item || !Array.isArray(item.values.intl_entries)) return;
+  const e = item.values.intl_entries[idx];
+  if (!e) return;
+  e[key] = val;
+  // Recompute rates whenever dest or rm changes
+  if (key === 'dest' || key === 'rm') {
+    const r = intlComputeRates(e.dest, e.rm);
+    Object.assign(e, r);
+    // Re-render table to update the rates column
+    const tableWrap = document.querySelector(`[data-intl-table="${itemId}"]`);
+    if (tableWrap) {
+      const entries = item.values.intl_entries;
+      const newHtml = intlRenderTable(entries, itemId);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = newHtml;
+      tableWrap.replaceWith(tmp.firstElementChild);
+    }
+  }
+  if (key === 'voipOut' || key === 'pstnIn') {
+    if (key === 'pstnIn') {
+      e.rmRate = val;
+    }
+    e.pstnOut = parseFloat((e.voipOut + e.pstnIn).toFixed(4));
+    const tableWrap = document.querySelector(`[data-intl-table="${itemId}"]`);
+    if (tableWrap) {
+      const entries = item.values.intl_entries;
+      const newHtml = intlRenderTable(entries, itemId);
+      const tmp = document.createElement('div');
+      tmp.innerHTML = newHtml;
+      tableWrap.replaceWith(tmp.firstElementChild);
+    }
+  }
+  if (key === 'count') {
+    item.values.num_numbers = item.values.intl_entries.reduce((s, en) => s + (en.count || 1), 0);
+  }
+  // Sync legacy fields from first entry
+  const first = item.values.intl_entries[0];
+  if (first) {
+    item.values.intl_country = first.dest;
+    item.values.rm_country = first.rm;
+    item.values.voip_outgoing_usd = first.voipOut;
+    item.values.pstn_incoming_usd = first.pstnIn;
+    item.values.pstn_outgoing_usd = first.pstnOut;
+    item.values._rm_rate = first.rmRate;
+  }
+  updatePreview();
+};
+
 function renderFieldRow(f, item) {
   const v = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : '');
+
+  // Hide legacy intl fields — they're managed by the intl_numbers_table widget
+  if (f.note === '_legacy_intl') return '';
+
+  // Render intl numbers table
+  if (f.type === 'intl_numbers_table') {
+    if (!Array.isArray(item.values.intl_entries) || item.values.intl_entries.length === 0) {
+      // Initialise with one default entry
+      const rates = intlComputeRates('United States', 'India');
+      item.values.intl_entries = [{ dest: 'United States', rm: 'India', count: 1, ...rates }];
+      item.values.num_numbers = 1;
+      item.values.intl_country = 'United States';
+      item.values.rm_country = 'India';
+      item.values.voip_outgoing_usd = rates.voipOut;
+      item.values.pstn_incoming_usd = rates.pstnIn;
+      item.values.pstn_outgoing_usd = rates.pstnOut;
+      item.values._rm_rate = rates.rmRate;
+    }
+    return intlRenderTable(item.values.intl_entries, item.id);
+  }
 
   if (f.type === 'country_select') {
     const countries = getIntlCountries();
@@ -3591,7 +3906,8 @@ function renderFieldsGrouped(fields, item) {
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
-    number_charge_usd: 'Number Plan',
+    num_paid_channels: 'Number Plan',
+    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
     prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
@@ -3738,10 +4054,26 @@ window.updateStartupBudget = function () {
 
 // ── Bundle Compare Preview Helper ─────────────────────────────────────────
 function _renderBundleItemsHTML(bundleItems) {
+  // ── Inject print styles for sub-SKU toggle buttons (once) ──────────────
+  if (!document.getElementById('subsku-print-style')) {
+    const s = document.createElement('style');
+    s.id = 'subsku-print-style';
+    s.innerHTML = `
+      @media print {
+        .subsku-toggle-btn { display: none !important; }
+        tr.subsku-row.excluded { display: none !important; }
+      }
+      .subsku-toggle-btn { transition: opacity 0.15s; }
+      .subsku-toggle-btn:hover { opacity: 0.75; }
+    `;
+    document.head.appendChild(s);
+  }
+
   let allSectionsHTML = '';
   let grandSubtotal = 0;
   const perUnit = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
   const validItems = bundleItems.filter(i => i.sku_key);
+  let allBundleRows = []; // { item, sku, section, id, label, value, isWaived, isIndented }
 
   for (let idx = 0; idx < validItems.length; idx++) {
     const item = validItems[idx];
@@ -3756,6 +4088,7 @@ function _renderBundleItemsHTML(bundleItems) {
     const getSafeNum = (id) => {
       const f = fields.find(x => x.id === id);
       if (!f || f.waived) return 0;
+      if (QG.bundleMergeMode && item.excludedFields && item.excludedFields[id]) return 0;
       return parseFloat(item.values[id] ?? f.value ?? 0);
     };
     const fmtRupee = (v) => {
@@ -3784,16 +4117,77 @@ function _renderBundleItemsHTML(bundleItems) {
     const FREE = `<span class="waived-text">${TICK} Free</span>`;
     let isFirstSec = true;
     const hasHTML = (s) => typeof s === 'string' && /<[a-zA-Z]/.test(s);
+    
+    let currentSection = 'Plan Details';
     const secRow = (lbl) => {
+      if (QG.bundleMergeMode) {
+        currentSection = lbl;
+        return '';
+      }
       const res = (isFirstSec ? '' : '</tbody>') + `<tbody style="page-break-inside: avoid; break-inside: avoid;"><tr class="section-header-row"><td colspan="2">${lbl}</td></tr>`;
       isFirstSec = false;
       return res;
     };
-    const stdRow = (lbl, val, isWaived) => {
+    const findFieldIdByLabel = (fields, label) => {
+      const clean = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const target = clean(label);
+      if (target.includes('extranumber') || target.includes('paidnumber') || target.includes('calculation')) return 'num_paid_numbers';
+      if (target.includes('callcredits') || (target.includes('credits') && !target.includes('sms') && !target.includes('wa') && !target.includes('rcs'))) return 'credits';
+      if (target.includes('smscredits')) return 'credits';
+      if (target.includes('wacredits')) return 'credits';
+      if (target.includes('rcscredits')) return 'credits';
+      if (target.includes('accountrental') || target.includes('numberrental') || (target.includes('rental') && !target.includes('calculation'))) return 'rental';
+      if (target.includes('setupcharges') || target.includes('setup')) return 'setup';
+      if (target.includes('validity') || target.includes('nummonths') || target.includes('noofmonths')) return 'validity';
+      if (target.includes('freeuser') || target.includes('noofuser') || target.includes('numusers') || target.includes('chargeduser') || target.includes('noofagents')) return 'num_users';
+      if (target.includes('extrausercost') || target.includes('usercharge')) return 'user_charge';
+      if (target.includes('freenumber')) return 'free_numbers';
+      if (target.includes('smscost') || target.includes('smsmessage')) return 'sms_cost';
+      if (target.includes('utilitymessage')) return 'wa_utility';
+      if (target.includes('promotionalmessage')) return 'wa_promo';
+      if (target.includes('apicharge')) return 'wa_api';
+      if (target.includes('incomingcall') || target.includes('pstnincoming')) return 'incoming';
+      if (target.includes('outgoingcall') || target.includes('pstnoutgoing')) return 'outgoing';
+      if (target.includes('brandreg')) return 'brand_fee';
+      if (target.includes('procurement') || target.includes('numberprocure')) return 'procurement';
+      if (target.includes('channel') && target.includes('cost')) return 'channel_cost';
+      if (target.includes('didnumber') || target.includes('mobiledit')) return 'did_numbers';
+      
+      if (!fields) return label;
+      const found = fields.find(f => { const fl = clean(f.label); return fl.includes(target) || target.includes(fl); });
+      return found ? found.id : label;
+    };
+    const stdRow = (lbl, val, isWaived, customId) => {
+      if (QG.bundleMergeMode) {
+        allBundleRows.push({
+          item,
+          sku,
+          section: currentSection,
+          id: customId || findFieldIdByLabel(fields, lbl),
+          label: lbl,
+          value: val,
+          isWaived: !!isWaived,
+          isIndented: false
+        });
+        return '';
+      }
       const disp = isWaived ? W : hasHTML(val) ? val : sanitize(String(val ?? '-'));
       return `<tr><td class="sku-row-name">${sanitize(lbl)}</td><td>${disp}</td></tr>`;
     };
-    const indRow = (lbl, val) => {
+    const indRow = (lbl, val, customId) => {
+      if (QG.bundleMergeMode) {
+        allBundleRows.push({
+          item,
+          sku,
+          section: currentSection,
+          id: customId || findFieldIdByLabel(fields, lbl),
+          label: lbl,
+          value: val,
+          isWaived: false,
+          isIndented: true
+        });
+        return '';
+      }
       const disp = hasHTML(val) ? val : sanitize(String(val ?? '-'));
       return `<tr class="sub-row"><td>${sanitize(lbl)}</td><td>${disp}</td></tr>`;
     };
@@ -4128,8 +4522,7 @@ function _renderBundleItemsHTML(bundleItems) {
       const numChs = getSafeNum('num_channels') || 0;
       const numMos = getSafeNum('num_months') || 0;
       const chCost = getSafeNum('channel_cost') || 0;
-      const freeChs = isVoicebot ? 5 : 0;
-      const paidChs = Math.max(0, numChs - freeChs);
+      const paidChs = isVoicebot ? Math.max(0, parseFloat(getVal('num_paid_channels') ?? 0)) : Math.max(0, numChs);
       const totalCh = paidChs * numMos * chCost;
 
       tableHTML += secRow('Plan Details');
@@ -4140,10 +4533,11 @@ function _renderBundleItemsHTML(bundleItems) {
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
       if (isVoicebot) {
-        tableHTML += stdRow('No. of Channels', paidChs > 0 ? `5 Free, ${paidChs} Paid` : `5 Channels (5 Channels Included Free)`);
+        tableHTML += stdRow('Free Channels', `${numChs} Channels (Included Free)`);
         tableHTML += indRow('Additional Channel Cost', `${fmtRupee(chCost)} ${perUnit('/channel/month')}`);
         if (paidChs > 0) {
-          tableHTML += indRow('Channel Calculation', `${paidChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
+          tableHTML += stdRow('Paid Channels', `${paidChs} Channel(s)`);
+          tableHTML += indRow('Paid Channels Charge', `${paidChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
         }
       } else {
         tableHTML += stdRow('No. of Channels', numChs);
@@ -4354,15 +4748,29 @@ function _renderBundleItemsHTML(bundleItems) {
       };
       const prepaid = getSafeNum('prepaid_usd') || 400;
       const numUsers = getSafeNum('num_users') || 1;
-      const numNumbers = getSafeNum('num_numbers') || 1;
       const userCharge = getSafeNum('user_charge_usd') || 15;
       const numCharge = getSafeNum('number_charge_usd') || 15;
+
       const country = getVal('intl_country') || 'United States';
       const rmCountry = getVal('rm_country') || 'India';
-      const rmRate = getSafeNum('_rm_rate') || 0.08;
+      const rmRate = parseFloat(item.values['_rm_rate'] ?? 0.08);
       const voipOut = getSafeNum('voip_outgoing_usd');
       const pstnInc = getSafeNum('pstn_incoming_usd');
       const pstnOut = getSafeNum('pstn_outgoing_usd');
+
+      const entries = Array.isArray(item.values.intl_entries) ? item.values.intl_entries : [];
+      if (entries.length === 0) {
+        entries.push({
+          dest: country,
+          rm: rmCountry,
+          count: getSafeNum('num_numbers') || 1,
+          voipOut,
+          pstnIn: pstnInc,
+          pstnOut,
+          rmRate,
+        });
+      }
+      const totalNumbers = entries.reduce((s, e) => s + (e.count || 1), 0);
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
@@ -4373,17 +4781,35 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('User Charge', `${fmtUsdFixed(userCharge)} / agent / month`);
 
       tableHTML += secRow('Number Plan');
-      tableHTML += stdRow('No. of Numbers', `${numNumbers}`);
+      tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
       tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numCharge)} / number / month`);
+      if (entries.length > 1) {
+        const breakdownStr = entries.map(e => `${e.count || 1} × ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`).join(', ');
+        tableHTML += indRow('Numbers Breakdown', breakdownStr);
+      }
 
-      tableHTML += secRow(`Call Charges (${sanitize(country)})`);
-      tableHTML += stdRow('VoIP Incoming', FREE);
-      tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOut)} / min`);
-      tableHTML += indRow(`${sanitize(country)} outgoing leg`, `Destination rate - billed to ${sanitize(country)} number`);
-      tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnInc)} / min`);
-      tableHTML += indRow(`${sanitize(rmCountry)} agent leg`, `${sanitize(country)} leg is free; ${sanitize(rmCountry)} agent leg charged at ${fmtUsd(rmRate)}/min`);
-      tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOut)} / min`);
-      tableHTML += indRow('Breakdown', `${sanitize(country)} leg (${fmtUsd(voipOut)}) + ${sanitize(rmCountry)} agent leg (${fmtUsd(rmRate)}) = <strong>${fmtUsd(pstnOut)}/min</strong>`);
+      if (entries.length === 1) {
+        const e = entries[0];
+        tableHTML += secRow(`Call Charges (${sanitize(e.dest)})`);
+        tableHTML += stdRow('VoIP Incoming', FREE);
+        tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
+        tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
+        tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
+        tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
+        tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
+        tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+      } else {
+        entries.forEach((e, idx) => {
+          tableHTML += secRow(`Call Charges - ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`);
+          tableHTML += stdRow('VoIP Incoming', FREE);
+          tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
+          tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
+          tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
+          tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
+          tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
+          tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        });
+      }
 
       // PDF attachment card (shown when toggle is on)
       if (getSafeNum('attach_intl_pdf') === 1) {
@@ -4477,8 +4903,9 @@ function _renderBundleItemsHTML(bundleItems) {
     const procure = getSafeNum('procurement');
     const setup = getSafeNum('setup');
     const isVoicebotItem = item.sku_key === 'voice_exotel_voicebot';
-    const freeChsItem = isVoicebotItem ? 5 : 0;
-    const paidChsItem = Math.max(0, parseFloat(item.values['num_channels'] ?? (isVoicebotItem ? 5 : 0)) - freeChsItem);
+    const paidChsItem = isVoicebotItem
+      ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0))
+      : Math.max(0, parseFloat(item.values['num_channels'] ?? 0));
     const chCostItem = getSafeNum('channel_cost') * paidChsItem * months;
     const numUsersItem = parseFloat(item.values['num_users'] ?? 0);
     const userChargeItem = getSafeNum('user_charge');
@@ -4508,21 +4935,98 @@ function _renderBundleItemsHTML(bundleItems) {
     grandSubtotal += isStartup ? 0 : subtotal;
 
     const tierLabel = sku.hasTiers && item.tier
-      ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
+      ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)) || '')
       : '';
     const sectionTitle = (!sku.hasTiers && item.customName) ? item.customName : `${sku.label}${tierLabel}`;
 
-    allSectionsHTML += `
-    <div class="quote-doc-section sku-card" style="margin-top:24px;">
-      <div class="quote-doc-section-title" style="font-size:1.05rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
-        ${sanitize(sectionTitle)}
-      </div>
-      <table class="quote-sku-table">
-        <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
-        ${tableHTML}
-      </table>
-      ${sk === 'voice_intl' ? (item._intlSubtotalCardB || '') : (subtotal > 0 ? `<div style="text-align:right; font-weight:600; padding:10px 14px; font-size:0.88rem; color:#0f172a; border-top:1px solid #f1f5f9;">Item Subtotal: ${fmtRupee(subtotal)}</div>` : '')}
-    </div>`;
+    if (!QG.bundleMergeMode) {
+      allSectionsHTML += `
+      <div class="quote-doc-section sku-card" style="margin-top:24px;">
+        <div class="quote-doc-section-title" style="font-size:1.05rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
+          ${sanitize(sectionTitle)}
+        </div>
+        <table class="quote-sku-table">
+          <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
+          ${tableHTML}
+        </table>
+        ${sk === 'voice_intl' ? (item._intlSubtotalCardB || '') : (subtotal > 0 ? `<div style="text-align:right; font-weight:600; padding:10px 14px; font-size:0.88rem; color:#0f172a; border-top:1px solid #f1f5f9;">Item Subtotal: ${fmtRupee(subtotal)}</div>` : '')}
+      </div>`;
+    }
+  }
+
+  if (QG.bundleMergeMode) {
+    const normSection = (sec) => {
+      const s = String(sec || '').toUpperCase().trim();
+      if (s.includes('USER')) return 'USER PLAN';
+      if (s.includes('NUMBER') && !s.includes('CREDIT')) return 'NUMBER PLAN';
+      if (s.includes('CREDIT') || s.includes('CHARGE') || s.includes('CAMPAIGN')) return 'CALL CREDITS & CHARGES';
+      if (s.includes('MESSAG') || s.includes('WHATSAPP') || s.includes('SMS') || s.includes('RCS') || s.includes('COMMUNICATION')) return 'MESSAGING & SERVICES';
+      if (s.includes('CHANNEL') || s.includes('VOICEBOT') || s.includes('STREAMING')) return 'CHANNEL PLAN';
+      if (s.includes('TFN') || s.includes('VIRTUAL')) return 'NUMBER PLAN';
+      return 'PLAN DETAILS';
+    };
+
+    const SECTION_ORDER = ['PLAN DETAILS', 'USER PLAN', 'NUMBER PLAN', 'CHANNEL PLAN', 'CALL CREDITS & CHARGES', 'MESSAGING & SERVICES'];
+
+    const grouped = {};
+    allBundleRows.forEach(row => {
+      const sec = normSection(row.section);
+      if (!grouped[sec]) grouped[sec] = [];
+      grouped[sec].push(row);
+    });
+
+    const secKeys = Object.keys(grouped).sort((a, b) => {
+      const ia = SECTION_ORDER.indexOf(a); const ib = SECTION_ORDER.indexOf(b);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+
+    let mergedHTML = '';
+    let isFirstSec = true;
+    secKeys.forEach(secKey => {
+      mergedHTML += (isFirstSec ? '' : '</tbody>') +
+        `<tbody style="page-break-inside:avoid;break-inside:avoid;"><tr class="section-header-row"><td colspan="2">${sanitize(secKey)}</td></tr>`;
+      isFirstSec = false;
+
+      grouped[secKey].forEach(row => {
+        const isExcluded = !!(row.item.excludedFields && row.item.excludedFields[row.id]);
+        const entityColor = row.sku.entity === 'Veeno' ? '#be185d' : '#0369a1';
+        const entityBg    = row.sku.entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
+        const tierLabel   = row.sku.hasTiers && row.item.tier
+          ? ' · ' + (TIER_DISPLAY_NAMES[row.item.tier] || row.item.tier)
+          : '';
+        const skuPillLabel = (row.item.customName && !row.sku.hasTiers) ? row.item.customName : `${row.sku.label}${tierLabel}`;
+        const pill = `<span style="display:inline-block;font-size:0.65rem;font-weight:700;color:${entityColor};background:${entityBg};padding:1px 5px;border-radius:4px;margin-right:5px;text-transform:uppercase;white-space:nowrap;">${sanitize(skuPillLabel)}</span>`;
+
+        let valueDisp;
+        const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+        if (row.isWaived) {
+          valueDisp = `<span class="waived-text">${TICK} Waived</span>`;
+        } else {
+          const hasHtmlVal = typeof row.value === 'string' && /<[a-zA-Z]/.test(row.value);
+          valueDisp = hasHtmlVal ? row.value : sanitize(String(row.value ?? '-'));
+        }
+        if (isExcluded) valueDisp = `<span style="text-decoration:line-through;color:#94a3b8;">${valueDisp}</span>`;
+
+        const actionBtn = `<button class="subsku-toggle-btn" onclick="event.stopPropagation();window.toggleSubSkuExclusion('${row.item.id}','${row.id}')" style="flex-shrink:0;border:none;border-radius:4px;padding:2px 8px;font-size:0.65rem;font-weight:700;cursor:pointer;margin-left:8px;background:${isExcluded ? '#dcfce7' : '#fee2e2'};color:${isExcluded ? '#15803d' : '#ef4444'};">${isExcluded ? '+ Add Back' : '✕ Take Out'}</button>`;
+
+        const rowBg = isExcluded ? 'background:#fafafa;' : '';
+        const labelStyle = `${row.isIndented ? 'padding-left:22px;' : ''} vertical-align:middle;`;
+
+        mergedHTML += `<tr class="subsku-row${isExcluded ? ' excluded' : ''}" style="${rowBg}">
+          <td class="sku-row-name" style="${labelStyle}"><div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">${pill}<span${isExcluded ? ' style="text-decoration:line-through;color:#94a3b8;"' : ''}>${sanitize(row.label)}</span></div></td>
+          <td style="vertical-align:middle;"><div style="display:flex;justify-content:space-between;align-items:center;">${valueDisp}${actionBtn}</div></td>
+        </tr>`;
+      });
+    });
+    if (!isFirstSec) mergedHTML += '</tbody>';
+
+    allSectionsHTML = `
+      <div class="quote-doc-section sku-card" style="margin-top:16px;">
+        <table class="quote-sku-table">
+          <thead><tr><th style="width:45%;">Component</th><th>Details</th></tr></thead>
+          ${mergedHTML}
+        </table>
+      </div>`;
   }
 
   return { allSectionsHTML, grandSubtotal };
@@ -4941,20 +5445,20 @@ function updatePreview() {
       tableRows += cmpRow('Setup Charges', colData.map(() => W));
 
       tableRows += cmpRow(isVBotCmp ? 'Voicebot Channels' : 'Streaming Channels', [], true);
-      tableRows += cmpRow('No. of Channels', colData.map(({ getSN }) => {
-        const chs = getSN('num_channels');
-        if (isVBotCmp) {
-          const paid = Math.max(0, chs - 5);
-          return paid > 0 ? `5 Free, ${paid} Paid` : `5 Channels (Free)`;
-        }
-        return chs;
-      }));
+      if (isVBotCmp) {
+        tableRows += cmpRow('Free Channels', colData.map(({ getSN }) => `${getSN('num_channels') || 5} Channels (Included Free)`));
+        tableRows += cmpRow('Paid Channels', colData.map(({ getSN, item }) => {
+          const paid = Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0));
+          return paid > 0 ? `${paid} Channel(s)` : '—';
+        }));
+      } else {
+        tableRows += cmpRow('No. of Channels', colData.map(({ getSN }) => getSN('num_channels')));
+      }
       tableRows += cmpRow('Channel Cost', colData.map(({ getSN }) => fmtR(getSN('channel_cost')) + perUnit('/channel/month')));
-      tableRows += cmpRow('Channel Calculation', colData.map(({ getSN }) => {
+      tableRows += cmpRow('Channel Calculation', colData.map(({ getSN, item }) => {
         const mos = getSN('num_months');
         const cost = getSN('channel_cost');
-        const chs = getSN('num_channels');
-        const paid = isVBotCmp ? Math.max(0, chs - 5) : chs;
+        const paid = isVBotCmp ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0)) : getSN('num_channels');
         return `${paid} ch × ${mos} mo × ${fmtR(cost)} = ${fmtR(paid * mos * cost)}`;
       }), false, true);
 
@@ -5174,6 +5678,101 @@ function updatePreview() {
     return;
   }
   // ── End Bundle Compare Mode ────────────────────────────────────
+
+  // ── Bundle Merge Mode ──────────────────────────────────────────
+  if (QG.bundleMergeMode) {
+    const includedItems = validItems.filter(i => !i.excluded);
+    const excludedItems  = validItems.filter(i => i.excluded);
+    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+
+    const result = _renderBundleItemsHTML(includedItems);
+    const gst    = Math.round(result.grandSubtotal * 0.18);
+    const total  = result.grandSubtotal + gst;
+    const hasIncluded = includedItems.length > 0;
+
+    // Build SKU tag pills for the bundle header
+    const skuTagsHTML = includedItems.map(i => {
+      const s = SKUS.find(x => x.key === i.sku_key);
+      if (!s) return '';
+      const label = i.customName || s.label;
+      return `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:0.72rem;font-weight:700;background:#e0f2fe;color:#0369a1;margin:2px 3px;">${sanitize(label)}</span>`;
+    }).join('');
+
+    const excludedNoteHTML = excludedItems.length > 0
+      ? `<div style="margin-top:18px;padding:10px 14px;border-radius:8px;background:#fffbeb;border:1.5px solid #fde68a;font-size:0.78rem;color:#92400e;">
+          <strong style="display:block;margin-bottom:4px;">⚠ Scope Notes — Excluded from this proposal:</strong>
+          ${excludedItems.map(i => {
+            const s = SKUS.find(x => x.key === i.sku_key);
+            return `<div style="margin:2px 0;">• ${sanitize(i.customName || s?.label || i.sku_key)}</div>`;
+          }).join('')}
+        </div>`
+      : '';
+
+    doc.innerHTML = `
+    <table class="print-master-table">
+      <thead><tr><td><div class="print-master-header"></div></td></tr></thead>
+      <tbody><tr><td>
+      <div class="quote-doc-header">
+        <img src="${logoSrc}" class="quote-doc-logo ${firstSku.entity.toLowerCase()}-logo" alt="${firstSku.entity} Logo" onerror="this.style.display='none'">
+        <div class="quote-doc-meta">
+          <div class="quote-number-badge">${sanitize(quoteNum)}</div>
+          <div style="margin-top:4px;">Date: ${sanitize(dateStr)}</div>
+          <div style="margin-top:2px;font-weight:600;color:#0284c7;">${firstSku.entity}</div>
+        </div>
+      </div>
+      <div class="quote-doc-title">Commercial Proposal: Bundled Package</div>
+      <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:6px;">Prepared For: ${sanitize(company)}</p>
+      ${skuTagsHTML ? `<div style="margin-bottom:16px;">${skuTagsHTML}</div>` : ''}
+      <div class="quote-doc-section">
+        <div class="quote-doc-section-title">Introduction</div>
+        <div class="quote-intro-text">${introMap[firstSku.entity]}</div>
+      </div>
+      <div class="quote-doc-section">
+        <div class="quote-doc-section-title">Parties</div>
+        <div class="quote-participant-grid">
+          <div class="quote-participant-box">
+            <div class="label">Prepared By (${firstSku.entity})</div>
+            <div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div>
+            <div class="sub">${sanitize(seEmail)}</div>
+            ${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}
+          </div>
+          <div class="quote-participant-box">
+            <div class="label">Prepared For (Client)</div>
+            <div class="value">${sanitize(company)}</div>
+            ${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''}
+            ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''}
+            ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''}
+            ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}
+          </div>
+        </div>
+      </div>
+      <div class="quote-doc-section" style="margin-top:24px;">
+        <div class="quote-doc-section-title">Bundled Package Breakdown</div>
+        ${hasIncluded
+          ? `<div>${result.allSectionsHTML}</div>
+             <div class="bundle-subtotal-card" style="border-color:#bae6fd;margin-top:16px;page-break-inside:avoid;break-inside:avoid;">
+               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#475569;margin-bottom:5px;"><span>Subtotal (excl. GST)</span><strong>${fmtR(result.grandSubtotal)}</strong></div>
+               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#64748b;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #cbd5e1;"><span>GST @ 18%</span><strong>${fmtR(gst)}</strong></div>
+               <div style="display:flex;justify-content:space-between;font-size:1.05rem;font-weight:800;color:#0284c7;margin-top:8px;padding-top:8px;border-top:2px solid #0284c7;"><span>Total (incl. GST)</span><span>${fmtR(total)}</span></div>
+             </div>`
+          : `<div style="text-align:center;color:#94a3b8;font-style:italic;padding:40px 20px;border:1.5px dashed #e2e8f0;border-radius:10px;background:#fafbfc;">No SKUs included — use "Add Back" to include items</div>`}
+        ${excludedNoteHTML}
+      </div>
+      <div class="quote-doc-section" style="margin-top:30px;">
+        <div class="quote-doc-section-title">Terms &amp; Conditions</div>
+        <div class="quote-tnc" style="font-size:0.85rem;color:#475569;line-height:1.5;">
+          ${generateTncHtml(validItems.filter(i => i.sku_key), firstSku.entity)}
+        </div>
+      </div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e0f2fe;font-size:0.78rem;color:#94a3b8;text-align:center;">
+        This is a system-generated commercial proposal. For queries, contact your ${firstSku.entity} account manager.
+      </div>
+      </td></tr></tbody>
+      <tfoot><tr><td><div class="print-master-footer"></div></td></tr></tfoot>
+    </table>`;
+    return;
+  }
+  // ── End Bundle Merge Mode ──────────────────────────────────────
 
   let allSectionsHTML = '';
   let grandSubtotal = 0;
@@ -5566,8 +6165,7 @@ function updatePreview() {
       const numChs = getSafeNum('num_channels') || 0;
       const numMos = getSafeNum('num_months') || 0;
       const chCost = getSafeNum('channel_cost') || 0;
-      const freeChs = isVoicebot ? 5 : 0;
-      const paidChs = Math.max(0, numChs - freeChs);
+      const paidChs = isVoicebot ? Math.max(0, parseFloat(getVal('num_paid_channels') ?? 0)) : Math.max(0, numChs);
       const totalCh = paidChs * numMos * chCost;
 
       tableHTML += secRow('Plan Details');
@@ -5578,10 +6176,11 @@ function updatePreview() {
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
       if (isVoicebot) {
-        tableHTML += stdRow('No. of Channels', paidChs > 0 ? `5 Free, ${paidChs} Paid` : `5 Channels (5 Channels Included Free)`);
+        tableHTML += stdRow('Free Channels', `${numChs} Channels (Included Free)`);
         tableHTML += indRow('Additional Channel Cost', `${fmtRupee(chCost)} ${perUnit('/channel/month')}`);
         if (paidChs > 0) {
-          tableHTML += indRow('Channel Calculation', `${paidChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
+          tableHTML += stdRow('Paid Channels', `${paidChs} Channel(s)`);
+          tableHTML += indRow('Paid Channels Charge', `${paidChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(totalCh)}</strong>`);
         }
       } else {
         tableHTML += stdRow('No. of Channels', numChs);
@@ -5792,15 +6391,29 @@ function updatePreview() {
       };
       const prepaid = getSafeNum('prepaid_usd') || 400;
       const numUsersI = getSafeNum('num_users') || 1;
-      const numNumbersI = getSafeNum('num_numbers') || 1;
       const userChargeI = getSafeNum('user_charge_usd') || 15;
       const numChargeI = getSafeNum('number_charge_usd') || 15;
+
       const countryI = getVal('intl_country') || 'United States';
       const rmCountryI = getVal('rm_country') || 'India';
-      const rmRateI = getSafeNum('_rm_rate') || 0.08;
+      const rmRateI = parseFloat(item.values['_rm_rate'] ?? 0.08);
       const voipOutI = getSafeNum('voip_outgoing_usd');
       const pstnIncI = getSafeNum('pstn_incoming_usd');
       const pstnOutI = getSafeNum('pstn_outgoing_usd');
+
+      const entries = Array.isArray(item.values.intl_entries) ? item.values.intl_entries : [];
+      if (entries.length === 0) {
+        entries.push({
+          dest: countryI,
+          rm: rmCountryI,
+          count: getSafeNum('num_numbers') || 1,
+          voipOut: voipOutI,
+          pstnIn: pstnIncI,
+          pstnOut: pstnOutI,
+          rmRate: rmRateI,
+        });
+      }
+      const totalNumbers = entries.reduce((s, e) => s + (e.count || 1), 0);
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
@@ -5811,17 +6424,35 @@ function updatePreview() {
       tableHTML += stdRow('User Charge', `${fmtUsdFixed(userChargeI)} / agent / month`);
 
       tableHTML += secRow('Number Plan');
-      tableHTML += stdRow('No. of Numbers', `${numNumbersI}`);
+      tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
       tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numChargeI)} / number / month`);
+      if (entries.length > 1) {
+        const breakdownStr = entries.map(e => `${e.count || 1} × ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`).join(', ');
+        tableHTML += indRow('Numbers Breakdown', breakdownStr);
+      }
 
-      tableHTML += secRow(`Call Charges (${sanitize(countryI)})`);
-      tableHTML += stdRow('VoIP Incoming', FREE);
-      tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(voipOutI)} / min`);
-      tableHTML += indRow(`${sanitize(countryI)} outgoing leg`, `Destination rate - billed to ${sanitize(countryI)} number`);
-      tableHTML += stdRow('PSTN Incoming', `${fmtUsd(pstnIncI)} / min`);
-      tableHTML += indRow(`${sanitize(rmCountryI)} agent leg`, `${sanitize(countryI)} leg is free; ${sanitize(rmCountryI)} agent leg charged at ${fmtUsd(rmRateI)}/min`);
-      tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(pstnOutI)} / min`);
-      tableHTML += indRow('Breakdown', `${sanitize(countryI)} leg (${fmtUsd(voipOutI)}) + ${sanitize(rmCountryI)} agent leg (${fmtUsd(rmRateI)}) = <strong>${fmtUsd(pstnOutI)}/min</strong>`);
+      if (entries.length === 1) {
+        const e = entries[0];
+        tableHTML += secRow(`Call Charges (${sanitize(e.dest)})`);
+        tableHTML += stdRow('VoIP Incoming', FREE);
+        tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
+        tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
+        tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
+        tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
+        tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
+        tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+      } else {
+        entries.forEach((e, idx) => {
+          tableHTML += secRow(`Call Charges - ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`);
+          tableHTML += stdRow('VoIP Incoming', FREE);
+          tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
+          tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
+          tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
+          tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
+          tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
+          tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        });
+      }
 
       // PDF attachment card (shown when toggle is on)
       if (getSafeNum('attach_intl_pdf') === 1) {
@@ -5935,8 +6566,9 @@ function updatePreview() {
     const procure = getSafeNum('procurement');
     const setup = getSafeNum('setup');
     const isVoicebot = item.sku_key === 'voice_exotel_voicebot';
-    const freeChs = isVoicebot ? 5 : 0;
-    const paidChs = Math.max(0, parseFloat(item.values['num_channels'] ?? (isVoicebot ? 5 : 0)) - freeChs);
+    const paidChs = isVoicebot
+      ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0))
+      : Math.max(0, parseFloat(item.values['num_channels'] ?? 0));
     const chCost = getSafeNum('channel_cost') * paidChs * months;
     const numUsers = parseFloat(item.values['num_users'] ?? 0);
     const userCharge = getSafeNum('user_charge');
@@ -6395,6 +7027,7 @@ async function generateQuote() {
     entity: (bundleFirstSku || firstSku)?.entity,
     compareMode: QG.compareMode,
     bundleCompareMode: QG.bundleCompareMode || false,
+    bundleMergeMode: QG.bundleMergeMode || false,
     bundle_a_items: itemsA,
     bundle_b_items: itemsB,
     activeBundle: QG.bundleCompareMode ? QG.activeBundle : null,
@@ -6871,6 +7504,7 @@ window.printHistoricalQuote = async function (id) {
       activeItemId: QG.activeItemId,
       compareMode: QG.compareMode,
       bundleCompareMode: QG.bundleCompareMode,
+      bundleMergeMode: QG.bundleMergeMode,
       bundleA: QG.bundleA ? JSON.parse(JSON.stringify(QG.bundleA)) : null,
       bundleB: QG.bundleB ? JSON.parse(JSON.stringify(QG.bundleB)) : null,
       activeBundle: QG.activeBundle,
@@ -6916,8 +7550,25 @@ window.printHistoricalQuote = async function (id) {
         const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
         fields.forEach(f => { if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value; });
       });
+    } else if (data.bundleMergeMode && data.sku_items?.length > 0) {
+      QG.bundleCompareMode = false;
+      QG.bundleMergeMode = true;
+      QG.compareMode = false;
+      QG.multiSkuMode = true;
+      QG.skuItems = data.sku_items;
+      QG.activeItemId = data.sku_items[0].id;
+      QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
+      syncActiveAliases();
+      QG.skuItems.forEach(item => {
+        if (!item.sku_key) return;
+        if (item.excluded === undefined) item.excluded = false;
+        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        fields.forEach(f => { if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value; });
+      });
     } else if (data.sku_items && data.sku_items.length > 0) {
       QG.bundleCompareMode = false;
+      QG.bundleMergeMode = false;
       QG.compareMode = data.compareMode || false;
       QG.skuItems = data.sku_items;
       QG.activeItemId = data.sku_items[0].id;
@@ -6966,6 +7617,7 @@ window.printHistoricalQuote = async function (id) {
       QG.activeItemId    = bkup.activeItemId;
       QG.compareMode     = bkup.compareMode;
       QG.bundleCompareMode = bkup.bundleCompareMode;
+      QG.bundleMergeMode   = bkup.bundleMergeMode;
       QG.bundleA         = bkup.bundleA;
       QG.bundleB         = bkup.bundleB;
       QG.activeBundle    = bkup.activeBundle;
@@ -7203,8 +7855,9 @@ window.confirmGenerateProforma = async function () {
       const procure = getSN('procurement');
       const setup = getSN('setup');
       const isVoicebot = item.sku_key === 'voice_exotel_voicebot';
-      const freeChs = isVoicebot ? 5 : 0;
-      const paidChs = Math.max(0, parseFloat(item.values['num_channels'] ?? (isVoicebot ? 5 : 0)) - freeChs);
+      const paidChs = isVoicebot
+        ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0))
+        : Math.max(0, parseFloat(item.values['num_channels'] ?? 0));
       const chCost = getSN('channel_cost') * paidChs * months;
       const numUsers = parseFloat(item.values['num_users'] ?? 0);
       const userCharge = getSN('user_charge');
@@ -7514,10 +8167,10 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Setup Charges: Waived`);
           
           if (isVoicebot) {
-            const freeChs = 5;
-            const paidChs = Math.max(0, numChs - freeChs);
-            lines.push(`No. of Channels: ${paidChs > 0 ? `5 Free, ${paidChs} Paid` : `5 Channels (Included Free)`}`);
-            lines.push(`Additional Channel Cost: ${fmtRupee(chCost)}/channel/month`);
+            const paidChs = Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0));
+            lines.push(`Free Channels: ${numChs} Channels (Included Free)`);
+            lines.push(`Paid Channels: ${paidChs > 0 ? paidChs + ' Channel(s)' : '—'}`);
+            lines.push(`Paid Channel Cost: ${fmtRupee(chCost)}/channel/month`);
           } else {
             lines.push(`No. of Channels: ${numChs}`);
             lines.push(`Channel Cost: ${fmtRupee(chCost)}/channel/month`);
@@ -7582,6 +8235,25 @@ window.confirmGenerateProforma = async function () {
           
           lines.push(`Call Credits Included: ${fmtRupee(getSN('credits'))}`);
           lines.push(`Outgoing Calls: ${fmtPaise(getSN('outgoing'))}`);
+        } else if (effectiveSk === 'voice_intl') {
+          const prepaid = getSN('prepaid_usd') || 400;
+          lines.push(`Credits Included: $${prepaid}`);
+          const numUsers = parseFloat(item.values['num_users'] ?? 0);
+          if (numUsers > 0) {
+            lines.push(`Agents: ${numUsers} User(s) @ $${getSN('user_charge_usd')}/agent/month`);
+          }
+          const entries = Array.isArray(item.values.intl_entries) ? item.values.intl_entries : [];
+          const totalNumbers = entries.reduce((s, e) => s + (e.count || 1), 0) || getSN('num_numbers') || 1;
+          lines.push(`No. of Numbers: ${totalNumbers} @ $15/number/month`);
+          if (entries.length > 1) {
+            entries.forEach(e => {
+              lines.push(`  - ${e.count || 1} × ${e.dest} (RM: ${e.rm})`);
+            });
+          } else {
+            const dest = item.values['intl_country'] || 'United States';
+            const rm = item.values['rm_country'] || 'India';
+            lines.push(`  - Destination: ${dest} (RM Location: ${rm})`);
+          }
         } else {
           lines.push(`Validity: ${months} months`);
 
@@ -8118,6 +8790,47 @@ window.viewQuote = async function (id) {
         }
       }
 
+    } else if (data.bundleMergeMode && data.sku_items?.length > 0) {
+      // ── Bundle Merge Mode quote restore ────────────────────────────
+      QG.bundleCompareMode = false;
+      QG.bundleMergeMode = true;
+      QG.compareMode = false;
+      QG.multiSkuMode = true;
+      QG.skuItems = data.sku_items;
+      QG.activeItemId = data.sku_items[0].id;
+      QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
+      syncActiveAliases();
+
+      // Hydrate missing field defaults + ensure excluded flag exists
+      QG.skuItems.forEach(item => {
+        if (!item.sku_key) return;
+        if (item.excluded === undefined) item.excluded = false;
+        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+        fields.forEach(f => {
+          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
+            item.values[f.id] = f.value;
+          }
+        });
+      });
+
+      // Hide multi-sku toggle label, show manager
+      const multiSkuLabel = document.getElementById('toggle-multi-sku-mode')?.closest('label');
+      if (multiSkuLabel) multiSkuLabel.style.display = 'none';
+      const manager = document.getElementById('sku-item-manager');
+      if (manager) manager.style.display = '';
+
+      renderSkuItemManager();
+      renderSkuSelector();
+      if (QG.currentSku) {
+        if (SKUS.find(s => s.key === QG.currentSku)?.hasTiers) renderTierSelector();
+        else {
+          const cfgArea = document.getElementById('sku-config-area');
+          if (cfgArea) cfgArea.innerHTML = '';
+          renderSkuForm(QG.currentSku, QG.currentTier);
+        }
+      }
+
     } else if (data.sku_items && data.sku_items.length > 0) {
       // ── Standard (non-bundle) quote restore ───────────────────────
       QG.skuItems = data.sku_items;
@@ -8553,6 +9266,9 @@ function resetQuoteForm() {
     const cb = document.getElementById('toggle-bundle-compare-mode');
     if (cb) cb.checked = false;
     window.toggleBundleCompareMode(false);
+  }
+  if (QG.bundleMergeMode) {
+    window.toggleBundleMergeMode(false);
   }
   if (QG.compareMode) {
     window.toggleCompareMode(false);
