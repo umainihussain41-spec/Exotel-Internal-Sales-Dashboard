@@ -1924,6 +1924,9 @@ function getSkuFields(skuKey, tier) {
         { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
         // Number Plan — multi-entry table
         { id: 'intl_entries', label: 'International Numbers & Rates', type: 'intl_numbers_table', value: [] },
+        // Standalone rental quantity (independent of the rate table above — lets you rent
+        // several numbers from the same region without adding extra rate rows)
+        { id: 'intl_number_qty', label: 'No. of Numbers', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         // Legacy single-entry kept for backward compat (hidden by table)
         { id: 'num_numbers', label: 'No. of US/Intl Numbers', value: 1, locked: false, stopType: 'lower', stopVal: 1, note: '_legacy_intl' },
         { id: 'number_charge_usd', label: 'Number Rental (USD/number/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10, note: '_legacy_intl' },
@@ -3297,7 +3300,7 @@ function renderFieldsGroupedCombined(items) {
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
     num_paid_channels: 'Number Plan',
-    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan',
+    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
     prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
@@ -4328,7 +4331,7 @@ function renderFieldsGrouped(fields, item) {
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
     num_paid_channels: 'Number Plan',
-    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan',
+    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
     prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
@@ -5229,10 +5232,11 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('No. of Agents', unlimitedUsers ? 'Unlimited' : `${numUsers}`);
       tableHTML += stdRow('User Charge', unlimitedUsers ? FREE : `${fmtUsdFixed(userCharge)} / agent / month`);
 
+      const rentalQty = getSafeNum('intl_number_qty') || 1;
       tableHTML += secRow('Number Plan');
-      tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
+      tableHTML += stdRow('No. of Numbers', `${rentalQty}`);
       tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numCharge)} / number / month`);
-      tableHTML += indRow('Rental Calculation', `${totalNumbers} number(s) × ${fmtUsdFixed(numCharge)} / month = <strong>${fmtUsdFixed(totalNumbers * numCharge)} / month</strong> <span style="color:#94a3b8;">(not included in plan total)</span>`);
+      tableHTML += indRow('Rental Calculation', `${rentalQty} number(s) × ${fmtUsdFixed(numCharge)} / month = <strong>${fmtUsdFixed(rentalQty * numCharge)} / month</strong> <span style="color:#94a3b8;">(not included in plan total)</span>`);
       if (entries.length > 1) {
         const breakdownStr = entries.map(e => `${e.count || 1} × ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`).join(', ');
         tableHTML += indRow('Numbers Breakdown', breakdownStr);
@@ -5515,7 +5519,7 @@ function _computeBundleRows(items) {
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Channel Plan', channel_cost: 'Channel Plan', did_cost: 'Number Plan',
     num_paid_channels: 'Channel Plan', bot_sessions: 'Channel Plan', session_cost: 'Channel Plan',
-    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan',
+    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Call Credits & Charges', extra_credits: 'Call Credits & Charges', extra_validity: 'Call Credits & Charges', volume: 'Call Credits & Charges',
     prepaid_usd: 'Plan Details', attach_intl_pdf: 'Plan Details', attach_isd_pdf: 'Plan Details', fee_type: 'Plan Details',
     single_leg: 'Call Credits & Charges', incoming: 'Call Credits & Charges', outgoing: 'Call Credits & Charges',
@@ -7310,10 +7314,11 @@ function updatePreview() {
       tableHTML += stdRow('No. of Agents', unlimitedUsersI ? 'Unlimited' : `${numUsersI}`);
       tableHTML += stdRow('User Charge', unlimitedUsersI ? FREE : `${fmtUsdFixed(userChargeI)} / agent / month`);
 
+      const rentalQtyI = getSafeNum('intl_number_qty') || 1;
       tableHTML += secRow('Number Plan');
-      tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
+      tableHTML += stdRow('No. of Numbers', `${rentalQtyI}`);
       tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numChargeI)} / number / month`);
-      tableHTML += indRow('Rental Calculation', `${totalNumbers} number(s) × ${fmtUsdFixed(numChargeI)} / month = <strong>${fmtUsdFixed(totalNumbers * numChargeI)} / month</strong> <span style="color:#94a3b8;">(not included in plan total)</span>`);
+      tableHTML += indRow('Rental Calculation', `${rentalQtyI} number(s) × ${fmtUsdFixed(numChargeI)} / month = <strong>${fmtUsdFixed(rentalQtyI * numChargeI)} / month</strong> <span style="color:#94a3b8;">(not included in plan total)</span>`);
       if (entries.length > 1) {
         const breakdownStr = entries.map(e => `${e.count || 1} × ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`).join(', ');
         tableHTML += indRow('Numbers Breakdown', breakdownStr);
