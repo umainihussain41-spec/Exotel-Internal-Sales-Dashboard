@@ -1916,8 +1916,10 @@ function getSkuFields(skuKey, tier) {
         // Plan Overview
         { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
         { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
+        { id: 'call_rate_mode', label: 'Call Rate Display', value: 0, type: 'call_mode_select' },
         { id: 'fee_type', label: 'Apply Fee to Quote', value: 2, type: 'fee_select' },
         // User Plan
+        { id: 'unlimited_users', label: 'Unlimited User Access (Free)', value: 0, type: 'boolean' },
         { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
         // Number Plan — multi-entry table
@@ -3290,7 +3292,7 @@ function renderFieldsGroupedCombined(items) {
     num_months: 'Plan Overview',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
-    user_charge_usd: 'User Plan',
+    user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
@@ -3302,7 +3304,7 @@ function renderFieldsGroupedCombined(items) {
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
-    pulse: 'Call Charges', human_handoff: 'Call Charges',
+    pulse: 'Call Charges', human_handoff: 'Call Charges', call_rate_mode: 'Call Charges',
     intl_country: 'Call Charges', rm_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
     voip_outgoing_usd: 'Call Charges', pstn_incoming_usd: 'Call Charges', pstn_outgoing_usd: 'Call Charges',
   };
@@ -3666,7 +3668,7 @@ function renderSkuForm(skuKey, tier) {
           return;
         }
 
-        if (f.type === 'boolean' || f.type === 'model_toggle' || f.type === 'fee_select') {
+        if (f.type === 'boolean' || f.type === 'model_toggle' || f.type === 'fee_select' || f.type === 'call_mode_select') {
           const toggleGroup = card.querySelector(`#qf_toggle_${f.id}_${item.id}`);
           toggleGroup?.querySelectorAll('.q-toggle-opt').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -4267,6 +4269,21 @@ function renderFieldRow(f, item, opts = {}) {
       </div>`;
   }
 
+  if (f.type === 'call_mode_select') {
+    const cmVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
+    return `
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="align-items:center;${isExcluded ? ' opacity: 0.55;' : ''}">
+        ${getLabelHtml('flex:1;')}
+        <div class="q-field-value" style="justify-content:flex-end;">
+          <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}" style="font-size:0.72rem;">
+            <button type="button" class="q-toggle-opt${cmVal == 0 ? ' active' : ''}" data-val="0" ${isExcluded ? 'disabled' : ''}>VoIP + PSTN</button>
+            <button type="button" class="q-toggle-opt${cmVal == 1 ? ' active' : ''}" data-val="1" ${isExcluded ? 'disabled' : ''}>PSTN only</button>
+            <button type="button" class="q-toggle-opt${cmVal == 2 ? ' active' : ''}" data-val="2" ${isExcluded ? 'disabled' : ''}>VoIP only</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   if (f.type === 'rental_toggle') {
     const rtVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
     const rtOneTime = (item.values['rental_onetime'] ?? 0) == 1;
@@ -4306,7 +4323,7 @@ function renderFieldsGrouped(fields, item) {
     num_months: 'Plan Overview',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
-    user_charge_usd: 'User Plan',
+    user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
@@ -4318,7 +4335,7 @@ function renderFieldsGrouped(fields, item) {
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
-    pulse: 'Call Charges', human_handoff: 'Call Charges',
+    pulse: 'Call Charges', human_handoff: 'Call Charges', call_rate_mode: 'Call Charges',
     intl_country: 'Call Charges', rm_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
     voip_outgoing_usd: 'Call Charges', pstn_incoming_usd: 'Call Charges', pstn_outgoing_usd: 'Call Charges',
   };
@@ -5189,9 +5206,28 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
       tableHTML += stdRow('Setup Charges', null, true);
 
+      const unlimitedUsers = getSafeNum('unlimited_users') === 1;
+      const callMode = getSafeNum('call_rate_mode') || 0; // 0 = VoIP + PSTN, 1 = PSTN only, 2 = VoIP only
+      const showVoip = callMode === 0 || callMode === 2;
+      const showPstn = callMode === 0 || callMode === 1;
+      const renderCallCharges = (e, title) => {
+        tableHTML += secRow(title);
+        if (showVoip) {
+          tableHTML += stdRow('VoIP Incoming', FREE);
+          tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
+          tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
+        }
+        if (showPstn) {
+          tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
+          tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
+          tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
+          tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        }
+      };
+
       tableHTML += secRow('User Plan');
-      tableHTML += stdRow('No. of Agents', `${numUsers}`);
-      tableHTML += stdRow('User Charge', `${fmtUsdFixed(userCharge)} / agent / month`);
+      tableHTML += stdRow('No. of Agents', unlimitedUsers ? 'Unlimited' : `${numUsers}`);
+      tableHTML += stdRow('User Charge', unlimitedUsers ? FREE : `${fmtUsdFixed(userCharge)} / agent / month`);
 
       tableHTML += secRow('Number Plan');
       tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
@@ -5202,25 +5238,10 @@ function _renderBundleItemsHTML(bundleItems) {
       }
 
       if (entries.length === 1) {
-        const e = entries[0];
-        tableHTML += secRow(`Call Charges (${sanitize(e.dest)})`);
-        tableHTML += stdRow('VoIP Incoming', FREE);
-        tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
-        tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
-        tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
-        tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
-        tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
-        tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        renderCallCharges(entries[0], `Call Charges (${sanitize(entries[0].dest)})`);
       } else {
-        entries.forEach((e, idx) => {
-          tableHTML += secRow(`Call Charges - ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`);
-          tableHTML += stdRow('VoIP Incoming', FREE);
-          tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
-          tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
-          tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
-          tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
-          tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
-          tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        entries.forEach((e) => {
+          renderCallCharges(e, `Call Charges - ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`);
         });
       }
 
@@ -5488,7 +5509,7 @@ function _computeBundleRows(items) {
     num_months: 'Plan Details',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
-    user_charge_usd: 'User Plan',
+    user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Channel Plan', channel_cost: 'Channel Plan', did_cost: 'Number Plan',
@@ -5501,6 +5522,7 @@ function _computeBundleRows(items) {
     wa_utility: 'Messaging & Services', wa_promo: 'Messaging & Services', wa_api: 'Messaging & Services',
     rcs_biz: 'Messaging & Services', rcs_rich: 'Messaging & Services', rcs_reply: 'Messaging & Services',
     rcs_cost: 'Messaging & Services', pulse: 'Call Credits & Charges', human_handoff: 'Call Credits & Charges',
+    call_rate_mode: 'Call Credits & Charges',
     intl_country: 'Call Credits & Charges', rm_country: 'Call Credits & Charges', voip_incoming_usd: 'Call Credits & Charges',
     voip_outgoing_usd: 'Call Credits & Charges', pstn_incoming_usd: 'Call Credits & Charges', pstn_outgoing_usd: 'Call Credits & Charges',
   };
@@ -7264,9 +7286,28 @@ function updatePreview() {
       tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
       tableHTML += stdRow('Setup Charges', null, true);
 
+      const unlimitedUsersI = getSafeNum('unlimited_users') === 1;
+      const callModeI = getSafeNum('call_rate_mode') || 0; // 0 = VoIP + PSTN, 1 = PSTN only, 2 = VoIP only
+      const showVoipI = callModeI === 0 || callModeI === 2;
+      const showPstnI = callModeI === 0 || callModeI === 1;
+      const renderCallChargesI = (e, title) => {
+        tableHTML += secRow(title);
+        if (showVoipI) {
+          tableHTML += stdRow('VoIP Incoming', FREE);
+          tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
+          tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
+        }
+        if (showPstnI) {
+          tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
+          tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
+          tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
+          tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        }
+      };
+
       tableHTML += secRow('User Plan');
-      tableHTML += stdRow('No. of Agents', `${numUsersI}`);
-      tableHTML += stdRow('User Charge', `${fmtUsdFixed(userChargeI)} / agent / month`);
+      tableHTML += stdRow('No. of Agents', unlimitedUsersI ? 'Unlimited' : `${numUsersI}`);
+      tableHTML += stdRow('User Charge', unlimitedUsersI ? FREE : `${fmtUsdFixed(userChargeI)} / agent / month`);
 
       tableHTML += secRow('Number Plan');
       tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
@@ -7277,25 +7318,10 @@ function updatePreview() {
       }
 
       if (entries.length === 1) {
-        const e = entries[0];
-        tableHTML += secRow(`Call Charges (${sanitize(e.dest)})`);
-        tableHTML += stdRow('VoIP Incoming', FREE);
-        tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
-        tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
-        tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
-        tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
-        tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
-        tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        renderCallChargesI(entries[0], `Call Charges (${sanitize(entries[0].dest)})`);
       } else {
-        entries.forEach((e, idx) => {
-          tableHTML += secRow(`Call Charges - ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`);
-          tableHTML += stdRow('VoIP Incoming', FREE);
-          tableHTML += stdRow('VoIP Outgoing', `${fmtUsd(e.voipOut)} / min`);
-          tableHTML += indRow(`${sanitize(e.dest)} outgoing leg`, `Destination rate - billed to ${sanitize(e.dest)} number`);
-          tableHTML += stdRow('PSTN Incoming', `${fmtUsd(e.pstnIn)} / min`);
-          tableHTML += indRow(`${sanitize(e.rm)} agent leg`, `${sanitize(e.dest)} leg is free; ${sanitize(e.rm)} agent leg charged at ${fmtUsd(e.rmRate)}/min`);
-          tableHTML += stdRow('PSTN Outgoing', `${fmtUsd(e.pstnOut)} / min`);
-          tableHTML += indRow('Breakdown', `${sanitize(e.dest)} leg (${fmtUsd(e.voipOut)}) + ${sanitize(e.rm)} agent leg (${fmtUsd(e.rmRate)}) = <strong>${fmtUsd(e.pstnOut)}/min</strong>`);
+        entries.forEach((e) => {
+          renderCallChargesI(e, `Call Charges - ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`);
         });
       }
 
@@ -9087,8 +9113,11 @@ window.confirmGenerateProforma = async function () {
         } else if (effectiveSk === 'voice_intl') {
           const prepaid = getSN('prepaid_usd') || 400;
           lines.push(`Credits Included: $${prepaid}`);
+          const unlimitedUsers = getSN('unlimited_users') === 1;
           const numUsers = parseFloat(item.values['num_users'] ?? 0);
-          if (numUsers > 0) {
+          if (unlimitedUsers) {
+            lines.push(`Agents: Unlimited User Access (Free)`);
+          } else if (numUsers > 0) {
             lines.push(`Agents: ${numUsers} User(s) @ $${getSN('user_charge_usd')}/agent/month`);
           }
           const entries = Array.isArray(item.values.intl_entries) ? item.values.intl_entries : [];
