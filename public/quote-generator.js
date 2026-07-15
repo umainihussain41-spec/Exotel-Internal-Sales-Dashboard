@@ -5232,6 +5232,7 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += secRow('Number Plan');
       tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
       tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numCharge)} / number / month`);
+      tableHTML += indRow('Rental Calculation', `${totalNumbers} number(s) × ${fmtUsdFixed(numCharge)} / month = <strong>${fmtUsdFixed(totalNumbers * numCharge)} / month</strong> <span style="color:#94a3b8;">(not included in plan total)</span>`);
       if (entries.length > 1) {
         const breakdownStr = entries.map(e => `${e.count || 1} × ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`).join(', ');
         tableHTML += indRow('Numbers Breakdown', breakdownStr);
@@ -7312,6 +7313,7 @@ function updatePreview() {
       tableHTML += secRow('Number Plan');
       tableHTML += stdRow('No. of Numbers', `${totalNumbers}`);
       tableHTML += stdRow('Number Rental', `${fmtUsdFixed(numChargeI)} / number / month`);
+      tableHTML += indRow('Rental Calculation', `${totalNumbers} number(s) × ${fmtUsdFixed(numChargeI)} / month = <strong>${fmtUsdFixed(totalNumbers * numChargeI)} / month</strong> <span style="color:#94a3b8;">(not included in plan total)</span>`);
       if (entries.length > 1) {
         const breakdownStr = entries.map(e => `${e.count || 1} × ${sanitize(e.dest)} (RM: ${sanitize(e.rm)})`).join(', ');
         tableHTML += indRow('Numbers Breakdown', breakdownStr);
