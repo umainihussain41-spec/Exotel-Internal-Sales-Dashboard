@@ -30,6 +30,10 @@ const QG = {
   activeBundle: 'A',
   savedSingleState: null,
   bundleMergeMode: false,  // true when Bundle Merge (club SKUs) mode is active
+  bundleRenameOverrides: {},  // { "itemId:fieldId": customLabel } — per-row label overrides in bundle mode
+  bundleReaddedFields: [],    // [ "itemId:fieldId" ] — duplicate fields the user chose to show again
+  _bundleRenamingKey: null,   // which "itemId:fieldId" is currently being renamed inline
+  _bundleShowDupes: false,    // reveal the greyed overlapping fields collapsed by smart dedup
 };
 
 // ── SKU Definitions ────────────────────────────────────────
@@ -1339,7 +1343,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Call Charges</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>This is a <strong>single-leg billing</strong> plan — only one call leg is charged per connected call minute.</li>
+            <li>This is a <strong>single-leg billing</strong> plan: only one call leg is charged per connected call minute.</li>
             <li>Ideal for outbound bulk/campaign calling where the agent leg is not billed separately.</li>
             <li>Call attempts (unanswered or failed) may also be chargeable depending on the campaign setup.</li>
             <li>Call rate applies per minute of actual connected duration.</li>
@@ -1673,6 +1677,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
+        { id: 'did_numbers', label: 'Own Number (BYON) (optional)', value: 0, locked: false },
+        { id: 'did_cost', label: 'Own Number (BYON) Rate (₹/number/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'credits', label: 'WA Credits (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 5000 },
         { id: 'wa_utility', label: 'Utility Msg (p/msg)', value: 11, locked: true, nonEditable: true },
         { id: 'wa_promo', label: 'Promotional Msg (p/msg)', value: 86, locked: true, nonEditable: true },
@@ -2194,12 +2200,12 @@ function renderSkuItemManager() {
     if (hint) hint.textContent = QG.bundleCompareMode
       ? `Option ${QG.activeBundle} is using ${QG.lockedEntity} SKUs. Switch to the other option to pick a different entity.`
       : QG.bundleMergeMode
-        ? `Bundle Package mode — add SKUs then use "✕ Take Out" to exclude any from the final proposal.`
+        ? `Bundle Package mode: add SKUs to build one unified proposal. Manage item names and remove unwanted rows below.`
         : `You can only add ${QG.lockedEntity} SKUs to this quote.`;
   } else {
     if (lockBadge) lockBadge.style.display = 'none';
     if (hint) hint.textContent = QG.bundleMergeMode
-      ? 'Bundle Package mode — add multiple SKUs to create one combined proposal. Use "✕ Take Out" to exclude any sub-SKU.'
+      ? 'Bundle Package mode: add multiple SKUs to create one combined proposal. Duplicate rows are merged and can be renamed.'
       : 'Choose the product plan for this quote. The logo and entity will switch automatically.';
   }
 
@@ -2217,11 +2223,12 @@ function renderSkuItemManager() {
     const fullLabel = sku ? `${skuLabel}${suffix}` : 'Not configured';
     const entityColor = sku?.entity === 'Veeno' ? '#be185d' : '#0369a1';
     const entityBg = sku?.entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
-    const showRemove = QG.skuItems.length > 1 && !QG.bundleMergeMode;
-    const canRename = sku && CUSTOM_NAME_SKUS.includes(item.sku_key);
+    
+    // In bundle mode: all SKUs can be removed, and rename is always available
+    const showRemove = QG.skuItems.length > 1;
+    const canRename = sku && (CUSTOM_NAME_SKUS.includes(item.sku_key) || QG.bundleMergeMode);
     const hasCustomName = !!(item.customName);
     const isRenaming = QG._renamingItemId === item.id;
-    const isExcluded = !!(item.excluded && QG.bundleMergeMode);
 
     // Placeholder for the rename input = default tier name (not custom)
     const defaultName = TIER_DISPLAY_NAMES[item.tier] || (item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : skuLabel);
@@ -2238,31 +2245,27 @@ function renderSkuItemManager() {
            onkeydown="if(event.key==='Enter'||event.key==='Escape'){event.preventDefault();window.commitItemRename('${item.id}')}"
            style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};border:none;border-bottom:2px solid #0284c7;background:transparent;outline:none;font-family:inherit;width:100%;padding:0;"
          >`
-      : `<div style="font-weight:600;font-size:0.88rem;color:${isExcluded ? '#94a3b8' : isActive ? '#0284c7' : '#1e293b'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${isExcluded ? 'text-decoration:line-through;' : ''}">${sku ? sanitize(fullLabel) : '<span style="color:#94a3b8;font-style:italic;">Not configured</span>'}</div>`;
+      : `<div style="font-weight:600;font-size:0.88rem;color:${isActive ? '#0284c7' : '#1e293b'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sku ? sanitize(fullLabel) : '<span style="color:#94a3b8;font-style:italic;">Not configured</span>'}</div>`;
 
-    // Take-Out button: only shown in bundle merge mode (replaces remove)
-    const takeOutBtn = QG.bundleMergeMode && sku ? `<button
-      onclick="event.stopPropagation();window.toggleSkuExclusion('${item.id}')"
-      title="${isExcluded ? 'Add back to bundle' : 'Take out from bundle'}"
-      style="flex-shrink:0;border:none;border-radius:6px;padding:2px 7px;font-size:0.68rem;font-weight:700;cursor:pointer;transition:all 0.15s;background:${isExcluded ? '#dcfce7' : '#fef3c7'};color:${isExcluded ? '#15803d' : '#b45309'};"
-      onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"
-    >${isExcluded ? '+ Add Back' : '✕ Take Out'}</button>` : (showRemove ? `<button onclick="window.removeSkuItem('${item.id}')" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-size:15px;line-height:1;transition:background 0.15s;" onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'" title="Remove item">×</button>` : '<div style="width:24px;flex-shrink:0;"></div>');
+    // In bundle mode, remove button is always shown for multi-item lists
+    const removeBtn = showRemove ? `<button onclick="window.removeSkuItem('${item.id}')" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:#fee2e2;color:#ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;font-size:15px;line-height:1;transition:background 0.15s;" onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'" title="Remove this SKU from quote">×</button>` : '<div style="width:24px;flex-shrink:0;"></div>';
 
-    // Indicator dot: amber when excluded in merge mode
-    const dotColor = isExcluded ? '#f59e0b' : isActive ? '#0284c7' : '#cbd5e1';
+    // Bundle mode: show rename note about per-row naming in preview
+    const bundleNote = QG.bundleMergeMode && sku ? ' · <span style="color:#7c3aed;font-size:0.68rem;">bundle ✦</span>' : '';
+    const dotColor = isActive ? '#0284c7' : '#cbd5e1';
 
     return `
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;${isExcluded ? 'opacity:0.65;' : ''}">
-        <div class="sku-item-row ${isActive ? 'active' : ''}" onclick="window.switchActiveItem('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1.5px solid ${isRenaming ? '#0284c7' : isExcluded ? '#fde68a' : isActive ? '#0284c7' : '#e2e8f0'};background:${isExcluded ? '#fffbeb' : isActive ? '#f0f9ff' : '#fff'};transition:all 0.15s;flex:1;min-width:0;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:0;">
+        <div class="sku-item-row ${isActive ? 'active' : ''}" onclick="window.switchActiveItem('${item.id}')" style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;border:1.5px solid ${isRenaming ? '#0284c7' : isActive ? '#0284c7' : '#e2e8f0'};background:${isActive ? '#f0f9ff' : '#fff'};transition:all 0.15s;flex:1;min-width:0;">
           <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
           <div style="flex:1;min-width:0;">
             ${labelArea}
-            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1} · ${sku.entity}${isExcluded ? ' · <span style="color:#b45309;font-style:italic;">excluded</span>' : (hasCustomName && !isRenaming ? ' · <span style="color:#0284c7;">renamed</span>' : '')}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
+            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1} · ${sku.entity}${hasCustomName && !isRenaming ? ' · <span style="color:#0284c7;">renamed</span>' : ''}${bundleNote}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
           </div>
           ${sku ? `<span style="padding:2px 7px;border-radius:20px;font-size:0.68rem;font-weight:700;background:${entityBg};color:${entityColor};">${sku.entity}</span>` : ''}
         </div>
-        ${canRename && !QG.bundleMergeMode ? `<button onclick="event.stopPropagation();window.openItemRename('${item.id}')" title="${isRenaming ? 'Finish renaming' : 'Rename plan'}" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'};color:${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;" onmouseover="this.style.background='#e0f2fe';this.style.color='#0284c7'" onmouseout="this.style.background='${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'}';this.style.color='${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '<div style="width:24px;flex-shrink:0;"></div>'}
-        ${takeOutBtn}
+        ${canRename ? `<button onclick="event.stopPropagation();window.openItemRename('${item.id}')" title="${isRenaming ? 'Finish renaming' : 'Rename plan'}" style="width:24px;height:24px;flex-shrink:0;border:none;border-radius:50%;background:${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'};color:${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'};cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;" onmouseover="this.style.background='#e0f2fe';this.style.color='#0284c7'" onmouseout="this.style.background='${hasCustomName || isRenaming ? '#e0f2fe' : '#f1f5f9'}';this.style.color='${hasCustomName || isRenaming ? '#0284c7' : '#94a3b8'}'"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>` : '<div style="width:24px;flex-shrink:0;"></div>'}
+        ${removeBtn}
       </div>`;
   }).join('');
 
@@ -2518,7 +2521,7 @@ window.toggleBundleCompareMode = function (enabled) {
   updatePreview();
 };
 
-// ── Bundle Merge Mode ──────────────────────────────────────────────────────
+// ── Bundle Package Mode (new unified proposal) ────────────────────────────
 window.toggleBundleMergeMode = function (enabled) {
   // Mutual exclusion: exit other compare/bundle modes first
   if (enabled) {
@@ -2531,7 +2534,7 @@ window.toggleBundleMergeMode = function (enabled) {
   const manager = document.getElementById('sku-item-manager');
 
   if (enabled) {
-    // Save current state
+    // Save current single-mode state
     QG.savedMergeState = {
       skuItems: JSON.parse(JSON.stringify(QG.skuItems)),
       activeItemId: QG.activeItemId,
@@ -2540,16 +2543,22 @@ window.toggleBundleMergeMode = function (enabled) {
     };
     if (multiSkuLabel) multiSkuLabel.style.display = 'none';
     QG.multiSkuMode = true;
-    // Reset all excluded flags and sub-SKU exclusions
-    QG.skuItems.forEach(i => { i.excluded = false; i.excludedFields = {}; });
+    // Reset all bundle-mode-specific state
+    QG.bundleRenameOverrides = {};
+    QG.bundleReaddedFields = [];
+    QG._bundleRenamingKey = null;
     if (manager) manager.style.display = '';
   } else {
+    // Restore previous state
     if (QG.savedMergeState) {
       QG.skuItems = QG.savedMergeState.skuItems;
       QG.activeItemId = QG.savedMergeState.activeItemId;
       QG.lockedEntity = QG.savedMergeState.lockedEntity;
       QG.multiSkuMode = QG.savedMergeState.multiSkuMode;
     }
+    QG.bundleRenameOverrides = {};
+    QG.bundleReaddedFields = [];
+    QG._bundleRenamingKey = null;
     if (multiSkuLabel) {
       multiSkuLabel.style.display = '';
       const cb = document.getElementById('toggle-multi-sku-mode');
@@ -2571,21 +2580,79 @@ window.toggleBundleMergeMode = function (enabled) {
   updatePreview();
 };
 
+// ── Bundle Package Mode — per-row label rename ─────────────────────────────
+// The rename UI lives in the SKU config panel (renderFieldRow), so these must
+// re-render that panel — not just the preview — to open/close the inline input.
+function _bundleRenameKey(itemId, fieldId) { return itemId + ':' + fieldId; }
+function _bundleReRenderConfig() {
+  const cfg = document.getElementById('sku-config-area');
+  if (cfg && QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+}
+
+window.bundleToggleRename = function (itemId, fieldId) {
+  const key = _bundleRenameKey(itemId, fieldId);
+  QG._bundleRenamingKey = (QG._bundleRenamingKey === key) ? null : key;
+  _bundleReRenderConfig();
+};
+// Back-compat single-key entry point
+window.bundleOpenRename = function (key) {
+  QG._bundleRenamingKey = (QG._bundleRenamingKey === key) ? null : key;
+  _bundleReRenderConfig();
+};
+
+window.bundleCommitRename = function (itemId, fieldId) {
+  const key = _bundleRenameKey(itemId, fieldId);
+  const safeId = 'bundle-rename-' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const inp = document.getElementById(safeId);
+  if (inp) {
+    const val = inp.value.trim();
+    if (val) QG.bundleRenameOverrides[key] = val;
+    else delete QG.bundleRenameOverrides[key];
+  }
+  QG._bundleRenamingKey = null;
+  _bundleReRenderConfig();
+};
+
+window.bundleSetRename = function (itemId, fieldId, val) {
+  QG.bundleRenameOverrides[_bundleRenameKey(itemId, fieldId)] = val;
+};
+
+window.bundleClearRename = function (itemId, fieldId) {
+  delete QG.bundleRenameOverrides[_bundleRenameKey(itemId, fieldId)];
+  QG._bundleRenamingKey = null;
+  _bundleReRenderConfig();
+};
+
+// ── Bundle Package Mode — reveal / re-hide a covered duplicate field ───────
+window.bundleReaddDupe = function (key) {
+  if (!QG.bundleReaddedFields.includes(key)) {
+    QG.bundleReaddedFields.push(key);
+  }
+  _bundleReRenderConfig();
+};
+
+window.bundleRemoveDupe = function (key) {
+  QG.bundleReaddedFields = QG.bundleReaddedFields.filter(k => k !== key);
+  _bundleReRenderConfig();
+};
+
+// ── Whole-SKU exclusion (drop an entire clubbed SKU from the proposal) ─────
 window.toggleSkuExclusion = function (itemId) {
   const item = QG.skuItems.find(i => i.id === itemId);
   if (!item) return;
   item.excluded = !item.excluded;
   renderSkuItemManager();
-  updatePreview();
+  _bundleReRenderConfig();
 };
 
-// ── Sub-SKU (row-level) exclusion for Bundle Package mode ──────────────────
+// ── Row-level exclusion ("Take Out" / "Add Back") for Bundle Package mode ──
 window.toggleSubSkuExclusion = function (itemId, fieldId) {
   const item = QG.skuItems.find(i => i.id === itemId);
   if (!item) return;
   if (!item.excludedFields) item.excludedFields = {};
   item.excludedFields[fieldId] = !item.excludedFields[fieldId];
-  updatePreview();
+  _bundleReRenderConfig();
 };
 
 window.switchBundle = function (bundleLabel) {
@@ -2681,15 +2748,25 @@ function renderSkuSelector() {
         <div class="sku-option-icon">${s.icon}</div>
         <div>
           <div class="sku-option-label">${sanitize(s.label)}</div>
-          <div class="sku-option-sub">${isActive ? 'Active — A vs B' : sanitize(s.sub)}</div>
+          <div class="sku-option-sub">${isActive ? 'Active: A vs B' : sanitize(s.sub)}</div>
           <span class="sku-entity-tag bundle">${isActive ? '✓ ON' : 'A vs B'}</span>
         </div>
       </div>`;
     }
 
     if (s.isBundleMerge) {
-      // Temporarily disabled/hidden from UI
-      return '';
+      const isActive = QG.bundleMergeMode;
+      return `
+      <div class="sku-option sku-bundle${isActive ? ' selected' : ''}" data-sku="bundle_merge"
+           onclick="window.toggleBundleMergeMode(!QG.bundleMergeMode); renderSkuSelector();"
+           title="${isActive ? 'Disable Bundle Package mode' : 'Enable Bundle Package: merge multiple SKUs into one unified proposal'}">
+        <div class="sku-option-icon">${s.icon}</div>
+        <div>
+          <div class="sku-option-label">${sanitize(s.label)}</div>
+          <div class="sku-option-sub">${isActive ? 'Active: unified proposal' : sanitize(s.sub)}</div>
+          <span class="sku-entity-tag bundle">${isActive ? '✓ ON' : 'Multi-SKU'}</span>
+        </div>
+      </div>`;
     }
 
     const canCmp = compareCapable.includes(s.key);
@@ -2982,7 +3059,16 @@ function selectTier(tier) {
   // Normal mode path:
   const item = getActiveItem();
   item.tier = tier;
-  item.values = {};
+  
+  // Preserve addon states and custom values not defined in tier defaults
+  const tierKeys = ['validity', 'rental', 'free_users', 'free_numbers', 'credits', 'single_leg', 'incoming', 'outgoing'];
+  const preserved = {};
+  for (const k in item.values) {
+    if (!tierKeys.includes(k)) {
+      preserved[k] = item.values[k];
+    }
+  }
+  item.values = preserved;
   QG.currentTier = tier;
   QG.skuValues = item.values;
   if (QG.currentSku === 'startup') {
@@ -3178,15 +3264,239 @@ window.updateCompareTiers = function (el) {
   updatePreview();
 };
 
+function renderFieldsGroupedCombined(items) {
+  const SECTION_MAP = {
+    validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
+    channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
+    num_months: 'Plan Overview',
+    num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
+    user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
+    user_charge_usd: 'User Plan',
+    free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
+    num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
+    remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
+    num_paid_channels: 'Number Plan',
+    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan',
+    credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
+    prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
+    single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
+    attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
+    wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
+    rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
+    pulse: 'Call Charges', human_handoff: 'Call Charges',
+    intl_country: 'Call Charges', rm_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
+    voip_outgoing_usd: 'Call Charges', pstn_incoming_usd: 'Call Charges', pstn_outgoing_usd: 'Call Charges',
+  };
+  // ── Smart dedup: figure out which clubbed SKU "owns" each shared field ────
+  // Shared with the proposal/pricing path so the config panel, the printed
+  // breakdown, and the totals all agree on which SKU covers each field.
+  const { owners, coveredBy: dupeCoveredBy } = _bundleComputeOwnership(items);
+
+  const sectionOrder = [];
+  const sectionMap = {};
+  items.forEach(item => {
+    const k = item.sku_key || QG.currentSku;
+    const t = item.tier || QG.currentTier;
+    const fields = getSkuFields(k, t) || [];
+    fields.forEach(f => {
+      const sec = SECTION_MAP[f.id] || 'Settings';
+      if (!sectionMap[sec]) { sectionMap[sec] = []; sectionOrder.push(sec); }
+      sectionMap[sec].push({f, item});
+    });
+  });
+  const multiSec = sectionOrder.length > 1;
+  const readded = new Set(QG.bundleReaddedFields || []);
+  const isTakenOut = (o) => !!(o.item.excludedFields && o.item.excludedFields[o.f.id]);
+  const hidden = [];   // fields not currently shown, offered in the search-to-add box
+
+  const body = sectionOrder.map(sec => {
+    const rows = [];
+    sectionMap[sec].forEach(o => {
+      const rk = o.item.id + ':' + o.f.id;
+      const skuObj = SKUS.find(s => s.key === o.item.sku_key);
+      const skuLabel = skuObj?.label || o.item.sku_key;
+      const dispLabel = QG.bundleRenameOverrides?.[rk] || o.f.label;
+
+      if (owners.has(rk)) {
+        // Owner field: shown unless the user took it out (then it moves to search)
+        if (isTakenOut(o)) { hidden.push({ itemId: o.item.id, fieldId: o.f.id, rk, label: dispLabel, sku: skuLabel, section: sec, kind: 'removed' }); return; }
+        rows.push(renderFieldRow(o.f, o.item));
+      } else if (readded.has(rk)) {
+        // Duplicate the user explicitly brought back into view (greyed, still covered)
+        const cover = dupeCoveredBy[rk] || 'the primary SKU';
+        rows.push(`<div class="bundle-dupe-row" title="Already covered by ${sanitize(cover)}, merged out of the proposal">
+          ${renderFieldRow(o.f, o.item, { dupe: true })}
+          <div class="bundle-dupe-tag">from ${sanitize(skuLabel)}, already covered by ${sanitize(cover)}</div>
+        </div>`);
+      } else {
+        // Overlapping duplicate covered by a more-primary SKU: hidden, offered in search
+        const cover = dupeCoveredBy[rk] || 'the primary SKU';
+        hidden.push({ itemId: o.item.id, fieldId: o.f.id, rk, label: dispLabel, sku: skuLabel, section: sec, kind: 'covered', coveredBy: cover });
+      }
+    });
+    if (!rows.length) return '';
+    return (multiSec ? `<div class="q-form-section-header">${sanitize(sec)}</div>` : '') + rows.join('');
+  }).join('');
+
+  const search = hidden.length ? `
+    <div class="bundle-field-search" onfocusout="setTimeout(window.bundleHideSearch, 150)">
+      <input type="text" class="bundle-field-search-input" autocomplete="off"
+        placeholder="&#128269;  Search ${hidden.length} hidden field${hidden.length > 1 ? 's' : ''} to add back..."
+        oninput="window.bundleFilterHidden(this)" onfocus="window.bundleShowSearch()" />
+      <div class="bundle-hidden-list" id="bundle-hidden-list">
+        ${hidden.map(h => {
+          const action = h.kind === 'removed'
+            ? `window.toggleSubSkuExclusion('${h.itemId}','${h.fieldId}')`
+            : `window.bundleReaddDupe('${h.rk}')`;
+          const meta = h.kind === 'removed' ? 'removed' : ('covered by ' + h.coveredBy);
+          return `<div class="bundle-hidden-item" data-search="${sanitize((h.label + ' ' + h.sku + ' ' + h.section).toLowerCase())}"
+                    onmousedown="event.preventDefault(); ${action}">
+            <span class="bundle-hidden-plus">+</span>
+            <span class="bundle-hidden-label">${sanitize(h.label)}</span>
+            <span class="bundle-hidden-meta">${sanitize(h.sku)} &middot; ${sanitize(meta)}</span>
+          </div>`;
+        }).join('')}
+        <div class="bundle-hidden-empty">No matching fields</div>
+      </div>
+    </div>` : '';
+  return search + body;
+}
+
+// ── Bundle Package — SKU primacy ranking for smart field ownership ─────────
+// Lower = more "primary" (a complete base plan). The most-primary clubbed SKU
+// owns each shared field; specialised SKUs only surface their unique fields.
+const _BUNDLE_PRIMARY_RANK = {
+  voice_exotel_std: 1, voice_veeno_std: 1,
+  voice_exotel_user: 2, voice_veeno_user: 2,
+  voice_exotel_campaigns: 3, sip_veeno: 3, voice_exotel_tfn: 3,
+  startup: 4,
+  voice_exotel_stream: 5, voice_exotel_voicebot: 5,
+  sms_exotel: 6, whatsapp_exotel: 6, rcs_exotel: 6,
+  num_1400: 7, num_1600: 7,
+  voice_intl: 8,
+};
+function _bundleRank(item) {
+  const k = item.sku_key === 'startup' ? 'startup' : item.sku_key;
+  return _BUNDLE_PRIMARY_RANK[k] != null ? _BUNDLE_PRIMARY_RANK[k] : 50;
+}
+// Normalise a field label to its core concept so "Account Rental (₹)" from two
+// SKUs merge, but "Call Credits" and "SMS Credits" (same id) stay distinct.
+function _bundleNormLabel(lbl) {
+  return String(lbl == null ? '' : lbl)
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase();
+}
+// Single source of truth for "which clubbed SKU owns each shared field".
+// The most-primary SKU (lowest _bundleRank) owns a field the first time its
+// id+concept is seen; the same field on a later SKU is a covered duplicate.
+// Used by the config panel, the printed breakdown, AND the pricing subtotal so
+// everything charges each merged field exactly once.
+function _bundleComputeOwnership(items) {
+  const owners = new Set();   // "itemId:fieldId" that is the primary/owner
+  const coveredBy = {};       // "itemId:fieldId" -> owning SKU label
+  const seen = {};            // mergeKey -> owning SKU label
+  const ordered = items
+    .map((item, idx) => ({ item, idx }))
+    .filter(o => o.item.sku_key)
+    .sort((a, b) => (_bundleRank(a.item) - _bundleRank(b.item)) || (a.idx - b.idx));
+  ordered.forEach(({ item }) => {
+    const fields = getSkuFields(item.sku_key, item.tier || QG.currentTier) || [];
+    const skuObj = SKUS.find(s => s.key === item.sku_key);
+    const skuLabel = item.customName || skuObj?.label || item.sku_key;
+    fields.forEach(f => {
+      const mk = f.id + '|' + _bundleNormLabel(f.label);
+      const rk = item.id + ':' + f.id;
+      if (seen[mk] !== undefined) coveredBy[rk] = seen[mk];
+      else { seen[mk] = skuLabel; owners.add(rk); }
+    });
+  });
+  return { owners, coveredBy };
+}
+// ── Bundle Package — "search hidden fields to add back" dropdown ───────────
+window.bundleShowSearch = function () {
+  const list = document.getElementById('bundle-hidden-list');
+  if (list) list.classList.add('open');
+};
+window.bundleHideSearch = function () {
+  const list = document.getElementById('bundle-hidden-list');
+  if (list) list.classList.remove('open');
+};
+window.bundleFilterHidden = function (inp) {
+  const q = (inp.value || '').trim().toLowerCase();
+  const list = document.getElementById('bundle-hidden-list');
+  if (!list) return;
+  list.classList.add('open');
+  let any = false;
+  list.querySelectorAll('.bundle-hidden-item').forEach(el => {
+    const match = !q || el.dataset.search.includes(q);
+    el.style.display = match ? '' : 'none';
+    if (match) any = true;
+  });
+  const empty = list.querySelector('.bundle-hidden-empty');
+  if (empty) empty.style.display = any ? 'none' : 'block';
+};
+
+// ── Bundle Package — per-component "Add-ons" checkbox bar ──────────────────
+// Mirrors the single-SKU add-on toolbar (SMS / WhatsApp / Call Transfer) inside
+// the unified bundle card. Only the SKU that *owns* an add-on field in the merge
+// shows its checkbox, so a clubbed field never gets two competing toggles.
+function renderBundleAddonBars(items) {
+  const { owners } = _bundleComputeOwnership(items);
+  const owns = (item, fid) => owners.has(item.id + ':' + fid);
+  const cb = (item, id, checked, k, t, labelHtml) =>
+    `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="${id}_${item.id}" ${checked ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> ${labelHtml}</label>`;
+
+  const multi = items.filter(i => i.sku_key).length > 1;
+  return items.map(item => {
+    const k = item.sku_key;
+    if (!k) return '';
+    const t = item.tier || QG.currentTier;
+    const fields = getSkuFields(k, t) || [];
+    const hasSms = fields.some(f => f.note === 'SMS Add-on' && owns(item, f.id));
+    const hasWa  = fields.some(f => f.note === 'WA Add-on'  && owns(item, f.id));
+    const hasCt  = fields.some(f => f.note === 'CT Add-on'  && owns(item, f.id));
+    if (!hasSms && !hasWa && !hasCt) return '';
+    const skuObj = SKUS.find(s => s.key === k);
+    const label = item.customName || skuObj?.label || k;
+    const toggles = [
+      hasSms ? cb(item, 'toggle-sms-addon', item.values['sms_cost'], k, t, 'SMS') : '',
+      hasWa  ? cb(item, 'toggle-wa-addon',  item.values['wa_api'],   k, t, 'WhatsApp') : '',
+      hasCt  ? cb(item, 'toggle-ct-addon',  item.values['call_transfer'] !== undefined, k, t, 'Call Transfer <span style="font-size:0.78rem;color:#64748b;">(₹499/mo)</span>') : '',
+    ].join('');
+    return `<div style="padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; font-size: 0.85rem; margin-bottom: 12px; border-radius: 6px; flex-wrap:wrap; align-items:center;">
+      <strong>Add-ons${multi ? ' (' + sanitize(label) + ')' : ''}:</strong>${toggles}</div>`;
+  }).join('');
+}
+
+// Hide any bundle section header whose rows are all currently hidden (e.g. a
+// "Settings" section that only holds an unchecked Call Transfer add-on).
+function hideEmptyBundleSections() {
+  const container = document.querySelector('#sku-fields-card-bundle .q-card-fields-container');
+  if (!container) return;
+  let header = null, visible = false;
+  const finalize = () => { if (header) header.style.display = visible ? '' : 'none'; };
+  Array.from(container.children).forEach(el => {
+    if (el.classList.contains('q-form-section-header')) {
+      finalize(); header = el; visible = false;
+      return;
+    }
+    const rows = el.classList.contains('q-field-row') ? [el] : Array.from(el.querySelectorAll('.q-field-row'));
+    if (rows.some(r => r.style.display !== 'none')) visible = true;
+  });
+  finalize();
+}
 
 function renderSkuForm(skuKey, tier) {
   const container = document.getElementById('sku-config-area');
-  // Preserve the tier selector card so it stays visible while the form re-renders
   const existingTierCard = container.querySelector('.sku-tier-card');
   container.innerHTML = '';
   if (existingTierCard) container.appendChild(existingTierCard);
 
-  const itemsToRender = (QG.compareMode && QG.skuItems.length > 1) ? QG.skuItems : [getActiveItem() || QG.skuItems[0]];
+  const isCombined = QG.bundleMergeMode;
+  const itemsToRender = (QG.compareMode && QG.skuItems.length > 1) ? QG.skuItems :
+                        (isCombined ? QG.skuItems : [getActiveItem() || QG.skuItems[0]]);
 
   const grid = document.createElement('div');
   if (QG.compareMode) {
@@ -3195,8 +3505,27 @@ function renderSkuForm(skuKey, tier) {
     grid.style.width = '100%';
   }
 
+  let combinedCard = null;
+  if (isCombined && itemsToRender.length > 0) {
+    combinedCard = document.createElement('div');
+    combinedCard.className = 'q-card';
+    combinedCard.id = 'sku-fields-card-bundle';
+    combinedCard.innerHTML = `
+      <div class="q-card-header">
+        <div class="q-card-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+          Bundle Package Configuration
+        </div>
+      </div>
+      ${renderBundleAddonBars(itemsToRender)}
+      <div class="q-card-fields-container">
+        ${renderFieldsGroupedCombined(itemsToRender)}
+      </div>
+    `;
+    grid.appendChild(combinedCard);
+  }
+
   itemsToRender.forEach(item => {
-    // Make sure we have a valid sku for the item
     const k = item.sku_key || skuKey || QG.currentSku;
     const t = item.tier || tier || QG.currentTier;
     if (!k) return;
@@ -3204,13 +3533,8 @@ function renderSkuForm(skuKey, tier) {
     const fields = getSkuFields(k, t);
     const sku = SKUS.find(s => s.key === k);
 
-    // Set default values without add-ons
     fields.forEach(f => {
       if (f.note?.includes('Add-on')) {
-        // Default addon values to undefined so checkboxes remain unchecked
-        if (item.values[f.id] === undefined) {
-          // do not set
-        }
       } else {
         if (item.values[f.id] === undefined && f.value !== undefined) {
           item.values[f.id] = f.value;
@@ -3218,38 +3542,46 @@ function renderSkuForm(skuKey, tier) {
       }
     });
 
-    // Make sure current active aliases match if it's the active item
     if (item.id === QG.activeItemId) syncActiveAliases();
 
-    const card = document.createElement('div');
-    card.className = QG.compareMode ? 'compare-card' : 'q-card';
-    if (QG.compareMode && sku?.hasTiers && QG.skuItems.length === 3) card.classList.add('tier-card');
-    card.id = 'sku-fields-card-' + item.id;
+    let card = combinedCard;
+    if (!isCombined) {
+      card = document.createElement('div');
+      card.className = QG.compareMode ? 'compare-card' : 'q-card';
+      if (QG.compareMode && sku?.hasTiers && QG.skuItems.length === 3) card.classList.add('tier-card');
+      card.id = 'sku-fields-card-' + item.id;
 
-    card.innerHTML = `
-      <div class="q-card-header">
-        <div class="q-card-title">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
-          ${sku?.label || 'Not Selected'}
-          ${item.customName
-            ? `<span class="sku-entity-tag" style="margin-left:6px;background:#e0f2fe;color:#0369a1;">${sanitize(item.customName)}</span>`
-            : (t && sku?.hasTiers ? `<span class="sku-entity-tag ${sku.entity.toLowerCase()}" style="margin-left:6px;">${TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase() + t.slice(1))}</span>` : '')}
+      card.innerHTML = `
+        <div class="q-card-header">
+          <div class="q-card-title">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            ${sku?.label || 'Not Selected'}
+            ${item.customName
+              ? `<span class="sku-entity-tag" style="margin-left:6px;background:#e0f2fe;color:#0369a1;">${sanitize(item.customName)}</span>`
+              : (t && sku?.hasTiers ? `<span class="sku-entity-tag ${sku.entity.toLowerCase()}" style="margin-left:6px;">${TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase() + t.slice(1))}</span>` : '')}
+          </div>
         </div>
-      </div>
-      
-      ${fields.some(f => f.note?.includes('Add-on') && f.note !== 'VN Add-on') ? `
-      <div style="padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; font-size: 0.85rem; margin-bottom: 12px; border-radius: 6px; flex-wrap:wrap; align-items:center;">
-        <strong>Add-ons:</strong>
-        ${fields.some(f => f.note === 'SMS Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-sms-addon_${item.id}" ${item.values['sms_cost'] ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> SMS</label>` : ''}
-        ${fields.some(f => f.note === 'WA Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-wa-addon_${item.id}" ${item.values['wa_api'] ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> WhatsApp</label>` : ''}
-        ${fields.some(f => f.note === 'CT Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-ct-addon_${item.id}" ${item.values['call_transfer'] !== undefined ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> Call Transfer <span style="font-size:0.78rem;color:#64748b;">(₹499/mo)</span></label>` : ''}
-      </div>` : ''}
+        
+        ${fields.some(f => f.note?.includes('Add-on') && f.note !== 'VN Add-on') ? `
+        <div style="padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; font-size: 0.85rem; margin-bottom: 12px; border-radius: 6px; flex-wrap:wrap; align-items:center;">
+          <strong>Add-ons:</strong>
+          ${fields.some(f => f.note === 'SMS Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-sms-addon_${item.id}" ${item.values['sms_cost'] ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> SMS</label>` : ''}
+          ${fields.some(f => f.note === 'WA Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-wa-addon_${item.id}" ${item.values['wa_api'] ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> WhatsApp</label>` : ''}
+          ${fields.some(f => f.note === 'CT Add-on') ? `<label style="cursor:pointer; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="toggle-ct-addon_${item.id}" ${item.values['call_transfer'] !== undefined ? 'checked' : ''} onchange="window.toggleAddons('${item.id}', '${k}', '${t}')"> Call Transfer <span style="font-size:0.78rem;color:#64748b;">(₹499/mo)</span></label>` : ''}
+        </div>` : ''}
 
-      <div class="q-card-fields-container">
-        ${renderFieldsGrouped(fields, item)}
-      </div>
-    `;
-    grid.appendChild(card);
+        <div class="q-card-fields-container">
+          ${renderFieldsGrouped(fields, item)}
+        </div>
+      `;
+
+      if (QG.compareMode && item.id === QG.activeItemId) {
+        card.style.border = '2px solid #0284c7';
+        card.style.boxShadow = '0 10px 25px -5px rgba(2, 132, 199, 0.2)';
+      }
+
+      grid.appendChild(card);
+    }
 
     // Bind input changes
     setTimeout(() => {
@@ -3475,7 +3807,13 @@ window.toggleAddons = function (itemId, skuKey, tier) {
 
   const fields = getSkuFields(skuKey, tier);
 
-  document.querySelectorAll('#sku-fields-card-' + itemId + ' .q-field-row').forEach(row => {
+  // In Bundle Package mode every item's rows live in one unified card, so scope
+  // by data-item; the single-SKU card only holds this item's rows.
+  const rowSelector = QG.bundleMergeMode
+    ? '#sku-fields-card-bundle .q-field-row[data-item="' + itemId + '"]'
+    : '#sku-fields-card-' + itemId + ' .q-field-row';
+
+  document.querySelectorAll(rowSelector).forEach(row => {
     const addonType = row.dataset.addon;
     if (addonType === 'SMS Add-on') {
       row.style.display = showSms ? 'flex' : 'none';
@@ -3535,7 +3873,10 @@ window.toggleAddons = function (itemId, skuKey, tier) {
 
   // Handle Veeno STD user model toggle – hide/show fields based on active model
   if (skuKey === 'voice_veeno_std') {
-    const card = document.getElementById('sku-fields-card-' + itemId);
+    // In Bundle mode every item's rows live in the shared bundle card. The
+    // #qf_<field>_<itemId> ids are already item-specific, so we only need to
+    // point at the right card here.
+    const card = document.getElementById(QG.bundleMergeMode ? 'sku-fields-card-bundle' : 'sku-fields-card-' + itemId);
     if (card) {
       const showExotel = item.values['user_model_exotel'] === 1;
       // Fields that belong only to the Veeno per-user model
@@ -3551,8 +3892,9 @@ window.toggleAddons = function (itemId, skuKey, tier) {
         if (row) row.style.display = showExotel ? 'flex' : 'none';
       });
       // Also hide/show the Veeno user charge label row (for the toggle itself keep visible)
-      // Update the section label visibility for clarity
-      const veenoLabelFields = card.querySelectorAll('.q-field-row');
+      // Update the section label visibility for clarity (scope to this item's
+      // rows in bundle mode so a second SKU's rows are never touched)
+      const veenoLabelFields = card.querySelectorAll(QG.bundleMergeMode ? `.q-field-row[data-item="${itemId}"]` : '.q-field-row');
       veenoLabelFields.forEach(row => {
         const label = row.querySelector('.q-field-label');
         if (!label) return;
@@ -3568,6 +3910,8 @@ window.toggleAddons = function (itemId, skuKey, tier) {
       });
     }
   }
+
+  if (QG.bundleMergeMode) hideEmptyBundleSections();
 
   if (QG.activeItemId === itemId) syncActiveAliases();
   updatePreview();
@@ -3744,7 +4088,48 @@ window.intlUpdateEntry = function(itemId, idx, key, val) {
   updatePreview();
 };
 
-function renderFieldRow(f, item) {
+function renderFieldRow(f, item, opts = {}) {
+  const isExcluded = !!(QG.bundleMergeMode && item.excludedFields && item.excludedFields[f.id]);
+  const isDupe = !!opts.dupe;
+
+  const getLabelHtml = (extraStyle = '') => {
+    let lblHtml = f.label;
+    if (QG.bundleMergeMode) {
+      const key = item.id + ':' + f.id;
+      const safeInputId = 'bundle-rename-' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const isRenaming = QG._bundleRenamingKey === key;
+      const customName = QG.bundleRenameOverrides?.[key];
+      const displayLabel = customName || f.label;
+
+      if (isRenaming) {
+        lblHtml = `
+          <div style="display:flex; align-items:center; gap:4px; width:100%;">
+            <input type="text" id="${safeInputId}" value="${sanitize(displayLabel)}" class="q-input" style="padding:2px 4px; font-size:0.8rem; flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();window.bundleCommitRename('${item.id}','${f.id}')}else if(event.key==='Escape'){window.bundleToggleRename('${item.id}','${f.id}')}" />
+            <button class="bundle-icon-btn save" onclick="window.bundleCommitRename('${item.id}','${f.id}')" title="Save">&#10003;</button>
+            <button class="bundle-icon-btn cancel" onclick="window.bundleToggleRename('${item.id}','${f.id}')" title="Cancel">&times;</button>
+          </div>
+        `;
+      } else if (isDupe) {
+        // A covered duplicate the user pulled back into view: no rename, x re-hides it
+        lblHtml = `
+          <div style="display:flex; align-items:center; gap:6px; width:100%;">
+            <span>${sanitize(displayLabel)}</span>
+            <button class="bundle-x-btn" onclick="window.bundleRemoveDupe('${key}')" title="Hide again">&times;</button>
+          </div>
+        `;
+      } else {
+        // Owner field: double-click the label to rename, small x to take it out
+        lblHtml = `
+          <div style="display:flex; align-items:center; gap:6px; width:100%;">
+            <span class="bundle-rename-target" ondblclick="window.bundleToggleRename('${item.id}','${f.id}')" title="Double-click to rename">${sanitize(displayLabel)}</span>
+            <button class="bundle-x-btn" onclick="window.toggleSubSkuExclusion('${item.id}','${f.id}')" title="Remove from proposal">&times;</button>
+          </div>
+        `;
+      }
+    }
+    return `<div class="q-field-label" style="${extraStyle}">${lblHtml}</div>`;
+  };
+  
   const v = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : '');
 
   // Hide legacy intl fields — they're managed by the intl_numbers_table widget
@@ -3771,10 +4156,10 @@ function renderFieldRow(f, item) {
     const countries = getIntlCountries();
     const optionsHtml = countries.map(c => `<option value="${sanitize(c.country)}" ${v === c.country ? 'selected' : ''}>${sanitize(c.country)}</option>`).join('');
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}">
-        <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
+        ${getLabelHtml()}
         <div class="q-field-value">
-          <select class="q-input" id="qf_${f.id}_${item.id}" style="width:100%;">
+          <select class="q-input" id="qf_${f.id}_${item.id}" style="width:100%;" ${isExcluded ? 'disabled' : ''}>
             ${optionsHtml}
           </select>
         </div>
@@ -3785,10 +4170,10 @@ function renderFieldRow(f, item) {
     const callTypes = ['Fixed', 'Mobile'];
     const optionsHtml = callTypes.map(ct => `<option value="${ct}" ${v === ct ? 'selected' : ''}>${ct}</option>`).join('');
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}">
-        <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
+        ${getLabelHtml()}
         <div class="q-field-value">
-          <select class="q-input" id="qf_${f.id}_${item.id}" style="width:100%;">
+          <select class="q-input" id="qf_${f.id}_${item.id}" style="width:100%;" ${isExcluded ? 'disabled' : ''}>
             ${optionsHtml}
           </select>
         </div>
@@ -3800,8 +4185,8 @@ function renderFieldRow(f, item) {
       ? `<span class="q-waived"><svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:2px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg> Waived</span>`
       : `<span class="q-non-editable">${v}</span>`;
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}">
-        <span class="q-field-label">${sanitize(cleanLabel(f.label))}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
+        ${getLabelHtml()}
         <div class="q-field-value">${display}</div>
       </div>`;
   }
@@ -3809,13 +4194,13 @@ function renderFieldRow(f, item) {
   if (f.type === 'pulse') {
     const pulseVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 60);
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
-        <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="align-items:center;${isExcluded ? ' opacity: 0.55;' : ''}">
+        ${getLabelHtml('flex:1;')}
         <div class="q-field-value" style="justify-content:flex-end;">
           <div class="q-toggle-group" id="qf_pulse_${item.id}">
-            <button type="button" class="q-toggle-opt${pulseVal == 15 ? ' active' : ''}" data-val="15">15secs</button>
-            <button type="button" class="q-toggle-opt${pulseVal == 30 ? ' active' : ''}" data-val="30">30secs</button>
-            <button type="button" class="q-toggle-opt${pulseVal == 60 ? ' active' : ''}" data-val="60">60secs</button>
+            <button type="button" class="q-toggle-opt${pulseVal == 15 ? ' active' : ''}" data-val="15" ${isExcluded ? 'disabled' : ''}>15secs</button>
+            <button type="button" class="q-toggle-opt${pulseVal == 30 ? ' active' : ''}" data-val="30" ${isExcluded ? 'disabled' : ''}>30secs</button>
+            <button type="button" class="q-toggle-opt${pulseVal == 60 ? ' active' : ''}" data-val="60" ${isExcluded ? 'disabled' : ''}>60secs</button>
           </div>
         </div>
       </div>`;
@@ -3824,12 +4209,12 @@ function renderFieldRow(f, item) {
   if (f.type === 'model_toggle') {
     const mtVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
-        <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="align-items:center;${isExcluded ? ' opacity: 0.55;' : ''}">
+        ${getLabelHtml('flex:1;')}
         <div class="q-field-value" style="justify-content:flex-end;">
           <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}">
-            <button type="button" class="q-toggle-opt${mtVal == 0 ? ' active' : ''}" data-val="0">Veeno Model</button>
-            <button type="button" class="q-toggle-opt${mtVal == 1 ? ' active' : ''}" data-val="1">Exotel Model</button>
+            <button type="button" class="q-toggle-opt${mtVal == 0 ? ' active' : ''}" data-val="0" ${isExcluded ? 'disabled' : ''}>Veeno Model</button>
+            <button type="button" class="q-toggle-opt${mtVal == 1 ? ' active' : ''}" data-val="1" ${isExcluded ? 'disabled' : ''}>Exotel Model</button>
           </div>
         </div>
       </div>`;
@@ -3838,12 +4223,12 @@ function renderFieldRow(f, item) {
   if (f.type === 'boolean') {
     const boolVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
-        <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="align-items:center;${isExcluded ? ' opacity: 0.55;' : ''}">
+        ${getLabelHtml('flex:1;')}
         <div class="q-field-value" style="justify-content:flex-end;">
           <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}">
-            <button type="button" class="q-toggle-opt${boolVal == 1 ? ' active' : ''}" data-val="1">Yes</button>
-            <button type="button" class="q-toggle-opt${boolVal == 0 ? ' active' : ''}" data-val="0">No</button>
+            <button type="button" class="q-toggle-opt${boolVal == 1 ? ' active' : ''}" data-val="1" ${isExcluded ? 'disabled' : ''}>Yes</button>
+            <button type="button" class="q-toggle-opt${boolVal == 0 ? ' active' : ''}" data-val="0" ${isExcluded ? 'disabled' : ''}>No</button>
           </div>
         </div>
       </div>`;
@@ -3852,12 +4237,12 @@ function renderFieldRow(f, item) {
   if (f.type === 'fee_select') {
     const feeVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 2);
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}" style="align-items:center;">
-        <span class="q-field-label" style="flex:1;">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="align-items:center;${isExcluded ? ' opacity: 0.55;' : ''}">
+        ${getLabelHtml('flex:1;')}
         <div class="q-field-value" style="justify-content:flex-end;">
           <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}" style="font-size:0.72rem;">
-            <button type="button" class="q-toggle-opt${feeVal == 1 ? ' active' : ''}" data-val="1">3% Conv. Fee</button>
-            <button type="button" class="q-toggle-opt${feeVal == 2 ? ' active' : ''}" data-val="2">18% GST</button>
+            <button type="button" class="q-toggle-opt${feeVal == 1 ? ' active' : ''}" data-val="1" ${isExcluded ? 'disabled' : ''}>3% Conv. Fee</button>
+            <button type="button" class="q-toggle-opt${feeVal == 2 ? ' active' : ''}" data-val="2" ${isExcluded ? 'disabled' : ''}>18% GST</button>
           </div>
         </div>
       </div>`;
@@ -3867,21 +4252,21 @@ function renderFieldRow(f, item) {
     const rtVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
     const rtOneTime = (item.values['rental_onetime'] ?? 0) == 1;
     return `
-      <div class="q-field-row" data-addon="${f.note || ''}">
-        <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
+        ${getLabelHtml()}
         <div class="q-field-value" style="gap:6px;align-items:center;">
-          <input type="text" inputmode="decimal" class="q-input" id="qf_${f.id}_${item.id}" value="${rtVal}" autocomplete="off" spellcheck="false" style="width:80px;">
+          <input type="text" inputmode="decimal" class="q-input" id="qf_${f.id}_${item.id}" value="${rtVal}" autocomplete="off" spellcheck="false" style="width:80px;" ${isExcluded ? 'disabled' : ''}>
           <div class="q-toggle-group" id="qf_toggle_rental_onetime_${item.id}" style="font-size:0.72rem;">
-            <button type="button" class="q-toggle-opt${!rtOneTime ? ' active' : ''}" data-val="0">Monthly</button>
-            <button type="button" class="q-toggle-opt${rtOneTime ? ' active' : ''}" data-val="1">One-Time</button>
+            <button type="button" class="q-toggle-opt${!rtOneTime ? ' active' : ''}" data-val="0" ${isExcluded ? 'disabled' : ''}>Monthly</button>
+            <button type="button" class="q-toggle-opt${rtOneTime ? ' active' : ''}" data-val="1" ${isExcluded ? 'disabled' : ''}>One-Time</button>
           </div>
         </div>
       </div>`;
   }
 
   return `
-    <div class="q-field-row" data-addon="${f.note || ''}">
-      <span class="q-field-label">${sanitize(cleanLabel(f.label))}${f.note ? `<br><span class="q-field-note">${f.note}</span>` : ''}</span>
+    <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
+      ${getLabelHtml()}
       <div class="q-field-value">
         <input type="text"
           inputmode="decimal"
@@ -3889,12 +4274,12 @@ function renderFieldRow(f, item) {
           id="qf_${f.id}_${item.id}"
           value="${v}"
           autocomplete="off"
-          spellcheck="false">
+          spellcheck="false"
+          ${isExcluded ? 'disabled' : ''}>
       </div>
     </div>`;
 }
 
-// ── Grouped field renderer ─────────────────────────────────
 function renderFieldsGrouped(fields, item) {
   const SECTION_MAP = {
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
@@ -4680,6 +5065,15 @@ function _renderBundleItemsHTML(bundleItems) {
         tableHTML += stdRow('Extra Numbers', `${waPaidNums} Number(s)`);
         tableHTML += indRow('Calculation', `${waPaidNums} numbers × ${waNumMonths} months × ${fmtRupee(waExtraCost)} = <strong>${fmtRupee(waPaidNums * waNumMonths * waExtraCost)}</strong>`);
       }
+      const didNums = getSafeNum('did_numbers') || 0;
+      if (didNums > 0) {
+        const DID_COST = getSafeNum('did_cost') || 1500;
+        const waNumMonths = (getSafeNum('num_months') || 0) + (getSafeNum('extra_validity') || 0);
+        const didTotalV = didNums * waNumMonths * DID_COST;
+        tableHTML += stdRow('Own Number (BYON)', `${didNums} Own Number(s)`);
+        tableHTML += indRow('Own Number Rate', `${fmtRupee(DID_COST)} ${perUnit('/number/month')}`);
+        tableHTML += indRow('Calculation', `${didNums} Own Number(s) × ${waNumMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotalV)}</strong>`);
+      }
 
       tableHTML += secRow('WhatsApp Credits & Rates');
       tableHTML += stdRow('WA Credits', fmtRupee(getSafeNum('credits')));
@@ -5014,7 +5408,7 @@ function _renderBundleItemsHTML(bundleItems) {
 
         mergedHTML += `<tr class="subsku-row${isExcluded ? ' excluded' : ''}" style="${rowBg}">
           <td class="sku-row-name" style="${labelStyle}"><div style="display:flex;align-items:center;gap:2px;flex-wrap:wrap;">${pill}<span${isExcluded ? ' style="text-decoration:line-through;color:#94a3b8;"' : ''}>${sanitize(row.label)}</span></div></td>
-          <td style="vertical-align:middle;"><div style="display:flex;justify-content:space-between;align-items:center;">${valueDisp}${actionBtn}</div></td>
+          <td style="vertical-align:middle;text-align:right;"><div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;">${valueDisp}${actionBtn}</div></td>
         </tr>`;
       });
     });
@@ -5030,6 +5424,496 @@ function _renderBundleItemsHTML(bundleItems) {
   }
 
   return { allSectionsHTML, grandSubtotal };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUNDLE PACKAGE MODE — Core engine (from scratch)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * _computeBundleRows(items)
+ * Extracts all rows from each SKU item, deduplicates by field ID,
+ * and returns primary + dupe arrays.
+ *
+ * Returns:
+ *   {
+ *     primaryRows: [ { key, itemId, skuKey, skuLabel, skuEntity, fieldId, label, value, isWaived, section } ],
+ *     dupeRows:    [ { key, itemId, skuKey, skuLabel, skuEntity, fieldId, label, value, isWaived, section } ],
+ *     subtotals:   { [itemId]: number }
+ *   }
+ */
+function _computeBundleRows(items) {
+  const SECTION_LABELS = {
+    planDetails:    'Plan Details',
+    userPlan:       'User Plan',
+    numberPlan:     'Number Plan',
+    channelPlan:    'Channel Plan',
+    callCredits:    'Call Credits & Charges',
+    messaging:      'Messaging & Services',
+  };
+
+  // Fields that are purely internal/UI and should never appear in the merged table
+  const SKIP_FIELD_IDS = new Set([
+    'attach_isd_pdf', 'user_model_exotel', 'remove_std_numbers',
+    'pulse',           // shown inline but not as a standalone row
+    'extra_users', 'extra_validity', 'extra_credits',
+    'single_leg',      // derived from incoming/outgoing
+    'call_transfer',   // shown as addon note, not main row
+  ]);
+
+  // Helper: determine which canonical section this field belongs to
+  const SECTION_MAP = {
+    validity: 'Plan Details', rental: 'Plan Details', setup: 'Plan Details',
+    channels: 'Plan Details', brand_fee: 'Plan Details', procurement: 'Plan Details',
+    num_months: 'Plan Details',
+    num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
+    user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
+    user_charge_usd: 'User Plan',
+    free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
+    num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
+    remove_std_numbers: 'Number Plan', num_channels: 'Channel Plan', channel_cost: 'Channel Plan', did_cost: 'Number Plan',
+    num_paid_channels: 'Channel Plan', bot_sessions: 'Channel Plan', session_cost: 'Channel Plan',
+    number_charge_usd: 'Number Plan', intl_entries: 'Number Plan',
+    credits: 'Call Credits & Charges', extra_credits: 'Call Credits & Charges', extra_validity: 'Call Credits & Charges', volume: 'Call Credits & Charges',
+    prepaid_usd: 'Plan Details', attach_intl_pdf: 'Plan Details', attach_isd_pdf: 'Plan Details', fee_type: 'Plan Details',
+    single_leg: 'Call Credits & Charges', incoming: 'Call Credits & Charges', outgoing: 'Call Credits & Charges',
+    attempt: 'Call Credits & Charges', call_rate: 'Call Credits & Charges', sms_cost: 'Messaging & Services',
+    wa_utility: 'Messaging & Services', wa_promo: 'Messaging & Services', wa_api: 'Messaging & Services',
+    rcs_biz: 'Messaging & Services', rcs_rich: 'Messaging & Services', rcs_reply: 'Messaging & Services',
+    rcs_cost: 'Messaging & Services', pulse: 'Call Credits & Charges', human_handoff: 'Call Credits & Charges',
+    intl_country: 'Call Credits & Charges', rm_country: 'Call Credits & Charges', voip_incoming_usd: 'Call Credits & Charges',
+    voip_outgoing_usd: 'Call Credits & Charges', pstn_incoming_usd: 'Call Credits & Charges', pstn_outgoing_usd: 'Call Credits & Charges',
+  };
+  const fieldSection = (id, sku_key) => SECTION_MAP[id] || 'Plan Details';
+
+  // Shared ownership: which clubbed SKU covers each field (priority + concept).
+  // A field only shows — and is only charged — under its owner; the same field
+  // on a less-primary SKU is a covered duplicate.
+  const { owners: bundleOwners } = _bundleComputeOwnership(items);
+  const isDupeField = (item, fieldId) => !bundleOwners.has(item.id + ':' + fieldId);
+  // Duration/context fields drive multipliers, not standalone charges — always
+  // read each SKU's own value even when the field repeats across SKUs.
+  const DURATION_FIELDS = new Set(['num_months', 'validity', 'extra_validity']);
+
+  const primaryRows = [];
+  const dupeRows = [];
+  const subtotals = {};
+
+  items.forEach(item => {
+    if (!item.sku_key) return;
+    const sku = SKUS.find(s => s.key === item.sku_key);
+    if (!sku) return;
+
+    const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+    const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+    const skuLabel = item.customName || (sku.hasTiers && item.tier
+      ? (sku.label + ' · ' + (TIER_DISPLAY_NAMES[item.tier] || item.tier))
+      : sku.label);
+
+    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
+
+    const getVal = (id) => item.values[id] !== undefined ? item.values[id] : fields.find(x => x.id === id)?.value;
+    const getSafeNum = (id) => {
+      if (item.excludedFields && item.excludedFields[id]) return 0;
+      const f = fields.find(x => x.id === id);
+      if (!f || f.waived) return 0;
+      return parseFloat(item.values[id] !== undefined ? item.values[id] : (f.value ?? 0)) || 0;
+    };
+
+    fields.forEach(f => {
+      if (SKIP_FIELD_IDS.has(f.id)) return;
+      if (f.type === 'boolean') return;
+      if (f.type === 'pulse') return;
+      if (f.nonEditable && f.type !== 'rental_toggle') return; // skip non-editable like CPM raw field
+      if (f.id === 'channels') return; // shown in Plan Details as text
+
+      const rawVal = item.values[f.id] !== undefined ? item.values[f.id] : f.value;
+      const numVal = parseFloat(rawVal);
+      const isZero = !isNaN(numVal) && numVal === 0;
+      const isWaived = !!(f.waived);
+
+      const isExcluded = !!(item.excludedFields && item.excludedFields[f.id]);
+      // Skip conditionally hidden fields (addons and dependents)
+      if (['did_numbers', 'did_cost', 'remove_std_numbers'].includes(f.id) && getSafeNum('add_vn') === 0) return;
+      if (f.note === 'SMS Add-on' && item.values[f.id] === undefined && !item.smsAddon) return;
+      if (f.note === 'WA Add-on' && item.values[f.id] === undefined && !item.waAddon) return;
+      if (f.note === 'CT Add-on' && item.values[f.id] === undefined && !item.ctAddon) return;
+      
+      // Skip zero-value optional fields (but not zero-waived)
+      if (isZero && !isWaived && ['num_paid_numbers','did_numbers','extra_credits','extra_validity','extra_users'].includes(f.id)) return;
+
+      // Format value for display
+      let displayVal;
+
+      if (isWaived) {
+        displayVal = '✓ Waived';
+      } else if (f.id === 'validity') {
+        const extraV = getSafeNum('extra_validity');
+        displayVal = extraV > 0 ? (rawVal + ' + ' + extraV + ' months') : (rawVal + ' Months');
+      } else if (f.id === 'num_months') {
+        displayVal = rawVal + ' Months';
+      } else if (f.id === 'rental') {
+        if (numVal === 0) displayVal = '✓ Waived';
+        else if (f.label.toLowerCase().includes('/month') || f.type === 'rental_toggle') displayVal = fmtR(numVal) + '/month';
+        else displayVal = fmtR(numVal);
+      } else if (f.id === 'setup') {
+        displayVal = numVal === 0 ? '✓ Waived' : fmtR(numVal);
+      } else if (f.id === 'free_users') {
+        const fuExtra = getSafeNum('extra_users');
+        displayVal = (rawVal === null || rawVal === 'Unlimited') ? 'Unlimited (Included)' : (fuExtra > 0 ? (rawVal + ' + ' + fuExtra + ' Users (Free)') : (rawVal + ' Users (Free)'));
+      } else if (f.id === 'num_users') {
+        displayVal = rawVal + ' Users';
+      } else if (f.id === 'free_numbers') {
+        displayVal = rawVal + ' Number(s) (Free)';
+      } else if (['num_paid_numbers', 'num_numbers'].includes(f.id)) {
+        displayVal = rawVal + ' Number(s)';
+      } else if (f.id === 'extra_number') {
+        displayVal = fmtR(numVal) + '/number/month';
+      } else if (f.id === 'credits') {
+        const extraC = getSafeNum('extra_credits');
+        displayVal = extraC > 0 ? (fmtR(numVal) + ' + ' + fmtR(extraC)) : fmtR(numVal);
+      } else if (f.id === 'did_numbers') {
+        displayVal = item.sku_key === 'whatsapp_exotel' ? (rawVal + ' Own Number(s)') : (rawVal + ' Mobile DID(s)');
+      } else if (f.id === 'did_cost') {
+        displayVal = item.sku_key === 'whatsapp_exotel' ? (fmtR(numVal) + '/number/month') : (fmtR(numVal) + '/Mobile DID/month');
+      } else if (['sms_cost', 'wa_utility', 'wa_promo', 'wa_api', 'rcs_cost', 'incoming', 'outgoing', 'single_leg', 'session_cost', 'attempt', 'call_rate'].includes(f.id)) {
+        if (numVal === 0) displayVal = '✓ Free';
+        else if (numVal >= 100) displayVal = '₹' + (numVal / 100).toFixed(2);
+        else displayVal = numVal + 'p';
+      } else if (['rental','setup','credits','extra_credits','user_charge','extra_user_cost','channel_cost','brand_fee','procurement','call_transfer', 'extra_number', 'did_cost'].includes(f.id)) {
+        displayVal = fmtR(numVal);
+      } else {
+        displayVal = rawVal !== null && rawVal !== undefined ? String(rawVal) : '-';
+      }
+
+      // Extract suffix and append to value, remove from label
+      let cleanLabel = f.label;
+      const suffixMatch = cleanLabel.match(/\s*\(([^)]+)\)$/);
+      if (suffixMatch && displayVal !== '✓ Free' && displayVal !== '✓ Waived' && displayVal !== '-' && !displayVal.includes('</')) {
+        cleanLabel = cleanLabel.replace(suffixMatch[0], '').trim();
+        let suffixInner = suffixMatch[1];
+        
+        // Clean up common complex suffixes to standard forms
+        if (suffixInner.includes('p/msg')) suffixInner = 'p/msg';
+        if (suffixInner.includes('p/min')) suffixInner = 'p/min';
+        
+        if (suffixInner === '₹') {
+            suffixInner = '';
+        } else if (suffixInner.startsWith('₹/')) {
+            suffixInner = suffixInner.substring(1); 
+        } else if (suffixInner.toLowerCase() === 'months') {
+            suffixInner = ''; 
+        }
+        
+        // Handle pulse override for calling rates
+        if (['incoming', 'outgoing', 'single_leg', 'session_cost'].includes(f.id)) {
+          const currentPulse = parseFloat(getVal('pulse')) || 60;
+          if (currentPulse !== 60) {
+            suffixInner = 'p/' + currentPulse + 'secs';
+          }
+        }
+        
+        // Translate suffix based on currency (paise vs rupee)
+        if (displayVal.includes('₹') || displayVal.includes('&#8377;')) {
+          if (suffixInner.startsWith('p/')) {
+            suffixInner = '/' + suffixInner.substring(2);
+          }
+        } else if (displayVal.endsWith('p')) {
+          if (suffixInner.startsWith('p/')) {
+            suffixInner = '/ ' + suffixInner.substring(2);
+          }
+        }
+
+        if (suffixInner && !displayVal.includes(suffixInner)) {
+            displayVal += ' <span style="font-size:0.75rem;color:#94a3b8;font-weight:normal;">' + suffixInner + '</span>';
+        }
+      }
+
+      const rowKey = item.id + ':' + f.id;
+      const section = fieldSection(f.id, item.sku_key);
+      const rowObj = {
+        key: rowKey,
+        itemId: item.id,
+        skuKey: item.sku_key,
+        skuLabel,
+        skuEntity: sku.entity,
+        fieldId: f.id,
+        label: typeof cleanLabel !== 'undefined' ? cleanLabel : f.label,
+        value: displayVal,
+        rawVal: rawVal,
+        isWaived,
+        isExcluded,
+        section,
+      };
+
+      if (isDupeField(item, f.id)) {
+        // A more-primary SKU already covers this field — it's a covered duplicate
+        dupeRows.push(rowObj);
+      } else {
+        primaryRows.push(rowObj);
+      }
+    });
+
+    // Compute subtotal for this item (for grand total)
+    const getS = (id) => {
+      if (item.excludedFields && item.excludedFields[id]) return 0;
+      // Covered duplicate → charged once under its owner SKU, not here. Duration
+      // fields stay per-SKU so month-based costs still compute correctly.
+      if (!DURATION_FIELDS.has(id) && isDupeField(item, id)) return 0;
+      const f = fields.find(x => x.id === id);
+      if (!f || f.waived) return 0;
+      return parseFloat(item.values[id] !== undefined ? item.values[id] : (f.value ?? 0)) || 0;
+    };
+    const months = getS('num_months') || getS('validity') || 1;
+    let sub = getS('credits');
+    let rental = getS('rental');
+    const rentalF = fields.find(x => x.id === 'rental');
+    if (rentalF && rentalF.label.toLowerCase().includes('/month')) rental = rental * months;
+    else if (item.sku_key === 'voice_exotel_std') { /* one-time */ }
+    else if (rentalF && rentalF.type === 'rental_toggle') rental = rental * months;
+    sub += rental;
+    sub += getS('brand_fee') + getS('procurement') + getS('setup');
+    const numUsers = getS('num_users'), userCharge = getS('user_charge');
+    if (numUsers && userCharge) sub += numUsers * userCharge * months;
+    const paidNums = getS('num_paid_numbers');
+    const numCost = getS('extra_number');
+    if (paidNums && numCost) sub += paidNums * numCost * (months + getS('extra_validity'));
+    const didNums = getS('did_numbers');
+    const didCost = parseFloat(item.values['did_cost']) || 1500;
+    if (didNums > 0) sub += didNums * didCost * months;
+    const numChs = getS('num_channels') || getS('num_paid_channels') || 0;
+    const chCost = getS('channel_cost');
+    sub += numChs * chCost * months;
+    subtotals[item.id] = sub;
+
+    // ── Calculation breakdown sub-rows (Bundle Package proposal only) ────────
+    // Mirror the exact figures folded into the subtotal above, so the client
+    // can see how each recurring charge is derived. Shown only when the charge
+    // is actually applied (component > 0).
+    const pushCalc = (section, label, valueStr) => {
+      primaryRows.push({
+        key: item.id + ':calc:' + label.replace(/\s+/g, '_'),
+        itemId: item.id, skuKey: item.sku_key, skuLabel, skuEntity: sku.entity,
+        fieldId: '_calc', label, value: valueStr, rawVal: null,
+        isWaived: false, isExcluded: false, section, isCalc: true,
+      });
+    };
+    if (numUsers && userCharge) {
+      pushCalc('User Plan', 'Calculation',
+        `${numUsers} users × ${months} months × ${fmtR(userCharge)} = <strong>${fmtR(numUsers * userCharge * months)}</strong>`);
+    }
+    if (paidNums && numCost) {
+      const totMonths = months + getS('extra_validity');
+      pushCalc('Number Plan', 'Calculation',
+        `${paidNums} numbers × ${totMonths} months × ${fmtR(numCost)} = <strong>${fmtR(paidNums * numCost * totMonths)}</strong>`);
+    }
+    if (didNums > 0 && didCost > 0) {
+      pushCalc('Number Plan', 'Calculation',
+        `${didNums} Mobile DID(s) × ${months} months × ${fmtR(didCost)} = <strong>${fmtR(didNums * didCost * months)}</strong>`);
+    }
+    if (numChs > 0 && chCost > 0) {
+      pushCalc('Channel Plan', 'Calculation',
+        `${numChs} channels × ${months} months × ${fmtR(chCost)} = <strong>${fmtR(numChs * chCost * months)}</strong>`);
+    }
+  });
+
+  return { primaryRows, dupeRows, subtotals };
+}
+
+/**
+ * _renderBundlePackagePreview(doc, validItems, ...)
+ * Renders the full unified bundle package quote document.
+ */
+function _renderBundlePackagePreview(doc, validItems, firstSku, logoSrc, company, contact, clientEmail, clientPhone, tenantId, seName, seEmail, sePhone, quoteNum, dateStr, introMap) {
+  // ── Inject print styles (once) ──────────────────────────────────────────
+  if (!document.getElementById('bpkg-print-style')) {
+    const s = document.createElement('style');
+    s.id = 'bpkg-print-style';
+    s.innerHTML = `
+      @media print {
+        .bpkg-action-btn { display: none !important; }
+        .bpkg-dupe-row.hidden { display: none !important; }
+        .bpkg-rename-input { display: none !important; }
+      }
+      .bpkg-action-btn { transition: opacity 0.15s; }
+      .bpkg-action-btn:hover { opacity: 0.75; }
+    `;
+    document.head.appendChild(s);
+  }
+
+  const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
+  const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+  const PENCIL = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+
+  const { primaryRows, dupeRows, subtotals } = _computeBundleRows(validItems);
+  const grandSubtotal = Object.values(subtotals).reduce((a, b) => a + b, 0);
+  const gst   = Math.round(grandSubtotal * 0.18);
+  const total = grandSubtotal + gst;
+
+  // Group primary rows by section
+  const SECTION_ORDER = ['Plan Details', 'User Plan', 'Number Plan', 'Channel Plan', 'Call Credits & Charges', 'Messaging & Services'];
+  const grouped = {};
+  primaryRows.forEach(row => {
+    if (!grouped[row.section]) grouped[row.section] = [];
+    grouped[row.section].push(row);
+  });
+  const dupeByFieldId = {};
+  dupeRows.forEach(row => {
+    if (!dupeByFieldId[row.fieldId]) dupeByFieldId[row.fieldId] = [];
+    dupeByFieldId[row.fieldId].push(row);
+  });
+
+  // Build entity pill for a row
+  const entityPill = (entity, label) => {
+    const ec = entity === 'Veeno' ? '#be185d' : '#0369a1';
+    const eb = entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
+    return `<span style="display:inline-block;font-size:0.62rem;font-weight:700;color:${ec};background:${eb};padding:1px 5px;border-radius:4px;margin-right:4px;text-transform:uppercase;white-space:nowrap;">${sanitize(label)}</span>`;
+  };
+
+  // Build each section
+  let tableBody = '';
+  let isFirstSec = true;
+  const secKeys = Object.keys(grouped).filter(sec => {
+    return grouped[sec].some(row => !row.isExcluded);
+  }).sort((a, b) => {
+    const ia = SECTION_ORDER.indexOf(a), ib = SECTION_ORDER.indexOf(b);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
+
+  secKeys.forEach(sec => {
+    tableBody += (isFirstSec ? '' : '</tbody>') +
+      `<tbody style="page-break-inside:avoid;break-inside:avoid;"><tr class="section-header-row"><td colspan="2">${sanitize(sec)}</td></tr>`;
+    isFirstSec = false;
+
+    grouped[sec].forEach(row => {
+      if (row.isExcluded) return;
+
+      // Calculation breakdown line: rendered identically to the single-SKU
+      // proposal's indented "Calculation" row (└ prefix + grey via .sub-row CSS).
+      if (row.isCalc) {
+        const calcVal = (typeof row.value === 'string' && /<[a-zA-Z]/.test(row.value)) ? row.value : sanitize(String(row.value ?? '-'));
+        tableBody += `<tr class="sub-row"><td>${sanitize(row.label)}</td><td>${calcVal}</td></tr>`;
+        return;
+      }
+
+      const isRenaming = QG._bundleRenamingKey === row.key;
+      const hasRename = !!QG.bundleRenameOverrides[row.key];
+      const displayLabel = QG.bundleRenameOverrides[row.key] || row.label;
+      const safeInputId = 'bundle-rename-' + row.key.replace(/[^a-zA-Z0-9_-]/g, '_');
+
+      let valueHtml;
+      if (row.isWaived) {
+        valueHtml = `<span class="waived-text">${TICK} Waived</span>`;
+      } else {
+        const hasHtml = typeof row.value === 'string' && /<[a-zA-Z]/.test(row.value);
+        valueHtml = hasHtml ? row.value : sanitize(String(row.value ?? '-'));
+      }
+
+      const labelCell = `<div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap;"><span>${sanitize(displayLabel)}</span></div>`;
+
+      tableBody += `<tr>
+        <td class="sku-row-name" style="vertical-align:middle;">
+          <div style="display:flex;align-items:center;gap:0;">
+            ${labelCell}
+          </div>
+        </td>
+        <td style="vertical-align:middle;text-align:left;">
+          <div style="display:flex;justify-content:flex-start;align-items:center;width:100%;">
+            ${valueHtml}
+          </div>
+        </td>
+      </tr>`;
+
+      // Check if this field has dupes that the user might want to see
+      // (Moved to SKU config)
+
+    });
+  });
+  if (!isFirstSec) tableBody += '</tbody>';
+
+  // SKU tag pills for header
+  const skuTagsHTML = validItems.map(i => {
+    const s = SKUS.find(x => x.key === i.sku_key);
+    if (!s) return '';
+    const lbl = i.customName || s.label;
+    const ec = s.entity === 'Veeno' ? '#be185d' : '#0369a1';
+    const eb = s.entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
+    return `<span style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:0.72rem;font-weight:700;background:${eb};color:${ec};margin:2px 3px;">${sanitize(lbl)}</span>`;
+  }).join('');
+
+  doc.innerHTML = `
+  <table class="print-master-table">
+    <thead><tr><td><div class="print-master-header"></div></td></tr></thead>
+    <tbody><tr><td>
+    <div class="quote-doc-header">
+      <img src="${logoSrc}" class="quote-doc-logo ${firstSku.entity.toLowerCase()}-logo" alt="${firstSku.entity} Logo" onerror="this.style.display='none'">
+      <div class="quote-doc-meta">
+        <div class="quote-number-badge">${sanitize(quoteNum)}</div>
+        <div style="margin-top:4px;">Date: ${sanitize(dateStr)}</div>
+        <div style="margin-top:2px;font-weight:600;color:#0284c7;">${firstSku.entity}</div>
+      </div>
+    </div>
+    <div class="quote-doc-title">Commercial Proposal: Bundled Package</div>
+    ${skuTagsHTML ? `<div style="margin-bottom:16px;">${skuTagsHTML}</div>` : ''}
+    <div class="quote-doc-section">
+      <div class="quote-doc-section-title">Introduction</div>
+      <div class="quote-intro-text">${introMap[firstSku.entity]}</div>
+    </div>
+    <div class="quote-doc-section">
+      <div class="quote-doc-section-title">Parties</div>
+      <div class="quote-participant-grid">
+        <div class="quote-participant-box">
+          <div class="label">Prepared By (${firstSku.entity})</div>
+          <div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div>
+          <div class="sub">${sanitize(seEmail)}</div>
+          ${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}
+        </div>
+        <div class="quote-participant-box">
+          <div class="label">Prepared For (Client)</div>
+          <div class="value">${sanitize(company)}</div>
+          ${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''}
+          ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''}
+          ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''}
+          ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="quote-doc-section" style="margin-top:24px;">
+      <div class="quote-doc-section-title">Bundled Package Breakdown</div>
+      <div style="overflow-x:auto; margin-top: 12px;">
+        <table class="quote-sku-table">
+          <thead><tr><th style="width:45%;">Component</th><th>Details</th></tr></thead>
+          ${tableBody}
+        </table>
+      </div>
+    </div>
+    <div class="bundle-subtotal-card" style="border-color:#bae6fd;margin-top:16px;page-break-inside:avoid;break-inside:avoid;">
+      <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#475569;margin-bottom:5px;"><span>Subtotal (excl. GST)</span><strong>${fmtR(grandSubtotal)}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#64748b;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #cbd5e1;"><span>GST @ 18%</span><strong>${fmtR(gst)}</strong></div>
+      <div style="display:flex;justify-content:space-between;font-size:1.05rem;font-weight:800;color:#0284c7;margin-top:8px;padding-top:8px;border-top:2px solid #0284c7;"><span>Total (incl. GST)</span><span>${fmtR(total)}</span></div>
+    </div>
+    <div class="quote-doc-section" style="margin-top:30px;">
+      <div class="quote-doc-section-title">Terms &amp; Conditions</div>
+      <div class="quote-tnc" style="font-size:0.85rem;color:#475569;line-height:1.5;">
+        ${generateTncHtml(validItems.filter(i => i.sku_key), firstSku.entity)}
+      </div>
+    </div>
+    <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e0f2fe;font-size:0.78rem;color:#94a3b8;text-align:center;">
+      This is a system-generated commercial proposal. For queries, contact your ${firstSku.entity} account manager.
+    </div>
+    </td></tr></tbody>
+    <tfoot><tr><td><div class="print-master-footer"></div></td></tr></tfoot>
+  </table>`;
+
+  // Auto-focus rename input if open
+  if (QG._bundleRenamingKey) {
+    const safeId = 'bundle-rename-' + QG._bundleRenamingKey.replace(/[^a-zA-Z0-9_-]/g, '_');
+    setTimeout(() => {
+      const inp = document.getElementById(safeId);
+      if (inp) { inp.focus(); inp.select(); }
+    }, 20);
+  }
 }
 
 
@@ -5152,7 +6036,7 @@ function updatePreview() {
       uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
       const anyPaidV = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
       if (anyPaidV) {
-        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
+        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
         uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
           const p = getSN('num_paid_numbers'), v = (parseFloat(getVal('validity')) || 0) + getSN('extra_validity'), c = getSN('extra_number');
           return p > 0 ? `${p} numbers × ${v} months × ${fmtR(c)} = ${fmtR(p*v*c)}` : '';
@@ -5160,10 +6044,16 @@ function updatePreview() {
       }
       const anyDID = colData.some(({ getSN }) => getSN('did_numbers') > 0);
       if (anyDID) {
-        uRows += cmpRow('Mobile DID Numbers', colData.map(({ getSN }) => { const d = getSN('did_numbers'); return d > 0 ? `${d} Mobile DID(s)` : '—'; }));
-        uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
+        const didLabel = colData.some(({ item }) => item.sku_key === 'whatsapp_exotel') ? 'Mobile DID / Own Number (BYON)' : 'Mobile DID Numbers';
+        uRows += cmpRow(didLabel, colData.map(({ getSN, item }) => {
+          const d = getSN('did_numbers');
+          return d > 0 ? (item.sku_key === 'whatsapp_exotel' ? `${d} Own Number(s)` : `${d} Mobile DID(s)`) : '-';
+        }));
+        uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal, item }) => {
           const d = getSN('did_numbers'), v = parseFloat(getVal('validity')) || 0;
-          return d > 0 ? `${d} Mobile DIDs × ${v} months × ${fmtR(getSN('did_cost') || 1500)} = ${fmtR(d*v*(getSN('did_cost')||1500))}` : '';
+          const label = item.sku_key === 'whatsapp_exotel' ? 'Own Numbers' : 'Mobile DIDs';
+          const cost = getSN('did_cost') || 1500;
+          return d > 0 ? `${d} ${label} × ${v} months × ${fmtR(cost)} = ${fmtR(d*v*cost)}` : '';
         }));
       }
       uRows += cmpRow('Call Credits & Charges', [], true);
@@ -5199,7 +6089,7 @@ function updatePreview() {
       uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
       const anyPaidNums = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
       if (anyPaidNums) {
-        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
+        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
         uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
           const p = getSN('num_paid_numbers'), m = getSN('num_months') + getSN('extra_validity'), c = getSN('extra_number');
           return p > 0 ? `${p} numbers × ${m} months × ${fmtR(c)} = ${fmtR(p*m*c)}` : '';
@@ -5207,10 +6097,16 @@ function updatePreview() {
       }
       const anyDIDu = colData.some(({ getSN }) => getSN('did_numbers') > 0);
       if (anyDIDu) {
-        uRows += cmpRow('Mobile DID Numbers', colData.map(({ getSN }) => { const d = getSN('did_numbers'); return d > 0 ? `${d} Mobile DID(s)` : '—'; }));
-        uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
+        const didLabel = colData.some(({ item }) => item.sku_key === 'whatsapp_exotel') ? 'Mobile DID / Own Number (BYON)' : 'Mobile DID Numbers';
+        uRows += cmpRow(didLabel, colData.map(({ getSN, item }) => {
+          const d = getSN('did_numbers');
+          return d > 0 ? (item.sku_key === 'whatsapp_exotel' ? `${d} Own Number(s)` : `${d} Mobile DID(s)`) : '-';
+        }));
+        uRows += cmpIndRow('Calculation', colData.map(({ getSN, item }) => {
           const d = getSN('did_numbers'), m = getSN('num_months');
-          return d > 0 ? `${d} Mobile DIDs × ${m} months × ${fmtR(getSN('did_cost') || 1500)} = ${fmtR(d*m*(getSN('did_cost')||1500))}` : '';
+          const label = item.sku_key === 'whatsapp_exotel' ? 'Own Numbers' : 'Mobile DIDs';
+          const cost = getSN('did_cost') || 1500;
+          return d > 0 ? `${d} ${label} × ${m} months × ${fmtR(cost)} = ${fmtR(d*m*cost)}` : '';
         }));
       }
       const userSubs = colData.map(({ getSN }) => {
@@ -5449,7 +6345,7 @@ function updatePreview() {
         tableRows += cmpRow('Free Channels', colData.map(({ getSN }) => `${getSN('num_channels') || 5} Channels (Included Free)`));
         tableRows += cmpRow('Paid Channels', colData.map(({ getSN, item }) => {
           const paid = Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0));
-          return paid > 0 ? `${paid} Channel(s)` : '—';
+          return paid > 0 ? `${paid} Channel(s)` : '-';
         }));
       } else {
         tableRows += cmpRow('No. of Channels', colData.map(({ getSN }) => getSN('num_channels')));
@@ -5475,7 +6371,7 @@ function updatePreview() {
       tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
       const anyPaidStreamNums = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
       if (anyPaidStreamNums) {
-        tableRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '—'; }));
+        tableRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
         tableRows += cmpRow('Num. Calculation', colData.map(({ getSN }) => {
           const p = getSN('num_paid_numbers'), m = getSN('num_months') + (getSN('extra_validity') || 0), c = getSN('extra_number');
           return p > 0 ? `${p} × ${m} mo × ${fmtR(c)} = ${fmtR(p * m * c)}` : '';
@@ -5602,7 +6498,7 @@ function updatePreview() {
     const hasA = itemsA.filter(i => i.sku_key).length > 0;
     const hasB = itemsB.filter(i => i.sku_key).length > 0;
 
-    const emptyMsg = (label) => `<div style="text-align:center;color:#94a3b8;font-style:italic;padding:40px 20px;border:1.5px dashed #e2e8f0;border-radius:10px;margin-top:24px;background:#fafbfc;">No SKUs in ${label} yet — switch to this option and add SKUs</div>`;
+    const emptyMsg = (label) => `<div style="text-align:center;color:#94a3b8;font-style:italic;padding:40px 20px;border:1.5px dashed #e2e8f0;border-radius:10px;margin-top:24px;background:#fafbfc;">No SKUs in ${label} yet. Switch to this option and add SKUs</div>`;
 
     doc.innerHTML = `
     <table class="print-master-table">
@@ -5681,98 +6577,10 @@ function updatePreview() {
 
   // ── Bundle Merge Mode ──────────────────────────────────────────
   if (QG.bundleMergeMode) {
-    const includedItems = validItems.filter(i => !i.excluded);
-    const excludedItems  = validItems.filter(i => i.excluded);
-    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
-
-    const result = _renderBundleItemsHTML(includedItems);
-    const gst    = Math.round(result.grandSubtotal * 0.18);
-    const total  = result.grandSubtotal + gst;
-    const hasIncluded = includedItems.length > 0;
-
-    // Build SKU tag pills for the bundle header
-    const skuTagsHTML = includedItems.map(i => {
-      const s = SKUS.find(x => x.key === i.sku_key);
-      if (!s) return '';
-      const label = i.customName || s.label;
-      return `<span style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:0.72rem;font-weight:700;background:#e0f2fe;color:#0369a1;margin:2px 3px;">${sanitize(label)}</span>`;
-    }).join('');
-
-    const excludedNoteHTML = excludedItems.length > 0
-      ? `<div style="margin-top:18px;padding:10px 14px;border-radius:8px;background:#fffbeb;border:1.5px solid #fde68a;font-size:0.78rem;color:#92400e;">
-          <strong style="display:block;margin-bottom:4px;">⚠ Scope Notes — Excluded from this proposal:</strong>
-          ${excludedItems.map(i => {
-            const s = SKUS.find(x => x.key === i.sku_key);
-            return `<div style="margin:2px 0;">• ${sanitize(i.customName || s?.label || i.sku_key)}</div>`;
-          }).join('')}
-        </div>`
-      : '';
-
-    doc.innerHTML = `
-    <table class="print-master-table">
-      <thead><tr><td><div class="print-master-header"></div></td></tr></thead>
-      <tbody><tr><td>
-      <div class="quote-doc-header">
-        <img src="${logoSrc}" class="quote-doc-logo ${firstSku.entity.toLowerCase()}-logo" alt="${firstSku.entity} Logo" onerror="this.style.display='none'">
-        <div class="quote-doc-meta">
-          <div class="quote-number-badge">${sanitize(quoteNum)}</div>
-          <div style="margin-top:4px;">Date: ${sanitize(dateStr)}</div>
-          <div style="margin-top:2px;font-weight:600;color:#0284c7;">${firstSku.entity}</div>
-        </div>
-      </div>
-      <div class="quote-doc-title">Commercial Proposal: Bundled Package</div>
-      <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:6px;">Prepared For: ${sanitize(company)}</p>
-      ${skuTagsHTML ? `<div style="margin-bottom:16px;">${skuTagsHTML}</div>` : ''}
-      <div class="quote-doc-section">
-        <div class="quote-doc-section-title">Introduction</div>
-        <div class="quote-intro-text">${introMap[firstSku.entity]}</div>
-      </div>
-      <div class="quote-doc-section">
-        <div class="quote-doc-section-title">Parties</div>
-        <div class="quote-participant-grid">
-          <div class="quote-participant-box">
-            <div class="label">Prepared By (${firstSku.entity})</div>
-            <div class="value">${sanitize(seName || firstSku.entity + ' Sales')}</div>
-            <div class="sub">${sanitize(seEmail)}</div>
-            ${sePhone ? `<div class="sub">${sanitize(sePhone)}</div>` : ''}
-          </div>
-          <div class="quote-participant-box">
-            <div class="label">Prepared For (Client)</div>
-            <div class="value">${sanitize(company)}</div>
-            ${contact ? `<div class="sub">${sanitize(contact)}</div>` : ''}
-            ${clientEmail ? `<div class="sub">${sanitize(clientEmail)}</div>` : ''}
-            ${clientPhone ? `<div class="sub">${sanitize(clientPhone)}</div>` : ''}
-            ${tenantId ? `<div class="sub" style="color:#0284c7;font-weight:600;">Tenant ID: ${sanitize(tenantId)}</div>` : ''}
-          </div>
-        </div>
-      </div>
-      <div class="quote-doc-section" style="margin-top:24px;">
-        <div class="quote-doc-section-title">Bundled Package Breakdown</div>
-        ${hasIncluded
-          ? `<div>${result.allSectionsHTML}</div>
-             <div class="bundle-subtotal-card" style="border-color:#bae6fd;margin-top:16px;page-break-inside:avoid;break-inside:avoid;">
-               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#475569;margin-bottom:5px;"><span>Subtotal (excl. GST)</span><strong>${fmtR(result.grandSubtotal)}</strong></div>
-               <div style="display:flex;justify-content:space-between;font-size:0.87rem;color:#64748b;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed #cbd5e1;"><span>GST @ 18%</span><strong>${fmtR(gst)}</strong></div>
-               <div style="display:flex;justify-content:space-between;font-size:1.05rem;font-weight:800;color:#0284c7;margin-top:8px;padding-top:8px;border-top:2px solid #0284c7;"><span>Total (incl. GST)</span><span>${fmtR(total)}</span></div>
-             </div>`
-          : `<div style="text-align:center;color:#94a3b8;font-style:italic;padding:40px 20px;border:1.5px dashed #e2e8f0;border-radius:10px;background:#fafbfc;">No SKUs included — use "Add Back" to include items</div>`}
-        ${excludedNoteHTML}
-      </div>
-      <div class="quote-doc-section" style="margin-top:30px;">
-        <div class="quote-doc-section-title">Terms &amp; Conditions</div>
-        <div class="quote-tnc" style="font-size:0.85rem;color:#475569;line-height:1.5;">
-          ${generateTncHtml(validItems.filter(i => i.sku_key), firstSku.entity)}
-        </div>
-      </div>
-      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e0f2fe;font-size:0.78rem;color:#94a3b8;text-align:center;">
-        This is a system-generated commercial proposal. For queries, contact your ${firstSku.entity} account manager.
-      </div>
-      </td></tr></tbody>
-      <tfoot><tr><td><div class="print-master-footer"></div></td></tr></tfoot>
-    </table>`;
+    _renderBundlePackagePreview(doc, validItems, firstSku, logoSrc, company, contact, clientEmail, clientPhone, tenantId, seName, seEmail, sePhone, quoteNum, dateStr, introMap);
     return;
   }
-  // ── End Bundle Merge Mode ──────────────────────────────────────
+  // ── End Bundle Package Mode ────────────────────────────────────
 
   let allSectionsHTML = '';
   let grandSubtotal = 0;
@@ -6322,6 +7130,15 @@ function updatePreview() {
         const waExtraCost = getSafeNum('extra_number');
         tableHTML += stdRow('Extra Numbers', `${waPaidNums} Number(s)`);
         tableHTML += indRow('Calculation', `${waPaidNums} numbers × ${waNumMonths} months × ${fmtRupee(waExtraCost)} = <strong>${fmtRupee(waPaidNums * waNumMonths * waExtraCost)}</strong>`);
+      }
+      const didNums = getSafeNum('did_numbers') || 0;
+      if (didNums > 0) {
+        const DID_COST = getSafeNum('did_cost') || 1500;
+        const waNumMonths = (getSafeNum('num_months') || 0) + (getSafeNum('extra_validity') || 0);
+        const didTotalV = didNums * waNumMonths * DID_COST;
+        tableHTML += stdRow('Own Number (BYON)', `${didNums} Own Number(s)`);
+        tableHTML += indRow('Own Number Rate', `${fmtRupee(DID_COST)} ${perUnit('/number/month')}`);
+        tableHTML += indRow('Calculation', `${didNums} Own Number(s) × ${waNumMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotalV)}</strong>`);
       }
 
       tableHTML += secRow('WhatsApp Credits & Rates');
@@ -7028,6 +7845,8 @@ async function generateQuote() {
     compareMode: QG.compareMode,
     bundleCompareMode: QG.bundleCompareMode || false,
     bundleMergeMode: QG.bundleMergeMode || false,
+    bundleRenameOverrides: QG.bundleMergeMode ? { ...QG.bundleRenameOverrides } : {},
+    bundleReaddedFields: QG.bundleMergeMode ? [...QG.bundleReaddedFields] : [],
     bundle_a_items: itemsA,
     bundle_b_items: itemsB,
     activeBundle: QG.bundleCompareMode ? QG.activeBundle : null,
@@ -7085,7 +7904,7 @@ async function generateQuote() {
         }).catch(() => null);
         localStorage.setItem('returnToDraft', emergencyDraftKey);
       } catch (_) { /* silent – session is already dead, best effort */ }
-      showAlert("Your session has expired. Your draft has been saved — it will be waiting for you after you log back in.", { type: 'warning', title: 'Session Expired' });
+      showAlert("Your session has expired. Your draft has been saved. It will be waiting for you after you log back in.", { type: 'warning', title: 'Session Expired' });
       setTimeout(() => { window.location.href = '/login'; }, 2500);
       return;
     }
@@ -7553,6 +8372,8 @@ window.printHistoricalQuote = async function (id) {
     } else if (data.bundleMergeMode && data.sku_items?.length > 0) {
       QG.bundleCompareMode = false;
       QG.bundleMergeMode = true;
+      QG.bundleRenameOverrides = data.bundleRenameOverrides || {};
+      QG.bundleReaddedFields = data.bundleReaddedFields || [];
       QG.compareMode = false;
       QG.multiSkuMode = true;
       QG.skuItems = data.sku_items;
@@ -7713,7 +8534,7 @@ window.generateProformaInvoice = async function (id) {
 
     // Pre-fill modal subtitle
     const subtitle = document.getElementById('pi-modal-subtitle');
-    if (subtitle) subtitle.textContent = `${q.quote_number} — ${company}`;
+    if (subtitle) subtitle.textContent = `${q.quote_number} · ${company}`;
 
     // Pre-fill billing address from quote client data if available
     const addrEl = document.getElementById('pi-billing-address');
@@ -8169,7 +8990,7 @@ window.confirmGenerateProforma = async function () {
           if (isVoicebot) {
             const paidChs = Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0));
             lines.push(`Free Channels: ${numChs} Channels (Included Free)`);
-            lines.push(`Paid Channels: ${paidChs > 0 ? paidChs + ' Channel(s)' : '—'}`);
+            lines.push(`Paid Channels: ${paidChs > 0 ? paidChs + ' Channel(s)' : '-'}`);
             lines.push(`Paid Channel Cost: ${fmtRupee(chCost)}/channel/month`);
           } else {
             lines.push(`No. of Channels: ${numChs}`);
@@ -8287,7 +9108,11 @@ window.confirmGenerateProforma = async function () {
           const did = parseFloat(item.values['did_numbers'] ?? 0);
           const didCost = getSN('did_cost') || 1500;
           if (did > 0) {
-            lines.push(`Mobile DID Numbers: ${did} DID(s) @ ${fmtRupee(didCost)}/DID/month`);
+            if (item.sku_key === 'whatsapp_exotel') {
+              lines.push(`Own Number (BYON): ${did} Number(s) @ ${fmtRupee(didCost)}/number/month`);
+            } else {
+              lines.push(`Mobile DID Numbers: ${did} DID(s) @ ${fmtRupee(didCost)}/DID/month`);
+            }
           }
 
           const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
@@ -8556,7 +9381,7 @@ window.confirmGenerateProforma = async function () {
 
   <!-- Client Details -->
   <div class="client-container">
-    <div class="client-name">${(company || '—').toUpperCase()}</div>
+    <div class="client-name">${(company || '-').toUpperCase()}</div>
     <div class="client-address">${addrLines}</div>
     <div class="client-gst">GST number: : &nbsp;${gstNumber}</div>
   </div>
@@ -8794,6 +9619,8 @@ window.viewQuote = async function (id) {
       // ── Bundle Merge Mode quote restore ────────────────────────────
       QG.bundleCompareMode = false;
       QG.bundleMergeMode = true;
+      QG.bundleRenameOverrides = data.bundleRenameOverrides || {};
+      QG.bundleReaddedFields = data.bundleReaddedFields || [];
       QG.compareMode = false;
       QG.multiSkuMode = true;
       QG.skuItems = data.sku_items;
@@ -9383,7 +10210,7 @@ async function initProfile() {
     const phoneText = document.getElementById('q-se-phone-text');
     const phoneInput = document.getElementById('q-se-phone');
     const savedPhone = profile.phone || '';
-    if (phoneText) phoneText.textContent = savedPhone || '—';
+    if (phoneText) phoneText.textContent = savedPhone || '-';
     if (phoneInput) phoneInput.value = savedPhone;
     // Show prompt if no phone
     const prompt = document.getElementById('q-profile-prompt');
@@ -9400,7 +10227,7 @@ function openPhoneEdit() {
   if (input) {
     // Pre-fill with current displayed value
     const currentText = document.getElementById('q-se-phone-text')?.textContent;
-    if (currentText && currentText !== '—') input.value = currentText;
+    if (currentText && currentText !== '-') input.value = currentText;
     input.focus();
     input.select();
   }

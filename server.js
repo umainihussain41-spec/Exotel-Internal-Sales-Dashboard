@@ -821,6 +821,48 @@ app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => 
     }
 });
 
+// ─── Admin: Trigger a Railway redeploy of this service ───────────────────────
+// Uses Railway's public GraphQL API. RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID
+// are injected automatically by Railway at runtime; the admin only needs to add a
+// RAILWAY_API_TOKEN (Account or Team token) in the service variables.
+app.post('/api/admin/redeploy', ensureAuthenticated, ensureAdmin, async (req, res) => {
+    const callerEmail = req.user?.emails?.[0]?.value;
+    const token = process.env.RAILWAY_API_TOKEN;
+    const serviceId = process.env.RAILWAY_SERVICE_ID;
+    const environmentId = process.env.RAILWAY_ENVIRONMENT_ID;
+
+    if (!token) {
+        return res.status(400).json({ error: 'Redeploy is not configured. Add a RAILWAY_API_TOKEN variable to this service on Railway.' });
+    }
+    if (!serviceId || !environmentId) {
+        return res.status(400).json({ error: 'Missing RAILWAY_SERVICE_ID / RAILWAY_ENVIRONMENT_ID. These are normally injected by Railway automatically.' });
+    }
+
+    const query = `mutation Redeploy($serviceId: String!, $environmentId: String!) {
+        serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
+    }`;
+
+    try {
+        const r = await axios.post(
+            'https://backboard.railway.com/graphql/v2',
+            { query, variables: { serviceId, environmentId } },
+            { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 15000 }
+        );
+        if (r.data?.errors?.length) {
+            const msg = r.data.errors.map(e => e.message).join('; ');
+            console.error('[REDEPLOY] Railway API error:', msg);
+            return res.status(502).json({ error: 'Railway API error: ' + msg });
+        }
+        addLog('SERVER_REDEPLOY', 'WARNING', `Railway redeploy triggered by ${callerEmail}`, callerEmail);
+        console.warn(`[REDEPLOY] Triggered by ${callerEmail} at ${new Date().toISOString()}`);
+        res.json({ success: true, message: 'Redeploy triggered. The server will restart shortly.' });
+    } catch (e) {
+        const detail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+        console.error('[REDEPLOY ERROR]', detail);
+        res.status(502).json({ error: 'Failed to reach Railway API: ' + (e.response?.status || e.message) });
+    }
+});
+
 // ─── Developer Feedback ──────────────────────────────────────────────────────
 // Gemini key rotation helper (reuses the same pool as the AI quote parser)
 function getGeminiKeysForFeedback() {

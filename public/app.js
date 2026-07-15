@@ -1677,6 +1677,40 @@ function setupAdminPanel() {
     document.getElementById('admin-log-from')?.addEventListener('change', fetchAdminLogs);
     document.getElementById('admin-log-to')?.addEventListener('change', fetchAdminLogs);
 
+    // ── Redeploy Server button ────────────────────────────────────────────────
+    document.getElementById('btn-redeploy-server')?.addEventListener('click', async () => {
+        const ok = await showConfirm(
+            'This will trigger a fresh Railway deployment and <strong>restart the server</strong>. The app will be briefly unavailable for everyone while it comes back up.<br><br>No data is affected.',
+            { title: 'Redeploy Server?', type: 'warning', confirmText: 'Redeploy', cancelText: 'Cancel', danger: false }
+        );
+        if (!ok) return;
+
+        const btn = document.getElementById('btn-redeploy-server');
+        const original = btn.innerHTML;
+        btn.disabled = true;
+        btn.style.opacity = '0.7';
+        btn.style.cursor = 'wait';
+        btn.innerHTML = 'Triggering redeploy…';
+        try {
+            const res = await fetch('/api/admin/redeploy', { method: 'POST' });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                showToast(data.message || 'Redeploy triggered. The server will restart shortly.', 'success');
+                btn.innerHTML = 'Redeploy triggered ✓';
+            } else {
+                showToast(data.error || 'Failed to trigger redeploy.', 'error');
+                btn.innerHTML = original;
+                btn.disabled = false;
+                btn.style.opacity = '';
+                btn.style.cursor = 'pointer';
+            }
+        } catch (e) {
+            // A dropped connection is expected once the server actually restarts.
+            showToast('Redeploy request sent. If the server was reachable, it is now restarting.', 'info');
+            btn.innerHTML = 'Redeploy triggered ✓';
+        }
+    });
+
     // ── Reset DB button ───────────────────────────────────────────────────────
     document.getElementById('btn-reset-db')?.addEventListener('click', async () => {
         // Step 1: primary warning confirm
