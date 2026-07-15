@@ -2200,7 +2200,7 @@ function renderSkuItemManager() {
     if (hint) hint.textContent = QG.bundleCompareMode
       ? `Option ${QG.activeBundle} is using ${QG.lockedEntity} SKUs. Switch to the other option to pick a different entity.`
       : QG.bundleMergeMode
-        ? `Bundle Package mode: add SKUs to build one unified proposal. Manage item names and remove unwanted rows below.`
+        ? `Bundle Package mode: click any SKU below to add it to the bundle (up to 3). Rename or remove rows below.`
         : `You can only add ${QG.lockedEntity} SKUs to this quote.`;
   } else {
     if (lockBadge) lockBadge.style.display = 'none';
@@ -2269,7 +2269,7 @@ function renderSkuItemManager() {
       </div>`;
   }).join('');
 
-  if (QG.multiSkuMode && QG.skuItems.length < 3) {
+  if (QG.multiSkuMode && QG.skuItems.length < 3 && !QG.bundleCompareMode) {
     itemsHtml += `
       <div style="display:flex; justify-content:center; margin-top:8px;">
         <button class="btn btn-secondary" onclick="window.addSkuItem()" style="padding:6px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; width:100%; justify-content:center; border: 1.5px dashed #cbd5e1; background:#f8fafc; color:#475569; transition:all 0.15s;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#94a3b8';" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';">
@@ -2836,18 +2836,37 @@ function selectSku(key) {
     return;
   }
 
-  // Currency check: prevent mixing International (USD) with standard plans (INR)
-  if (QG.multiSkuMode && !QG.bundleCompareMode && QG.skuItems.length > 1) {
-    const hasIntl = QG.skuItems.some(i => i.sku_key === 'voice_intl' && i.id !== QG.activeItemId);
+  // Bundle Package: clicking a SKU appends a new row when the active row is
+  // already a different configured SKU, so several SKUs can be stacked just by
+  // clicking them in turn — no need to press "Add SKU" between each.
+  const activeItem = getActiveItem();
+  const bundleAppend = QG.bundleMergeMode && activeItem && activeItem.sku_key && activeItem.sku_key !== key;
+  if (bundleAppend && QG.skuItems.length >= 3) {
+    showAlert('A bundle can hold up to 3 SKUs. Remove one to add another.', { type: 'warning', title: 'Bundle Limit' });
+    return;
+  }
+
+  // Currency check: prevent mixing International (USD) with standard plans (INR).
+  // When appending, the active row is kept, so weigh the whole set.
+  if (QG.multiSkuMode && !QG.bundleCompareMode) {
+    const otherItems = bundleAppend ? QG.skuItems : QG.skuItems.filter(i => i.id !== QG.activeItemId);
+    const hasIntl = otherItems.some(i => i.sku_key === 'voice_intl');
     const isSelectingIntl = key === 'voice_intl';
-    if ((hasIntl && !isSelectingIntl) || (!hasIntl && isSelectingIntl)) {
+    if (otherItems.some(i => i.sku_key) && ((hasIntl && !isSelectingIntl) || (!hasIntl && isSelectingIntl))) {
       showAlert("International USD plans cannot be mixed with standard INR plans in a single quote.", { type: 'warning', title: 'Currency Mismatch' });
       return;
     }
   }
 
-  // Update active item
-  const item = getActiveItem();
+  // Target item: a fresh appended row in bundle mode, otherwise the active row.
+  let item;
+  if (bundleAppend) {
+    item = _makeItem('item_' + Date.now());
+    QG.skuItems.push(item);
+    QG.activeItemId = item.id;
+  } else {
+    item = getActiveItem();
+  }
   item.sku_key = key;
   item.values = {};
   item.stopLockOverrides = [];
@@ -5495,6 +5514,12 @@ function _computeBundleRows(items) {
   // Duration/context fields drive multipliers, not standalone charges — always
   // read each SKU's own value even when the field repeats across SKUs.
   const DURATION_FIELDS = new Set(['num_months', 'validity', 'extra_validity']);
+  // Non-editable info rows that must still appear in bundles: per-message rates
+  // for WhatsApp and RCS are fixed (nonEditable) but are shown for reference.
+  const BUNDLE_KEEP_NONEDITABLE = new Set(['wa_utility', 'wa_promo', 'rcs_biz', 'rcs_rich', 'rcs_reply']);
+  // Fields shown as indented sub-rows in the single-SKU proposal — mirror that
+  // here so the bundle breakdown reads the same (└ under their parent row).
+  const BUNDLE_SUB_FIELDS = new Set(['extra_user_cost', 'extra_number', 'did_cost']);
 
   const primaryRows = [];
   const dupeRows = [];
@@ -5525,7 +5550,7 @@ function _computeBundleRows(items) {
       if (SKIP_FIELD_IDS.has(f.id)) return;
       if (f.type === 'boolean') return;
       if (f.type === 'pulse') return;
-      if (f.nonEditable && f.type !== 'rental_toggle') return; // skip non-editable like CPM raw field
+      if (f.nonEditable && f.type !== 'rental_toggle' && !BUNDLE_KEEP_NONEDITABLE.has(f.id)) return; // skip non-editable like CPM raw field
       if (f.id === 'channels') return; // shown in Plan Details as text
 
       const rawVal = item.values[f.id] !== undefined ? item.values[f.id] : f.value;
@@ -5577,7 +5602,7 @@ function _computeBundleRows(items) {
         displayVal = item.sku_key === 'whatsapp_exotel' ? (rawVal + ' Own Number(s)') : (rawVal + ' Mobile DID(s)');
       } else if (f.id === 'did_cost') {
         displayVal = item.sku_key === 'whatsapp_exotel' ? (fmtR(numVal) + '/number/month') : (fmtR(numVal) + '/Mobile DID/month');
-      } else if (['sms_cost', 'wa_utility', 'wa_promo', 'wa_api', 'rcs_cost', 'incoming', 'outgoing', 'single_leg', 'session_cost', 'attempt', 'call_rate'].includes(f.id)) {
+      } else if (['sms_cost', 'wa_utility', 'wa_promo', 'wa_api', 'rcs_cost', 'rcs_biz', 'rcs_rich', 'rcs_reply', 'incoming', 'outgoing', 'single_leg', 'session_cost', 'attempt', 'call_rate'].includes(f.id)) {
         if (numVal === 0) displayVal = '✓ Free';
         else if (numVal >= 100) displayVal = '₹' + (numVal / 100).toFixed(2);
         else displayVal = numVal + 'p';
@@ -5644,6 +5669,7 @@ function _computeBundleRows(items) {
         rawVal: rawVal,
         isWaived,
         isExcluded,
+        isSub: BUNDLE_SUB_FIELDS.has(f.id),
         section,
       };
 
@@ -5789,11 +5815,13 @@ function _renderBundlePackagePreview(doc, validItems, firstSku, logoSrc, company
     grouped[sec].forEach(row => {
       if (row.isExcluded) return;
 
-      // Calculation breakdown line: rendered identically to the single-SKU
-      // proposal's indented "Calculation" row (└ prefix + grey via .sub-row CSS).
-      if (row.isCalc) {
-        const calcVal = (typeof row.value === 'string' && /<[a-zA-Z]/.test(row.value)) ? row.value : sanitize(String(row.value ?? '-'));
-        tableBody += `<tr class="sub-row"><td>${sanitize(row.label)}</td><td>${calcVal}</td></tr>`;
+      // Indented sub-rows (calculation lines and "extra/cost" fields) — rendered
+      // like the single-SKU proposal's indented rows (└ prefix + grey via CSS).
+      if (row.isCalc || row.isSub) {
+        const subVal = row.isWaived
+          ? `<span class="waived-text">${TICK} Waived</span>`
+          : ((typeof row.value === 'string' && /<[a-zA-Z]/.test(row.value)) ? row.value : sanitize(String(row.value ?? '-')));
+        tableBody += `<tr class="sub-row"><td>${sanitize(row.label)}</td><td>${subVal}</td></tr>`;
         return;
       }
 
