@@ -799,7 +799,9 @@ app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => 
 // ─── Admin: Trigger a Railway redeploy of this service ───────────────────────
 // Uses Railway's public GraphQL API. RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID
 // are injected automatically by Railway at runtime; the admin only needs to add a
-// RAILWAY_API_TOKEN (Account or Team token) in the service variables.
+// RAILWAY_API_TOKEN in the service variables. Account/Workspace tokens use the
+// `Authorization: Bearer` header while Project tokens use `Project-Access-Token`,
+// so we try Bearer first and fall back to the project-token header on auth failure.
 app.post('/api/admin/redeploy', ensureAuthenticated, ensureAdmin, async (req, res) => {
     const callerEmail = req.user?.emails?.[0]?.value;
     const token = process.env.RAILWAY_API_TOKEN;
@@ -817,16 +819,31 @@ app.post('/api/admin/redeploy', ensureAuthenticated, ensureAdmin, async (req, re
         serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
     }`;
 
+    const post = (headers) => axios.post(
+        'https://backboard.railway.com/graphql/v2',
+        { query, variables: { serviceId, environmentId } },
+        { headers: { ...headers, 'Content-Type': 'application/json' }, timeout: 15000, validateStatus: () => true }
+    );
+    const isAuthError = (resp) =>
+        resp.status === 401 || resp.status === 403 ||
+        (Array.isArray(resp.data?.errors) && resp.data.errors.some(e => /not authorized|unauthorized|authenticate|access denied|invalid.*token/i.test(e?.message || '')));
+
     try {
-        const r = await axios.post(
-            'https://backboard.railway.com/graphql/v2',
-            { query, variables: { serviceId, environmentId } },
-            { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, timeout: 15000 }
-        );
-        if (r.data?.errors?.length) {
+        // Account / Workspace / OAuth tokens use Bearer; Project tokens use their own header.
+        let r = await post({ Authorization: `Bearer ${token}` });
+        if (isAuthError(r)) r = await post({ 'Project-Access-Token': token });
+
+        if (isAuthError(r)) {
+            console.error('[REDEPLOY] Railway rejected the token');
+            return res.status(502).json({ error: 'Railway rejected the token (Not Authorized). Verify RAILWAY_API_TOKEN is valid and, if it is a Project token, that it belongs to this exact project + environment.' });
+        }
+        if (Array.isArray(r.data?.errors) && r.data.errors.length) {
             const msg = r.data.errors.map(e => e.message).join('; ');
             console.error('[REDEPLOY] Railway API error:', msg);
             return res.status(502).json({ error: 'Railway API error: ' + msg });
+        }
+        if (r.status >= 400) {
+            return res.status(502).json({ error: 'Railway API returned HTTP ' + r.status });
         }
         addLog('SERVER_REDEPLOY', 'WARNING', `Railway redeploy triggered by ${callerEmail}`, callerEmail);
         console.warn(`[REDEPLOY] Triggered by ${callerEmail} at ${new Date().toISOString()}`);
