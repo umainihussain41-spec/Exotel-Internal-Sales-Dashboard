@@ -6069,6 +6069,11 @@ function updatePreview() {
     const cmpIndRow = (label, vals) =>
       `<tr class="sub-row"><td>${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /^</.test(v) ? v : sanitize(String(v ?? ''))}</td>`).join('')}</tr>`;
 
+    // Indented sub-row with └ prefix (same style as tier-compare tables)
+    const perUnitU = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
+    const cmpSubRow = (label, vals) =>
+      `<tr class="sub-row"><td class="sku-row-name" style="padding-left:20px;"><span style="color:#94a3b8;font-size:0.75em;">└ </span>${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /<[a-zA-Z]/.test(v) ? v : sanitize(String(v ?? '-'))}</td>`).join('')}</tr>`;
+
     if (allSku0 === 'voice_veeno_std') {
       // ── Veeno STD side-by-side comparison ─────────────────────
       uRows += cmpRow('Plan Details', [], true);
@@ -6089,6 +6094,7 @@ function updatePreview() {
       }));
       uRows += cmpRow('Number Plan', [], true);
       uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
+      uRows += cmpSubRow('Extra Number Cost', colData.map(({ getSN }) => { const c = getSN('extra_number'); return c > 0 ? fmtR(c) + perUnitU('/number/month') : '-'; }));
       const anyPaidV = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
       if (anyPaidV) {
         uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
@@ -6142,6 +6148,7 @@ function updatePreview() {
       }));
       uRows += cmpRow('Number Plan', [], true);
       uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
+      uRows += cmpSubRow('Extra Number Cost', colData.map(({ getSN }) => { const c = getSN('extra_number'); return c > 0 ? fmtR(c) + perUnitU('/number/month') : '-'; }));
       const anyPaidNums = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
       if (anyPaidNums) {
         uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
@@ -7661,7 +7668,8 @@ window.printQuote = async function () {
      /* ── Print header/footer collapse ─────────────────────────── */
      .print-master-header, .print-master-footer { height: 0 !important; padding: 0 !important; overflow: hidden !important; display: block !important; }
      .print-master-table { width: 100% !important; border-collapse: collapse !important; }
-     .print-master-table thead, .print-master-table tfoot { display: none !important; }
+     /* Child selector only: nested tables (e.g. compare-mode Option A/B header) keep their thead */
+     .print-master-table > thead, .print-master-table > tfoot { display: none !important; }
 
      /* ── Waived / free badges ──────────────────────────────────── */
      .waived-text { font-size: 0.68rem !important; }
@@ -8607,6 +8615,12 @@ window.generateProformaInvoice = async function (id) {
     if (gstEl) { gstEl.value = ''; gstEl.disabled = false; gstEl.style.opacity = '1'; }
     if (gstUnreg) gstUnreg.checked = false;
 
+    // Reset TDS fields
+    const tdsSel = document.getElementById('pi-tds-rate');
+    const tdsCustom = document.getElementById('pi-tds-custom');
+    if (tdsSel) { tdsSel.value = ''; tdsSel.disabled = false; }
+    if (tdsCustom) { tdsCustom.value = ''; tdsCustom.style.display = 'none'; tdsCustom.disabled = false; }
+
     // Set expiry date to 30 days from quote date
     const expiryEl = document.getElementById('pi-expiry-date');
     if (expiryEl) {
@@ -8651,6 +8665,17 @@ window.confirmGenerateProforma = async function () {
   const gstNumber = gstUnreg ? 'Unregistered' : ((document.getElementById('pi-gst')?.value || '').trim());
   const expiryDateVal = document.getElementById('pi-expiry-date')?.value || '';
 
+  // TDS rate: from preset dropdown or custom input
+  const tdsRateSelect = document.getElementById('pi-tds-rate');
+  const tdsCustomInput = document.getElementById('pi-tds-custom');
+  let tdsRate = 0;
+  if (tdsRateSelect) {
+    tdsRate = tdsRateSelect.value === 'custom'
+      ? (parseFloat(tdsCustomInput?.value) || 0)
+      : (parseFloat(tdsRateSelect.value) || 0);
+  }
+  tdsRate = Math.min(100, Math.max(0, tdsRate));
+
   const confirmBtn = document.getElementById('pi-modal-confirm');
   const cancelBtn = document.getElementById('pi-modal-cancel');
   const billingAddressInput = document.getElementById('pi-billing-address');
@@ -8679,6 +8704,8 @@ window.confirmGenerateProforma = async function () {
   if (gstInput) gstInput.disabled = true;
   if (gstUnregisteredInput) gstUnregisteredInput.disabled = true;
   if (expiryDateInput) expiryDateInput.disabled = true;
+  if (tdsRateSelect) tdsRateSelect.disabled = true;
+  if (tdsCustomInput) tdsCustomInput.disabled = true;
 
   const restoreModalState = () => {
     if (confirmBtn) {
@@ -8697,6 +8724,8 @@ window.confirmGenerateProforma = async function () {
     if (billingAddressInput) billingAddressInput.disabled = false;
     if (gstUnregisteredInput) gstUnregisteredInput.disabled = false;
     if (expiryDateInput) expiryDateInput.disabled = false;
+    if (tdsRateSelect) tdsRateSelect.disabled = false;
+    if (tdsCustomInput) tdsCustomInput.disabled = false;
     if (gstInput) {
       gstInput.disabled = gstUnregisteredInput ? gstUnregisteredInput.checked : false;
     }
@@ -9204,7 +9233,10 @@ window.confirmGenerateProforma = async function () {
     }
 
     const gstAmt = grandSubtotal * 0.18;
-    const grandTotal = grandSubtotal + gstAmt;
+    // TDS is deducted on the taxable value (before GST)
+    const tdsAmt = grandSubtotal * (tdsRate / 100);
+    const grossTotal = grandSubtotal + gstAmt;
+    const grandTotal = grossTotal - tdsAmt;
 
     // ── Format helpers ────────────────────────────────────────────
     const fmtINR = (v) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
@@ -9248,6 +9280,10 @@ window.confirmGenerateProforma = async function () {
 <head>
   <meta charset="UTF-8">
   <title>Proforma Invoice - ${company.replace(/</g,'&lt;')} - ${q.quote_number}</title>
+  <!-- Webfont fallback so the rupee glyph renders on servers without Arial (e.g. Railway) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
     @page {
       size: A4 landscape;
@@ -9255,7 +9291,7 @@ window.confirmGenerateProforma = async function () {
     }
     body {
       background: #fff;
-      font-family: Arial, sans-serif;
+      font-family: Arial, 'Inter', 'DejaVu Sans', sans-serif;
       color: #000;
       margin: 0;
       padding: 0;
@@ -9495,18 +9531,21 @@ window.confirmGenerateProforma = async function () {
       </tr>
       <tr>
         <td>TDS</td>
-        <td class="center-align">0%</td>
-        <td class="right-align">-</td>
+        <td class="center-align">${tdsRate > 0 ? tdsRate + '%' : '0%'}</td>
+        <td class="right-align">${tdsRate > 0 ? '(-) ' + tdsAmt.toFixed(3) : '-'}</td>
       </tr>
       <tr>
-        <td colspan="2"></td>
-        <td class="right-align">-</td>
+        ${tdsRate > 0
+          ? `<td colspan="2">Total (incl. GST)</td>
+        <td class="right-align">${fmtINR(grossTotal)}</td>`
+          : `<td colspan="2"></td>
+        <td class="right-align">-</td>`}
       </tr>
-      
+
       <!-- Total Row -->
       <tr>
         <td colspan="3" style="border: none;"></td>
-        <td colspan="2" class="bold-text">TOTAL</td>
+        <td colspan="2" class="bold-text">${tdsRate > 0 ? 'TOTAL PAYABLE' : 'TOTAL'}</td>
         <td class="right-align bold-text">${fmtINR(grandTotal)}</td>
       </tr>
       

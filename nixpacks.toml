@@ -6,7 +6,8 @@ nixPkgs = [
   "freetype",
   "harfbuzz",
   "ca-certificates",
-  "ttf-opensans"
+  "ttf-opensans",
+  "dejavu_fonts"
 ]
 
 [variables]

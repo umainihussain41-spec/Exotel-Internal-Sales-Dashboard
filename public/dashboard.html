@@ -1852,6 +1852,31 @@
                 Customer is GST Unregistered
             </label>
 
+            <!-- TDS -->
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:0.82rem; font-weight:600; color:#374151; margin-bottom:6px;">TDS Deduction</label>
+                <div style="display:flex; gap:10px;">
+                    <select id="pi-tds-rate"
+                        style="flex:1; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.88rem; font-family:'Inter',sans-serif; color:#0f172a; background:#f8fafc; box-sizing:border-box; outline:none; transition:border-color 0.15s; cursor:pointer;"
+                        onchange="var c=document.getElementById('pi-tds-custom'); c.style.display=this.value==='custom'?'block':'none'; if(this.value!=='custom'){c.value='';} else{c.focus();}"
+                        onfocus="this.style.borderColor='#059669'; this.style.background='#fff';"
+                        onblur="this.style.borderColor='#cbd5e1'; this.style.background='#f8fafc';">
+                        <option value="">No TDS</option>
+                        <option value="0.1">0.1%</option>
+                        <option value="1">1%</option>
+                        <option value="2">2%</option>
+                        <option value="5">5%</option>
+                        <option value="10">10%</option>
+                        <option value="custom">Custom %</option>
+                    </select>
+                    <input type="number" id="pi-tds-custom" placeholder="e.g. 3.5" min="0" max="100" step="0.01"
+                        style="display:none; width:110px; padding:10px 14px; border:1.5px solid #cbd5e1; border-radius:8px; font-size:0.88rem; font-family:'Inter',sans-serif; color:#0f172a; background:#f8fafc; box-sizing:border-box; outline:none; transition:border-color 0.15s;"
+                        onfocus="this.style.borderColor='#059669'; this.style.background='#fff';"
+                        onblur="this.style.borderColor='#cbd5e1'; this.style.background='#f8fafc';">
+                </div>
+                <div style="font-size:0.74rem; color:#94a3b8; margin-top:5px;">TDS is calculated on the taxable value (before GST) and deducted from the total payable.</div>
+            </div>
+
             <!-- Expiry Date -->
             <div style="margin-bottom:24px;">
                 <label style="display:block; font-size:0.82rem; font-weight:600; color:#374151; margin-bottom:6px;">Proforma Expiry Date</label>
