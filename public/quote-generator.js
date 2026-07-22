@@ -6396,7 +6396,7 @@ function updatePreview() {
 
     const cmpRow = (label, vals, isSection = false) => {
       if (isSection) return `<tr class="section-header-row"><td colspan="${validItems.length + 1}">${label}</td></tr>`;
-      return `<tr><td class="sku-row-name">${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /^</.test(v) ? v : sanitize(String(v ?? '-'))}</td>`).join('')}</tr>`;
+      return `<tr><td class="sku-row-name">${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /<[a-zA-Z]/.test(v) ? v : sanitize(String(v ?? '-'))}</td>`).join('')}</tr>`;
     };
 
     const subtotals = colData.map(({ item, getVal, getSN }) => {
@@ -6422,7 +6422,7 @@ function updatePreview() {
     const allSku0 = validItems[0].sku_key;
 
     const cmpIndRow = (label, vals) =>
-      `<tr class="sub-row"><td>${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /^</.test(v) ? v : sanitize(String(v ?? ''))}</td>`).join('')}</tr>`;
+      `<tr class="sub-row"><td>${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /<[a-zA-Z]/.test(v) ? v : sanitize(String(v ?? ''))}</td>`).join('')}</tr>`;
 
     // Indented sub-row with └ prefix (same style as tier-compare tables)
     const perUnitU = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
