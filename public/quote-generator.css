@@ -185,6 +185,62 @@
     gap: 6px;
 }
 
+/* ── Per-field discount (strikethrough) control ─────────────────────── */
+.q-disc-btn {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.q-disc-btn:hover {
+    border-color: #0ea5e9;
+    color: #0284c7;
+    background: #eff6ff;
+}
+.q-disc-btn.active {
+    border-color: #059669;
+    color: #059669;
+    background: #ecfdf5;
+}
+.q-disc-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.q-disc-pill {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #047857;
+    background: #ecfdf5;
+    border: 1px solid #a7f3d0;
+    border-radius: 20px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
+/* Discount shown in the quote preview / PDF: struck list price + new price */
+.q-disc-old {
+    text-decoration: line-through;
+    text-decoration-thickness: 1.5px;
+    color: #94a3b8;
+    margin-right: 5px;
+    font-weight: 500;
+}
+.q-disc-new {
+    color: #047857;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
 .q-input-wrapper {
     position: relative;
     flex: 1;

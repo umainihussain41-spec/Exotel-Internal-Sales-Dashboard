@@ -152,6 +152,58 @@ function truecallerSubtotalINR(item) {
 function _tcFmt(v) {
   return '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(v);
 }
+
+// ── Per-field discount (strikethrough) support ──────────────────────────────
+// A rep can strike any editable field's value and enter a discounted number.
+// Storage: item.fieldDiscounts[fieldId] = discounted number. The ORIGINAL (list)
+// price stays in item.values[fieldId] so the input keeps editing the list price.
+//
+// Recalculation is achieved without touching the dozens of per-SKU row/calc
+// sites: the value-reading helpers return a "discount box" — a Number object
+// that behaves exactly like its discounted value in every arithmetic/compare
+// operation (so all subtotals/totals recompute automatically), while carrying
+// the original so the money formatters can render "<s>old</s> new".
+function _num(v) { const n = parseFloat(v); return isNaN(n) ? null : n; }
+function itemDiscount(item, id) {
+  if (!item || !item.fieldDiscounts) return null;
+  const raw = item.fieldDiscounts[id];
+  if (raw === undefined || raw === null || raw === '') return null;
+  return _num(raw);
+}
+// Return `base` wrapped in a discount box when a valid, different discount is set.
+function applyDiscount(item, id, base) {
+  const d = itemDiscount(item, id);
+  if (d === null) return base;
+  const orig = _num(base);
+  if (orig === null || d === orig) return base; // no-op if equal or non-numeric
+  const box = new Number(d);           // behaves as `d` in all math/compare
+  box.__disc = true;
+  box.__orig = orig;                   // remembered for strikethrough display
+  return box;
+}
+// Effective numeric value (discount if set, else base) — for direct calc reads
+// that bypass the reading helpers.
+function effVal(item, id, base) {
+  const d = itemDiscount(item, id);
+  const orig = _num(base);
+  if (d !== null && orig !== null && d !== orig) return d;
+  return orig === null ? base : orig;
+}
+// Format a value that may be a discount box: strike original, show discounted.
+// `fmt` formats a plain value; returns HTML string when discounted.
+function discWrap(v, fmt) {
+  if (v && typeof v === 'object' && v.__disc) {
+    return `<span class="q-disc-old">${fmt(v.__orig)}</span> <span class="q-disc-new">${fmt(Number(v))}</span>`;
+  }
+  return fmt(v);
+}
+// True when the item has any active discount (for form indicator / preview note).
+function itemHasAnyDiscount(item) {
+  if (!item || !item.fieldDiscounts) return false;
+  return Object.keys(item.fieldDiscounts).some(id => itemDiscount(item, id) !== null);
+}
+// Strikethrough "S" glyph for the per-field discount button.
+const I_STRIKE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.2 7.2C16.6 5.3 14.6 4.2 12 4.2c-2.9 0-4.9 1.4-4.9 3.4 0 1.4.9 2.3 2.6 2.9M7 16.6c.5 2 2.6 3.2 5.2 3.2 3 0 5-1.5 5-3.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="3.5" y1="12" x2="20.5" y2="12" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/></svg>`;
 // Build the full ".quote-doc-section sku-card" HTML for a Truecaller item.
 // Used by the live preview (which the PDF snapshots) so screen + PDF stay identical.
 function buildTruecallerCardHTML(item, sku) {
@@ -2177,7 +2229,7 @@ function getSkuFields(skuKey, tier) {
 
 // ── Multi-SKU Helpers ──────────────────────────────────────
 function _makeItem(id) {
-  return { id, sku_key: null, tier: 'dabbler', values: {}, stopLockOverrides: [], customName: '', excluded: false };
+  return { id, sku_key: null, tier: 'dabbler', values: {}, fieldDiscounts: {}, stopLockOverrides: [], customName: '', excluded: false };
 }
 
 function initSkuItems() {
@@ -4018,6 +4070,41 @@ function renderSkuForm(skuKey, tier) {
           updatePreview();
         });
       });
+
+      // ── Per-field discount (strikethrough) buttons ──────────────────
+      card.querySelectorAll('.q-disc-btn').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          const fid = btn.dataset.disc;
+          const f = fields.find(x => x.id === fid);
+          if (!f) return;
+          if (!item.fieldDiscounts) item.fieldDiscounts = {};
+          const listRaw = (item.values[fid] !== undefined && item.values[fid] !== '') ? item.values[fid] : f.value;
+          const listNum = parseFloat(listRaw);
+          const existing = item.fieldDiscounts[fid];
+          const promptDefault = (existing !== undefined && existing !== null && existing !== '') ? String(existing) : '';
+          const ans = await showPrompt(
+            `Discounted price for “${f.label}” (list price ${listRaw}). Leave blank to remove the discount.`,
+            promptDefault,
+            { title: 'Apply Discount' }
+          );
+          if (ans === null) return; // cancelled
+          const trimmed = String(ans).trim();
+          if (trimmed === '') {
+            delete item.fieldDiscounts[fid];
+          } else {
+            const n = parseFloat(trimmed);
+            if (isNaN(n)) {
+              showAlert('Please enter a numeric discounted price.', { type: 'warning', title: 'Invalid value' });
+              return;
+            }
+            if (!isNaN(listNum) && n === listNum) delete item.fieldDiscounts[fid]; // same as list → no discount
+            else item.fieldDiscounts[fid] = n;
+          }
+          renderSkuForm(QG.currentSku, QG.currentTier); // refresh icon state + discount pill
+          updatePreview();
+        });
+      });
     }, 0);
 
     // Block scroll-to-change only when the input is actively focused.
@@ -4557,6 +4644,9 @@ function renderFieldRow(f, item, opts = {}) {
       </div>`;
   }
 
+  const _discVal = itemDiscount(item, f.id);
+  const _hasDisc = _discVal !== null && _discVal !== _num(v);
+  const _discBtn = `<button type="button" class="q-disc-btn${_hasDisc ? ' active' : ''}" data-disc="${f.id}" data-item="${item.id}" tabindex="-1" title="${_hasDisc ? 'Discount applied — click to edit or clear' : 'Strike this value and add a discounted price'}"${isExcluded ? ' disabled' : ''}>${I_STRIKE}</button>${_hasDisc ? `<span class="q-disc-pill" title="Discounted price shown to the client">→ ₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(_discVal)}</span>` : ''}`;
   return `
     <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
       ${getLabelHtml()}
@@ -4569,6 +4659,7 @@ function renderFieldRow(f, item, opts = {}) {
           autocomplete="off"
           spellcheck="false"
           ${isExcluded ? 'disabled' : ''}>
+        ${_discBtn}
       </div>
     </div>`;
 }
@@ -4763,34 +4854,34 @@ function _renderBundleItemsHTML(bundleItems) {
     const getVal = (id) => {
       const f = fields.find(x => x.id === id);
       if (!f) return undefined;
-      return item.values[id] ?? f.value;
+      return applyDiscount(item, id, item.values[id] ?? f.value);
     };
     const getSafeNum = (id) => {
       const f = fields.find(x => x.id === id);
       if (!f || f.waived) return 0;
       if (QG.bundleMergeMode && item.excludedFields && item.excludedFields[id]) return 0;
-      return parseFloat(item.values[id] ?? f.value ?? 0);
+      return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0));
     };
-    const fmtRupee = (v) => {
-      if (v === null || v === undefined) return '-';
-      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
-    };
+    const fmtRupee = (v) => discWrap(v, (x) => {
+      if (x === null || x === undefined) return '-';
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x);
+    });
     const currentPulse = parseFloat(getVal('pulse')) || 60;
     const rateUnit = currentPulse === 60 ? 'p/min' : `p/${currentPulse}secs`;
-    const fmtPaise = (v) => {
-      if (v === null || v === undefined) return '-';
-      const num = parseFloat(v);
-      if (isNaN(num)) return String(v);
+    const fmtPaise = (v) => discWrap(v, (x) => {
+      if (x === null || x === undefined) return '-';
+      const num = parseFloat(x);
+      if (isNaN(num)) return String(x);
       if (num >= 100) return '\u20b9' + (num / 100).toFixed(2) + '/' + (currentPulse === 60 ? 'min' : currentPulse + 'secs');
       return num + ' ' + rateUnit;
-    };
-    const fmtPaiseMsg = (v) => {
-      if (v === null || v === undefined) return '-';
-      const num = parseFloat(v);
-      if (isNaN(num)) return String(v);
+    });
+    const fmtPaiseMsg = (v) => discWrap(v, (x) => {
+      if (x === null || x === undefined) return '-';
+      const num = parseFloat(x);
+      if (isNaN(num)) return String(x);
       if (num >= 100) return '\u20b9' + (num / 100).toFixed(2) + '/msg';
       return num + 'p/msg';
-    };
+    });
 
     const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
     const W = `<span class="waived-text">${TICK} Waived</span>`;
@@ -5619,8 +5710,8 @@ function _renderBundleItemsHTML(bundleItems) {
     if (item.sku_key === 'voice_veeno_std') {
       const useExotelModel = item.values['user_model_exotel'] === 1;
       if (useExotelModel) {
-        const exoFree = parseFloat(item.values['exotel_free_users'] ?? 6) || 6;
-        const exoCharge = parseFloat(item.values['exotel_user_charge'] ?? 199) || 199;
+        const exoFree = effVal(item, 'exotel_free_users', parseFloat(item.values['exotel_free_users'] ?? 6) || 6);
+        const exoCharge = effVal(item, 'exotel_user_charge', parseFloat(item.values['exotel_user_charge'] ?? 199) || 199);
         const charged = Math.max(0, numUsersItem - exoFree);
         if (charged > 0) subtotal += charged * exoCharge * months;
       } else {
@@ -5633,7 +5724,7 @@ function _renderBundleItemsHTML(bundleItems) {
     const extraNumCostItem = getSafeNum('extra_number');
     if (numPaidNumsItem && extraNumCostItem) subtotal += numPaidNumsItem * extraNumCostItem * (months + (getSafeNum('extra_validity') || 0));
     const didNumbersItem = parseFloat(item.values['did_numbers'] ?? 0);
-    if (didNumbersItem > 0) subtotal += didNumbersItem * (parseFloat(item.values['did_cost']) || 1500) * months;
+    if (didNumbersItem > 0) subtotal += didNumbersItem * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
 
     grandSubtotal += isStartup ? 0 : subtotal;
 
@@ -5827,14 +5918,14 @@ function _computeBundleRows(items) {
       ? (sku.label + ' · ' + (TIER_DISPLAY_NAMES[item.tier] || item.tier))
       : sku.label);
 
-    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
+    const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x || 0));
 
-    const getVal = (id) => item.values[id] !== undefined ? item.values[id] : fields.find(x => x.id === id)?.value;
+    const getVal = (id) => applyDiscount(item, id, item.values[id] !== undefined ? item.values[id] : fields.find(x => x.id === id)?.value);
     const getSafeNum = (id) => {
       if (item.excludedFields && item.excludedFields[id]) return 0;
       const f = fields.find(x => x.id === id);
       if (!f || f.waived) return 0;
-      return parseFloat(item.values[id] !== undefined ? item.values[id] : (f.value ?? 0)) || 0;
+      return applyDiscount(item, id, parseFloat(item.values[id] !== undefined ? item.values[id] : (f.value ?? 0)) || 0);
     };
 
     fields.forEach(f => {
@@ -5980,7 +6071,7 @@ function _computeBundleRows(items) {
       if (!DURATION_FIELDS.has(id) && isDupeField(item, id)) return 0;
       const f = fields.find(x => x.id === id);
       if (!f || f.waived) return 0;
-      return parseFloat(item.values[id] !== undefined ? item.values[id] : (f.value ?? 0)) || 0;
+      return applyDiscount(item, id, parseFloat(item.values[id] !== undefined ? item.values[id] : (f.value ?? 0)) || 0);
     };
     const months = getS('num_months') || getS('validity') || 1;
     let sub = getS('credits');
@@ -5997,7 +6088,7 @@ function _computeBundleRows(items) {
     const numCost = getS('extra_number');
     if (paidNums && numCost) sub += paidNums * numCost * (months + getS('extra_validity'));
     const didNums = getS('did_numbers');
-    const didCost = parseFloat(item.values['did_cost']) || 1500;
+    const didCost = effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500);
     if (didNums > 0) sub += didNums * didCost * months;
     const numChs = getS('num_channels') || getS('num_paid_channels') || 0;
     const chCost = getS('channel_cost');
@@ -6059,7 +6150,7 @@ function _renderBundlePackagePreview(doc, validItems, firstSku, logoSrc, company
     document.head.appendChild(s);
   }
 
-  const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v || 0);
+  const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x || 0));
   const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
   const PENCIL = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 
@@ -6293,13 +6384,13 @@ function updatePreview() {
   // ── User-based comparison (side-by-side configs) ─────────────────────────
   if (isUserCompare) {
     const skuDef = SKUS.find(s => s.key === validItems[0].sku_key);
-    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+    const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x));
     const W = `<span class="waived-text">✓ Waived</span>`;
 
     const colData = validItems.map(item => {
       const fields = getSkuFields(item.sku_key, item.tier);
-      const getVal = (id) => { const f = fields.find(x => x.id === id); if (!f) return undefined; return item.values[id] ?? f.value; };
-      const getSN = (id) => { const f = fields.find(x => x.id === id); if (!f || f.waived) return 0; return parseFloat(item.values[id] ?? f.value ?? 0); };
+      const getVal = (id) => { const f = fields.find(x => x.id === id); if (!f) return undefined; return applyDiscount(item, id, item.values[id] ?? f.value); };
+      const getSN = (id) => { const f = fields.find(x => x.id === id); if (!f || f.waived) return 0; return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0)); };
       return { item, fields, getVal, getSN };
     });
 
@@ -6495,7 +6586,7 @@ function updatePreview() {
       ? Object.fromEntries(validItems.map((item, idx) => [String(idx), item.customName || `Option ${String.fromCharCode(65 + idx)}`]))
       : Object.fromEntries(tiers.map(t => [t, (QG.skuItems.find(i=>i.tier===t)?.customName) || TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase()+t.slice(1))]));
     void 0; // (tierLabels defined above)
-    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+    const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x));
     const fmtP = (v, pulse = 60) => {
       if (v === null || v === undefined) return '-';
       const n = parseFloat(v); if (isNaN(n)) return String(v);
@@ -6515,8 +6606,8 @@ function updatePreview() {
     // Build row data per item
     const colData = validItems.map(item => {
       const fields = getSkuFields(item.sku_key, item.tier);
-      const getVal = (id) => { const f = fields.find(x => x.id === id); if (!f) return undefined; return item.values[id] ?? f.value; };
-      const getSN = (id) => { const f = fields.find(x => x.id === id); if (!f || f.waived) return 0; return parseFloat(item.values[id] ?? f.value ?? 0); };
+      const getVal = (id) => { const f = fields.find(x => x.id === id); if (!f) return undefined; return applyDiscount(item, id, item.values[id] ?? f.value); };
+      const getSN = (id) => { const f = fields.find(x => x.id === id); if (!f || f.waived) return 0; return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0)); };
       return { item, fields, getVal, getSN };
     });
 
@@ -6542,7 +6633,7 @@ function updatePreview() {
       const extraVal = parseFloat(item.values['extra_validity'] ?? 0);
       if (numPaidNums && extraNumCost) sub += numPaidNums * extraNumCost * (months + extraVal);
       const didNums = parseFloat(item.values['did_numbers'] ?? 0);
-      if (didNums > 0) sub += didNums * (parseFloat(item.values['did_cost']) || 1500) * months;
+      if (didNums > 0) sub += didNums * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
       return sub;
     });
     const grandSub = subtotals.reduce((a, b) => a + b, 0);
@@ -6797,7 +6888,7 @@ function updatePreview() {
 
     const itemsA = QG.bundleA?.skuItems || [];
     const itemsB = QG.bundleB?.skuItems || [];
-    const fmtR = (v) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
+    const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x));
 
     // Compute human-readable labels for each bundle column (same logic as renderBundleTabSwitcher)
     const _bundleLabel = (items, fallback) => {
@@ -6921,34 +7012,34 @@ function updatePreview() {
     const getVal = (id) => {
       const f = fields.find(x => x.id === id);
       if (!f) return undefined;
-      return item.values[id] ?? f.value;
+      return applyDiscount(item, id, item.values[id] ?? f.value);
     };
     const getSafeNum = (id) => {
       const f = fields.find(x => x.id === id);
       if (!f || f.waived) return 0;
-      return parseFloat(item.values[id] ?? f.value ?? 0);
+      return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0));
     };
 
-    const fmtRupee = (v) => {
-      if (v === null || v === undefined) return '-';
-      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(v);
-    };
+    const fmtRupee = (v) => discWrap(v, (x) => {
+      if (x === null || x === undefined) return '-';
+      return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x);
+    });
     const currentPulse = parseFloat(getVal('pulse')) || 60;
     const rateUnit = currentPulse === 60 ? 'p/min' : `p/${currentPulse}secs`;
-    const fmtPaise = (v) => {
-      if (v === null || v === undefined) return '-';
-      const num = parseFloat(v);
-      if (isNaN(num)) return String(v);
+    const fmtPaise = (v) => discWrap(v, (x) => {
+      if (x === null || x === undefined) return '-';
+      const num = parseFloat(x);
+      if (isNaN(num)) return String(x);
       if (num >= 100) return '\u20b9' + (num / 100).toFixed(2) + '/' + (currentPulse === 60 ? 'min' : currentPulse + 'secs');
       return num + ' ' + rateUnit;
-    };
-    const fmtPaiseMsg = (v) => {
-      if (v === null || v === undefined) return '-';
-      const num = parseFloat(v);
-      if (isNaN(num)) return String(v);
+    });
+    const fmtPaiseMsg = (v) => discWrap(v, (x) => {
+      if (x === null || x === undefined) return '-';
+      const num = parseFloat(x);
+      if (isNaN(num)) return String(x);
       if (num >= 100) return '\u20b9' + (num / 100).toFixed(2) + '/msg';
       return num + 'p/msg';
-    };
+    });
 
     const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
     const W = `<span class="waived-text">${TICK} Waived</span>`;
@@ -7737,8 +7828,8 @@ function updatePreview() {
     if (item.sku_key === 'voice_veeno_std') {
       const useExotelModel = item.values['user_model_exotel'] === 1;
       if (useExotelModel) {
-        const exoFree = parseFloat(item.values['exotel_free_users'] ?? 6) || 6;
-        const exoCharge = parseFloat(item.values['exotel_user_charge'] ?? 199) || 199;
+        const exoFree = effVal(item, 'exotel_free_users', parseFloat(item.values['exotel_free_users'] ?? 6) || 6);
+        const exoCharge = effVal(item, 'exotel_user_charge', parseFloat(item.values['exotel_user_charge'] ?? 199) || 199);
         const charged = Math.max(0, numUsers - exoFree);
         if (charged > 0) subtotal += charged * exoCharge * months;
       } else {
@@ -7752,7 +7843,7 @@ function updatePreview() {
     const extraNumCost = getSafeNum('extra_number');
     if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSafeNum('extra_validity') || 0));
     const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
-    if (didNumbers > 0) subtotal += didNumbers * (parseFloat(item.values['did_cost']) || 1500) * months;
+    if (didNumbers > 0) subtotal += didNumbers * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
 
     grandSubtotal += isStartup ? 0 : subtotal;
 
@@ -7934,6 +8025,11 @@ window.printQuote = async function () {
      .quote-sku-table .section-header-row td { font-size: 0.7rem !important; padding: 3px 6px !important; }
      .quote-sku-table .sub-row td { font-size: 0.68rem !important; padding: 2px 6px !important; }
      .sku-row-name { width: 55% !important; }
+
+     /* ── Discount strikethrough (client-visible savings) ───────────── */
+     .q-disc-old { text-decoration: line-through !important; text-decoration-thickness: 1.5px !important; color: #94a3b8 !important; margin-right: 5px !important; font-weight: 500 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+     .q-disc-new { color: #047857 !important; font-weight: 700 !important; white-space: nowrap !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+     .q-disc-btn, .q-disc-pill { display: none !important; }
 
      /* ── Totals ────────────────────────────────────────────────── */
      .quote-totals { margin-top: 8px !important; padding-top: 8px !important; }
@@ -9030,12 +9126,12 @@ window.confirmGenerateProforma = async function () {
       const getSN = (id) => {
         const f = fields.find(x => x.id === id);
         if (!f || f.waived) return 0;
-        return parseFloat(item.values[id] ?? f.value ?? 0) || 0;
+        return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0) || 0);
       };
       const getV = (id) => {
         const f = fields.find(x => x.id === id);
         if (!f) return undefined;
-        return item.values[id] ?? f.value;
+        return applyDiscount(item, id, item.values[id] ?? f.value);
       };
 
       const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
@@ -9064,8 +9160,8 @@ window.confirmGenerateProforma = async function () {
       if (item.sku_key === 'voice_veeno_std') {
         const useExotelModel = item.values['user_model_exotel'] === 1;
         if (useExotelModel) {
-          const exoFree = parseFloat(item.values['exotel_free_users'] ?? 6) || 6;
-          const exoCharge = parseFloat(item.values['exotel_user_charge'] ?? 199) || 199;
+          const exoFree = effVal(item, 'exotel_free_users', parseFloat(item.values['exotel_free_users'] ?? 6) || 6);
+          const exoCharge = effVal(item, 'exotel_user_charge', parseFloat(item.values['exotel_user_charge'] ?? 199) || 199);
           const charged = Math.max(0, numUsers - exoFree);
           if (charged > 0) subtotal += charged * exoCharge * months;
         } else {
@@ -9076,7 +9172,7 @@ window.confirmGenerateProforma = async function () {
         if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
       }
       if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSN('extra_validity') || 0));
-      if (didNumbers > 0) subtotal += didNumbers * (parseFloat(item.values['did_cost']) || 1500) * months;
+      if (didNumbers > 0) subtotal += didNumbers * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
 
       // Truecaller: fixed-price package (0 when "Both" comparison selected)
       if (item.sku_key === 'truecaller_exotel') subtotal = truecallerSubtotalINR(item);
@@ -9090,34 +9186,34 @@ window.confirmGenerateProforma = async function () {
         const getSN = (id) => {
           const f = fields.find(x => x.id === id);
           if (!f || f.waived) return 0;
-          return parseFloat(item.values[id] ?? f.value ?? 0) || 0;
+          return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0) || 0);
         };
         const getV = (id) => {
           const f = fields.find(x => x.id === id);
           if (!f) return undefined;
-          return item.values[id] ?? f.value;
+          return applyDiscount(item, id, item.values[id] ?? f.value);
         };
 
-        const fmtRupee = (v) => {
-          if (v === null || v === undefined) return '-';
-          return '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
-        };
+        const fmtRupee = (v) => discWrap(v, (x) => {
+          if (x === null || x === undefined) return '-';
+          return '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(x);
+        });
         const currentPulse = parseFloat(getV('pulse')) || 60;
         const rateUnit = currentPulse === 60 ? 'p/min' : `p/${currentPulse}secs`;
-        const fmtPaise = (v) => {
-          if (v === null || v === undefined) return '-';
-          const num = parseFloat(v);
-          if (isNaN(num)) return String(v);
+        const fmtPaise = (v) => discWrap(v, (x) => {
+          if (x === null || x === undefined) return '-';
+          const num = parseFloat(x);
+          if (isNaN(num)) return String(x);
           if (num >= 100) return '₹' + (num / 100).toFixed(2) + '/' + (currentPulse === 60 ? 'min' : currentPulse + 'secs');
           return num + ' ' + rateUnit;
-        };
-        const fmtPaiseMsg = (v) => {
-          if (v === null || v === undefined) return '-';
-          const num = parseFloat(v);
-          if (isNaN(num)) return String(v);
+        });
+        const fmtPaiseMsg = (v) => discWrap(v, (x) => {
+          if (x === null || x === undefined) return '-';
+          const num = parseFloat(x);
+          if (isNaN(num)) return String(x);
           if (num >= 100) return '₹' + (num / 100).toFixed(2) + '/msg';
           return num + 'p/msg';
-        };
+        });
 
         const lines = [];
         const tierName = sku.hasTiers && item.tier ? (item.customName || TIER_DISPLAY_NAMES[item.tier] || item.tier) : '';
@@ -9541,7 +9637,7 @@ window.confirmGenerateProforma = async function () {
     const grandTotal = grossTotal - tdsAmt;
 
     // ── Format helpers ────────────────────────────────────────────
-    const fmtINR = (v) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
+    const fmtINR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(x));
     const fmtINRFull = (v) => '&#8377;' + fmtINR(v);
 
     // ── Date strings ──────────────────────────────────────────────
