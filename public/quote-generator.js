@@ -66,6 +66,15 @@ const I_MERGE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" str
   <circle cx="12" cy="21" r="1.5" fill="currentColor" stroke="none"/>
 </svg>`;
 
+// Truecaller — blue app-tile with white handset + verified badge (self-coloured, brand blue)
+const I_TRUECALLER = `<svg width="30" height="30" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="3" y="3" width="42" height="42" rx="12" fill="#0087FF"/>
+  <path d="M18.1 12.8c-1.2 0-2.2 1-2.2 2.2 0 9.4 7.7 17.1 17.1 17.1 1.2 0 2.2-1 2.2-2.2v-3.5c0-1.1-.8-2-1.9-2.2l-3.5-.4c-1-.1-2 .4-2.4 1.4l-.6 1.3c-2.7-1.4-4.9-3.6-6.3-6.3l1.3-.6c1-.4 1.5-1.4 1.4-2.4l-.4-3.5c-.2-1.1-1.1-1.9-2.2-1.9h-2z" fill="#fff"/>
+  <circle cx="35.5" cy="12.5" r="7.5" fill="#fff"/>
+  <circle cx="35.5" cy="12.5" r="6" fill="#0087FF"/>
+  <path d="M32.4 12.6l2 2 4.2-4.4" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>`;
+
 const SKUS = [
   { key: 'voice_exotel_std', label: 'Voice STD', sub: 'Minute Based', entity: 'Exotel', icon: I_PHONE, hasTiers: true },
   { key: 'voice_exotel_user', label: 'Voice User', sub: 'User Based', entity: 'Exotel', icon: I_USERS, hasTiers: false },
@@ -76,6 +85,7 @@ const SKUS = [
   { key: 'sms_exotel', label: 'SMS Plan', sub: 'Exotel SMS', entity: 'Exotel', icon: I_MSG, hasTiers: false },
   { key: 'whatsapp_exotel', label: 'WhatsApp Plan', sub: 'Exotel WA', entity: 'Exotel', icon: I_WA, hasTiers: false },
   { key: 'rcs_exotel', label: 'RCS Plan', sub: 'Exotel RCS', entity: 'Exotel', icon: I_DIAMOND, hasTiers: false },
+  { key: 'truecaller_exotel', label: 'Truecaller', sub: 'Verified Business Caller ID', entity: 'Exotel', theme: 'truecaller', icon: I_TRUECALLER, hasTiers: false },
 
   // ── International Commercial (USD pricing) ────────────────────────
   { key: 'voice_intl', label: 'International', sub: 'USD · Country-Specific', entity: 'Exotel', theme: 'intl', icon: I_GLOBE, hasTiers: false, isIntl: true },
@@ -104,7 +114,180 @@ const TIER_DEFAULTS = {
   elite:      { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 },
 };
 // SKUs that support a custom plan name rename
-const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl'];
+const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl', 'truecaller_exotel'];
+
+// ── Truecaller Commercial (Exotel-resold verified caller-ID package) ─────────
+// Source: "Truecaller commercials" proposal, dated 27-02-2026.
+const TRUECALLER_PLANS = {
+  '6':  { name: 'Growth Half-Yearly Plan', validity: '6 Months',  months: 6,  cost: 177000 },
+  '12': { name: 'Growth Yearly Plan',      validity: '12 Months', months: 12, cost: 354000 },
+};
+const TRUECALLER_INFO = {
+  impressions: 50000,       // included impressions per month
+  extraImpression: 0.71,    // ₹ per additional impression
+  numbersWhitelisted: 250,  // total phone numbers whitelisted (Growth)
+  analyticsLicenses: 2,     // Growth
+  callRate: 1,              // ₹/min incoming & outgoing on Truecaller plans
+  gst: 0.18,
+};
+// Growth package feature list (page 3 of the source proposal, GROWTH column)
+const TRUECALLER_FEATURES = [
+  'Verified Business Caller ID', 'Business Call Reason', 'Business Profile',
+  'Video Caller ID', 'Call Me Back (with Webhook support)', 'User Feedback',
+  'Truecaller dashboard access', 'Tech Support within 48 working hours',
+];
+// Resolve the selected plan period: '6' | '12' | 'both' (0 = both)
+function tcSelectedPlan(item) {
+  const v = item && item.values ? item.values.tc_plan : undefined;
+  if (v === 0 || v === '0' || v === 'both') return 'both';
+  if (v === 12 || v === '12') return '12';
+  return '6';
+}
+// Pre-GST INR contributed to the grand total. "Both" is a comparison — no single line total.
+function truecallerSubtotalINR(item) {
+  const p = tcSelectedPlan(item);
+  if (p === 'both') return 0;
+  return TRUECALLER_PLANS[p].cost;
+}
+function _tcFmt(v) {
+  return '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(v);
+}
+// Build the full ".quote-doc-section sku-card" HTML for a Truecaller item.
+// Used by the live preview (which the PDF snapshots) so screen + PDF stay identical.
+function buildTruecallerCardHTML(item, sku) {
+  const period = tcSelectedPlan(item);
+  const info = TRUECALLER_INFO;
+  const gstPct = Math.round(info.gst * 100);
+  const planLabel = period === 'both'
+    ? 'Growth · Half-Yearly &amp; Yearly'
+    : 'Growth · ' + TRUECALLER_PLANS[period].validity;
+
+  // ── Header band (brand-blue) ──────────────────────────────
+  const header = `
+    <div class="tc-blk" style="background:linear-gradient(135deg,#0a91ff 0%,#0064d6 100%);padding:16px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:46px;height:46px;border-radius:13px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.18);flex-shrink:0;">
+          <svg width="30" height="30" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M18.1 12.8c-1.2 0-2.2 1-2.2 2.2 0 9.4 7.7 17.1 17.1 17.1 1.2 0 2.2-1 2.2-2.2v-3.5c0-1.1-.8-2-1.9-2.2l-3.5-.4c-1-.1-2 .4-2.4 1.4l-.6 1.3c-2.7-1.4-4.9-3.6-6.3-6.3l1.3-.6c1-.4 1.5-1.4 1.4-2.4l-.4-3.5c-.2-1.1-1.1-1.9-2.2-1.9h-2z" fill="#0087FF"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:1.2rem;font-weight:800;color:#fff;letter-spacing:-0.02em;line-height:1;">truecaller</div>
+          <div style="font-size:0.74rem;color:rgba(255,255,255,0.88);margin-top:4px;">Verified Business Caller ID · powered by Exotel</div>
+        </div>
+      </div>
+      <span style="background:rgba(255,255,255,0.18);color:#fff;font-size:0.72rem;font-weight:700;padding:6px 13px;border-radius:20px;border:1px solid rgba(255,255,255,0.4);white-space:nowrap;">${planLabel}</span>
+    </div>`;
+
+  // ── Pricing hero ──────────────────────────────────────────
+  const priceCard = (plan, highlight) => {
+    const gst = Math.round(plan.cost * info.gst);
+    return `<div style="min-width:0;background:${highlight ? 'linear-gradient(135deg,#0a91ff,#0064d6)' : '#fff'};border:1.5px solid ${highlight ? '#0057bd' : '#d9e9fb'};border-radius:12px;padding:15px 17px;box-shadow:0 6px 18px -6px rgba(0,135,255,${highlight ? '0.5' : '0.18'});">
+        <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.05em;color:${highlight ? 'rgba(255,255,255,0.9)' : '#0087FF'};">${sanitize(plan.name)}</div>
+        <div style="display:flex;align-items:baseline;gap:7px;margin-top:9px;flex-wrap:wrap;">
+          <div style="font-size:1.6rem;font-weight:800;color:${highlight ? '#fff' : '#0f172a'};letter-spacing:-0.03em;line-height:1;">${_tcFmt(plan.cost)}</div>
+          <div style="font-size:0.74rem;color:${highlight ? 'rgba(255,255,255,0.82)' : '#64748b'};">/ ${plan.validity.toLowerCase()}</div>
+        </div>
+        <div style="margin-top:10px;padding-top:9px;border-top:1px solid ${highlight ? 'rgba(255,255,255,0.28)' : '#eef2f7'};font-size:0.78rem;color:${highlight ? '#fff' : '#334155'};">+ ${gstPct}% GST = <strong>${_tcFmt(plan.cost + gst)}</strong></div>
+      </div>`;
+  };
+  const priceBlock = period === 'both'
+    ? `<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#64748b;margin-bottom:9px;">Total Cost (choose one plan term)</div>
+       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">${priceCard(TRUECALLER_PLANS['6'], false)}${priceCard(TRUECALLER_PLANS['12'], true)}</div>`
+    : `<div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.04em;color:#64748b;margin-bottom:9px;">Total Cost</div>
+       <div>${priceCard(TRUECALLER_PLANS[period], true)}</div>`;
+
+  // ── Spec tiles ────────────────────────────────────────────
+  const specs = [
+    ['Impressions / month', info.impressions.toLocaleString('en-IN')],
+    ['Additional impression', _tcFmt(info.extraImpression)],
+    ['Numbers whitelisted', String(info.numbersWhitelisted)],
+    ['Analytics licenses', String(info.analyticsLicenses)],
+    ['Call charges (in &amp; out)', _tcFmt(info.callRate) + '/min'],
+    ['Verified badge', 'Included'],
+  ];
+  const specGrid = `<div class="tc-blk" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
+      ${specs.map(([l, v]) => `<div style="background:#f4f9ff;border:1px solid #e4eefb;border-radius:10px;padding:10px 12px;">
+        <div style="font-size:0.67rem;color:#64748b;text-transform:uppercase;letter-spacing:0.03em;font-weight:700;">${l}</div>
+        <div style="font-size:0.98rem;font-weight:800;color:#0f172a;margin-top:4px;">${v}</div>
+      </div>`).join('')}
+    </div>`;
+
+  // ── Feature chips ─────────────────────────────────────────
+  const features = `<div class="tc-blk" style="margin-top:16px;">
+      <div style="font-size:0.76rem;font-weight:800;color:#0f172a;margin-bottom:9px;">Growth package includes</div>
+      <div style="display:flex;flex-wrap:wrap;gap:7px;">
+        ${TRUECALLER_FEATURES.map(f => `<span style="display:inline-flex;align-items:center;gap:5px;font-size:0.75rem;font-weight:500;color:#0d5199;background:#eaf4ff;border:1px solid #d6e8ff;border-radius:20px;padding:5px 11px;">
+          <svg width="11" height="11" viewBox="0 0 12 12" style="flex-shrink:0;"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#0087FF;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round"/></svg>${sanitize(f)}</span>`).join('')}
+      </div>
+    </div>`;
+
+  // ── Footer note ───────────────────────────────────────────
+  const footer = `<div class="tc-blk" style="margin-top:16px;padding:11px 14px;background:#fff8ec;border:1px solid #fbe3bd;border-radius:9px;font-size:0.76rem;color:#8a5a06;line-height:1.5;display:flex;gap:9px;">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;margin-top:1px;"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="#d97706" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>A Truecaller-specific agreement is mandatory to procure the verified badge. The tax invoice is issued post-payment.</span>
+    </div>`;
+
+  return `
+    <div class="quote-doc-section sku-card truecaller-card" style="margin-top:24px;">
+      <div style="border:1px solid #d6e8ff;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px -14px rgba(0,135,255,0.45);">
+        ${header}
+        <div style="padding:18px;background:#fff;">
+          ${specGrid}
+          ${features}
+          <div class="tc-blk" style="margin-top:18px;padding-top:16px;border-top:2px solid #eef2f7;">
+            ${priceBlock}
+          </div>
+          ${footer}
+        </div>
+      </div>
+    </div>`;
+}
+
+// Full-screen Truecaller reveal animation — plays when the SKU card is clicked.
+function playTruecallerAnimation() {
+  // Never stack two overlays
+  if (document.getElementById('tc-anim-overlay')) return;
+
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'tc-anim-overlay';
+  overlay.className = 'tc-anim-overlay';
+  overlay.setAttribute('role', 'presentation');
+  overlay.innerHTML = `
+    <div class="tc-anim-stage">
+      <span class="tc-ring tc-ring-1"></span>
+      <span class="tc-ring tc-ring-2"></span>
+      <span class="tc-ring tc-ring-3"></span>
+      <div class="tc-anim-tile">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="96" height="96">
+          <path class="tc-handset" d="M17.4 11c-1.4 0-2.6 1.2-2.6 2.6 0 10.9 8.9 19.8 19.8 19.8 1.4 0 2.6-1.2 2.6-2.6v-4.1c0-1.3-1-2.4-2.3-2.6l-4.1-.5c-1.2-.1-2.4.5-2.9 1.6l-.7 1.5c-3.2-1.6-5.7-4.2-7.3-7.3l1.5-.7c1.1-.5 1.7-1.7 1.6-2.9l-.5-4.1c-.2-1.3-1.3-2.3-2.6-2.3h-2z" fill="#fff"/>
+        </svg>
+        <span class="tc-shimmer"></span>
+      </div>
+      <div class="tc-badge">
+        <svg viewBox="0 0 24 24" width="34" height="34" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="11" fill="#0087FF"/>
+          <path class="tc-check" d="M6.5 12.4l3.4 3.4 7.6-7.8" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <div class="tc-anim-word">truecaller</div>
+      <div class="tc-anim-tag">Verified Business Caller ID</div>
+    </div>`;
+
+  const done = () => {
+    overlay.classList.add('tc-anim-out');
+    setTimeout(() => overlay.remove(), 380);
+  };
+  // Click anywhere to skip
+  overlay.addEventListener('click', done);
+
+  document.body.appendChild(overlay);
+  // Auto-dismiss (shorter when reduced-motion is preferred)
+  setTimeout(done, reduce ? 700 : 2100);
+}
+window.playTruecallerAnimation = playTruecallerAnimation;
 
 // ── International Rate Card (USD/min, 60s pulse) ─────────────────
 // Source: International Voice April'24 Outbound Price (USD) PDF
@@ -396,6 +579,47 @@ function getSkuTncHtml(item, entity = 'Exotel') {
   let tncKey = item.sku_key;
   if (tncKey === 'startup') {
     tncKey = STARTUP_PARENT_MAP['startup_' + (item.tier || 'voice')] || 'voice_exotel_std';
+  }
+
+  if (tncKey === 'truecaller_exotel') {
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Verified Badge &amp; Agreement</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>A Truecaller-specific agreement is mandatory for procuring the verified badge.</li>
+            <li>The proposed solution provides access to a verified badge on Truecaller and to the Truecaller dashboard.</li>
+            <li>The tax invoice will be issued post-payment.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Impressions &amp; Whitelisting</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>${TRUECALLER_INFO.impressions.toLocaleString('en-IN')} impressions per month are included; additional impressions are charged at ${_tcFmt(TRUECALLER_INFO.extraImpression)} each.</li>
+            <li>Up to ${TRUECALLER_INFO.numbersWhitelisted} phone numbers can be whitelisted. Both Exotel-provided numbers and your own numbers can be whitelisted.</li>
+            <li>Display Name must not exceed 24 characters (including spaces); specific agent/representative names must not be used.</li>
+            <li>Numbers must be provided in international format (e.g. 91&lt;Mobile no.&gt;) without any prefix before 91.</li>
+            <li>Brand logo must be provided as a 200×200 px PNG under 5MB.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Call Charges</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>On Truecaller plans, incoming and outgoing calls are charged at ${_tcFmt(TRUECALLER_INFO.callRate)} per minute.</li>
+            <li>For Voice or any other add-ons, please contact <a href="mailto:hello@exotel.com" style="color:#0284c7; text-decoration:underline;">hello@exotel.com</a> or your account manager.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN card (self-signed), Certificate of Incorporation / owner's passport, company address proof, and a director's passport-size photo, uploaded via the Exotel dashboard.</li>
+            <li>Accepted formats: png, gif, jpeg, pdf.</li>
+            <li>Name, phone number and email of the SPOC handling the listing process (with dashboard access) are required.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Validity &amp; Pricing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Growth Half-Yearly Plan: 6 months validity. Growth Yearly Plan: 12 months validity.</li>
+            <li>All prices are exclusive of GST; 18% GST applies as shown in the commercial.</li>
+          </ul>
+        </li>
+      </ol>`;
   }
 
   if (tncKey === 'voice_exotel_std') {
@@ -1703,6 +1927,14 @@ function getSkuFields(skuKey, tier) {
         { id: 'rcs_rich', label: 'RCS Rich Media (p/msg)', value: 28, locked: true, nonEditable: true },
         { id: 'rcs_reply', label: 'User Reply Charge (p/msg)', value: 18, locked: true, nonEditable: true },
       ];
+    case 'truecaller_exotel':
+      return [
+        { id: 'tc_plan', label: 'Plan Term', value: 6, type: 'tc_plan_select', locked: false, note: 'Growth Half-Yearly (6mo), Yearly (12mo), or show both' },
+        { id: 'tc_impressions', label: 'Impressions / month', value: TRUECALLER_INFO.impressions, locked: true, nonEditable: true },
+        { id: 'tc_extra_impression', label: 'Cost per Additional Impression (₹)', value: TRUECALLER_INFO.extraImpression, locked: true, nonEditable: true },
+        { id: 'tc_numbers', label: 'Phone Numbers Whitelisted', value: TRUECALLER_INFO.numbersWhitelisted, locked: true, nonEditable: true },
+        { id: 'tc_call_rate', label: 'Call Charges (₹/min · in & out)', value: TRUECALLER_INFO.callRate, locked: true, nonEditable: true },
+      ];
     case 'sip_veeno': {
       const t2 = TIER_DEFAULTS[tier] || TIER_DEFAULTS.dabbler;
       return [
@@ -2781,7 +3013,7 @@ function renderSkuSelector() {
       : '';
     const theme = s.theme || s.entity.toLowerCase();
     return `
-    <div class="sku-option sku-${theme}${QG.currentSku === s.key ? ' selected' : ''}" data-sku="${s.key}" onclick="selectSku('${s.key}')">
+    <div class="sku-option sku-${theme}${QG.currentSku === s.key ? ' selected' : ''}" data-sku="${s.key}" onclick="selectSku('${s.key}', true)">
       ${cmpBtn}
       <div class="sku-option-icon">${s.icon}</div>
       <div>
@@ -2831,9 +3063,14 @@ window.enableCompareFor = function(key) {
   window.toggleCompareMode(true);
   renderSkuSelector(); // refresh icon state
 };
-function selectSku(key) {
+function selectSku(key, userInitiated = false) {
   const sku = SKUS.find(s => s.key === key);
   if (!sku) return;
+
+  // Truecaller: play the signature reveal animation on a real user click
+  if (userInitiated && key === 'truecaller_exotel') {
+    playTruecallerAnimation();
+  }
 
   // Entity lock enforcement — only applies within a bundle (not across bundles in compare mode)
   if (QG.multiSkuMode && QG.lockedEntity && sku.entity !== QG.lockedEntity && sku.entity !== 'Both' && !QG.bundleCompareMode && !QG.bundleMergeMode) {
@@ -3293,6 +3530,8 @@ function renderFieldsGroupedCombined(items) {
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
     channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
     num_months: 'Plan Overview',
+    tc_plan: 'Plan Overview', tc_impressions: 'Plan Overview', tc_extra_impression: 'Plan Overview',
+    tc_numbers: 'Number Plan', tc_call_rate: 'Call Charges',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
     user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
@@ -3671,7 +3910,7 @@ function renderSkuForm(skuKey, tier) {
           return;
         }
 
-        if (f.type === 'boolean' || f.type === 'model_toggle' || f.type === 'fee_select' || f.type === 'call_mode_select') {
+        if (f.type === 'boolean' || f.type === 'model_toggle' || f.type === 'fee_select' || f.type === 'call_mode_select' || f.type === 'tc_plan_select') {
           const toggleGroup = card.querySelector(`#qf_toggle_${f.id}_${item.id}`);
           toggleGroup?.querySelectorAll('.q-toggle-opt').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -4230,6 +4469,21 @@ function renderFieldRow(f, item, opts = {}) {
       </div>`;
   }
 
+  if (f.type === 'tc_plan_select') {
+    const tcVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 6);
+    return `
+      <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="align-items:center;${isExcluded ? ' opacity: 0.55;' : ''}">
+        ${getLabelHtml('flex:1;')}
+        <div class="q-field-value" style="justify-content:flex-end;">
+          <div class="q-toggle-group" id="qf_toggle_${f.id}_${item.id}" style="font-size:0.72rem;">
+            <button type="button" class="q-toggle-opt${tcVal == 6 ? ' active' : ''}" data-val="6" ${isExcluded ? 'disabled' : ''}>6 Months</button>
+            <button type="button" class="q-toggle-opt${tcVal == 12 ? ' active' : ''}" data-val="12" ${isExcluded ? 'disabled' : ''}>12 Months</button>
+            <button type="button" class="q-toggle-opt${tcVal == 0 ? ' active' : ''}" data-val="0" ${isExcluded ? 'disabled' : ''}>Both</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   if (f.type === 'model_toggle') {
     const mtVal = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : 0);
     return `
@@ -4324,6 +4578,8 @@ function renderFieldsGrouped(fields, item) {
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
     channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
     num_months: 'Plan Overview',
+    tc_plan: 'Plan Overview', tc_impressions: 'Plan Overview', tc_extra_impression: 'Plan Overview',
+    tc_numbers: 'Number Plan', tc_call_rate: 'Call Charges',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
     user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
@@ -4630,6 +4886,14 @@ function _renderBundleItemsHTML(bundleItems) {
     const showSms = isEditingThisItem ? document.getElementById('toggle-sms-addon_' + QG.activeItemId)?.checked : (item.smsAddon === true);
     const showWa  = isEditingThisItem ? document.getElementById('toggle-wa-addon_'  + QG.activeItemId)?.checked : (item.waAddon  === true);
     const showCt  = isEditingThisItem ? document.getElementById('toggle-ct-addon_'  + QG.activeItemId)?.checked : (item.ctAddon  === true);
+
+    // ── Truecaller: fully custom commercial card (fixed-price package) ──
+    // Self-contained card shows its own Total + GST, so it is excluded from the
+    // combined grand-total footer (mirrors voice_intl) to avoid a duplicate total.
+    if (sk === 'truecaller_exotel') {
+      allSectionsHTML += buildTruecallerCardHTML(item, sku);
+      continue;
+    }
 
     // Startup banner header (renders before the SKU-format rows)
     if (effectiveSk === 'voice_exotel_std') {
@@ -6719,6 +6983,14 @@ function updatePreview() {
     const showWa  = isEditingThisItem ? document.getElementById('toggle-wa-addon_'  + QG.activeItemId)?.checked : (item.waAddon  === true);
     const showCt  = isEditingThisItem ? document.getElementById('toggle-ct-addon_'  + QG.activeItemId)?.checked : (item.ctAddon  === true);
 
+    // ── Truecaller: fully custom commercial card (fixed-price package) ──
+    // Self-contained card shows its own Total + GST, so it is excluded from the
+    // combined grand-total footer (mirrors voice_intl) to avoid a duplicate total.
+    if (sk === 'truecaller_exotel') {
+      allSectionsHTML += buildTruecallerCardHTML(item, sku);
+      continue;
+    }
+
     // Startup banner header (renders before the SKU-format rows)
     if (effectiveSk === 'voice_exotel_std') {
       tableHTML += secRow('Plan Details');
@@ -7645,8 +7917,17 @@ window.printQuote = async function () {
 
      /* ── SKU grid: BLOCK layout — no height-fill, no blank gaps ── */
      .quote-skus-grid { display: block !important; margin-top: 8px !important; }
-     .quote-doc-section.sku-card { display: block !important; height: auto !important; min-height: 0 !important; margin-top: 8px !important; flex: none !important; }
+     .quote-doc-section.sku-card { display: block !important; height: auto !important; min-height: 0 !important; margin-top: 8px !important; flex: none !important; break-inside: auto !important; page-break-inside: auto !important; }
      .quote-doc-section.sku-card .quote-sku-table { flex-grow: unset !important; }
+
+     /* Truecaller commercial: the framed card must be allowed to span a page
+        boundary. Its inner wrapper uses overflow:hidden, which makes Chrome
+        treat the whole card as monolithic and shove it to the next page,
+        leaving a big blank gap. Force overflow:visible so it can fragment; the
+        inner .tc-blk blocks stay whole so it only breaks at clean seams, and
+        box-decoration-break:slice keeps the border continuous across the seam. */
+     .truecaller-card, .truecaller-card > div { overflow: visible !important; break-inside: auto !important; page-break-inside: auto !important; }
+     .truecaller-card .tc-blk { break-inside: avoid !important; page-break-inside: avoid !important; }
 
      /* ── SKU table rows ────────────────────────────────────────── */
      .quote-sku-table th, .quote-sku-table td { font-size: 0.72rem !important; padding: 3px 6px !important; }
@@ -8797,6 +9078,9 @@ window.confirmGenerateProforma = async function () {
       if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSN('extra_validity') || 0));
       if (didNumbers > 0) subtotal += didNumbers * (parseFloat(item.values['did_cost']) || 1500) * months;
 
+      // Truecaller: fixed-price package (0 when "Both" comparison selected)
+      if (item.sku_key === 'truecaller_exotel') subtotal = truecallerSubtotalINR(item);
+
       grandSubtotal += subtotal;
 
       // Build description
@@ -8844,7 +9128,25 @@ window.confirmGenerateProforma = async function () {
         const resolvedStartupKey = sk === 'startup' ? ('startup_' + (item.tier || 'voice')) : sk;
         const effectiveSk = STARTUP_PARENT_MAP[resolvedStartupKey] || (STARTUP_PARENT_MAP[sk]) || sk;
 
-        if (effectiveSk === 'voice_exotel_std') {
+        if (effectiveSk === 'truecaller_exotel') {
+          const p = tcSelectedPlan(item);
+          const info = TRUECALLER_INFO;
+          const gstPct = Math.round(info.gst * 100);
+          if (p === 'both') {
+            const p6 = TRUECALLER_PLANS['6'], p12 = TRUECALLER_PLANS['12'];
+            lines.push(`Plan Term: Both plans (client selects one)`);
+            lines.push(`${p6.name}: ${fmtRupee(p6.cost)} (${fmtRupee(Math.round(p6.cost * 1.18))} incl. ${gstPct}% GST)`);
+            lines.push(`${p12.name}: ${fmtRupee(p12.cost)} (${fmtRupee(Math.round(p12.cost * 1.18))} incl. ${gstPct}% GST)`);
+          } else {
+            const plan = TRUECALLER_PLANS[p];
+            lines.push(`Plan Term: ${plan.name} (${plan.validity})`);
+            lines.push(`Total Cost: ${fmtRupee(plan.cost)} (${fmtRupee(Math.round(plan.cost * 1.18))} incl. ${gstPct}% GST)`);
+          }
+          lines.push(`Impressions per month: ${info.impressions.toLocaleString('en-IN')}`);
+          lines.push(`Cost per additional impression: ${_tcFmt(info.extraImpression)}`);
+          lines.push(`Phone numbers whitelisted: ${info.numbersWhitelisted}`);
+          lines.push(`Call charges (incoming & outgoing): ${fmtRupee(info.callRate)}/min`);
+        } else if (effectiveSk === 'voice_exotel_std') {
           const baseValidity = parseFloat(getV('validity')) || 0;
           const extraValidity = getSN('extra_validity') || 0;
           lines.push(`Validity: ${extraValidity > 0 ? baseValidity + ' + ' + extraValidity + ' months' : baseValidity + ' Months'}`);

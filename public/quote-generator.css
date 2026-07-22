@@ -422,6 +422,27 @@
     font-weight: 800;
 }
 
+/* Truecaller card — brand blue */
+.sku-truecaller .sku-option-icon {
+    background: linear-gradient(135deg, #e6f3ff 0%, #cfe8ff 100%);
+    color: #0087FF;
+}
+.sku-truecaller:hover {
+    border-color: #0087FF;
+    background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+    box-shadow: 0 2px 10px rgba(0, 135, 255, 0.2);
+}
+.sku-truecaller.selected {
+    border-color: #0087FF;
+    background: linear-gradient(135deg, #e6f3ff 0%, #cfe8ff 40%);
+    box-shadow: 0 2px 14px rgba(0, 135, 255, 0.3);
+}
+.sku-entity-tag.truecaller {
+    background: linear-gradient(90deg, #e6f3ff, #cfe8ff);
+    color: #0069c9;
+    font-weight: 800;
+}
+
 /* Bundle Compare card */
 .sku-bundle .sku-option-icon {
     background: linear-gradient(135deg, #ede9fe 0%, #fce7f3 100%);
@@ -2245,4 +2266,205 @@ input[type="number"] {
     color: #94a3b8;
     padding: 0 8px 6px 12px;
     margin-top: -6px;
+}
+
+/* Truecaller commercial card — keep the single panel child flush (override sku-card margin-top:auto) */
+.truecaller-card > div:last-child { margin-top: 0 !important; }
+@media (max-width: 560px) {
+    .truecaller-card [style*="grid-template-columns:repeat(3,1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
+}
+
+/* ============================================================
+   Truecaller reveal animation (full-screen overlay)
+   ============================================================ */
+.tc-anim-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 50% 45%, rgba(0, 135, 255, 0.22), rgba(6, 20, 44, 0.86) 60%, rgba(3, 12, 28, 0.96));
+    backdrop-filter: blur(10px) saturate(1.1);
+    -webkit-backdrop-filter: blur(10px) saturate(1.1);
+    animation: tcFadeIn 0.32s ease both;
+    cursor: pointer;
+    overflow: hidden;
+}
+.tc-anim-overlay.tc-anim-out {
+    animation: tcFadeOut 0.36s ease forwards;
+}
+
+.tc-anim-stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 320px;
+    max-width: 82vw;
+}
+
+/* Concentric caller-ID pulse rings */
+.tc-ring {
+    position: absolute;
+    top: 48px;
+    left: 50%;
+    width: 140px;
+    height: 140px;
+    margin-left: -70px;
+    margin-top: -70px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 135, 255, 0.55);
+    transform: scale(0.3);
+    opacity: 0;
+    pointer-events: none;
+}
+.tc-ring-1 { animation: tcRing 2.1s ease-out 0.35s infinite; }
+.tc-ring-2 { animation: tcRing 2.1s ease-out 0.75s infinite; }
+.tc-ring-3 { animation: tcRing 2.1s ease-out 1.15s infinite; }
+
+/* Blue app tile with the white handset */
+.tc-anim-tile {
+    position: relative;
+    width: 136px;
+    height: 136px;
+    border-radius: 34px;
+    background: linear-gradient(150deg, #23a0ff 0%, #0087FF 45%, #0064d6 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 20px 55px -12px rgba(0, 135, 255, 0.75), inset 0 2px 6px rgba(255, 255, 255, 0.28);
+    transform: scale(0.4) translateY(8px);
+    opacity: 0;
+    overflow: hidden;
+    animation: tcPop 0.9s cubic-bezier(0.22, 1.4, 0.36, 1) 0.15s forwards;
+}
+.tc-handset {
+    transform-origin: 24px 24px;
+    animation: tcWiggle 0.9s ease-in-out 1s;
+}
+.tc-shimmer {
+    position: absolute;
+    top: 0;
+    left: -60%;
+    width: 55%;
+    height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+    transform: skewX(-18deg);
+    animation: tcShimmer 1.1s ease-in-out 0.95s;
+}
+
+/* Verified check badge */
+.tc-badge {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    margin-left: 34px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 18px rgba(0, 135, 255, 0.5);
+    transform: scale(0);
+    opacity: 0;
+    animation: tcBadgePop 0.6s cubic-bezier(0.22, 1.5, 0.36, 1) 0.85s forwards;
+}
+.tc-check {
+    stroke-dasharray: 24;
+    stroke-dashoffset: 24;
+    animation: tcDraw 0.4s ease 1.15s forwards;
+}
+
+.tc-anim-word {
+    margin-top: 30px;
+    font-size: 2.05rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: #fff;
+    opacity: 0;
+    transform: translateY(14px);
+    animation: tcRise 0.6s ease 0.9s forwards;
+    text-shadow: 0 4px 24px rgba(0, 135, 255, 0.6);
+}
+.tc-anim-tag {
+    margin-top: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: rgba(224, 242, 255, 0.9);
+    opacity: 0;
+    transform: translateY(10px);
+    animation: tcRise 0.6s ease 1.1s forwards;
+}
+
+@keyframes tcFadeIn  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes tcFadeOut { from { opacity: 1; } to { opacity: 0; } }
+@keyframes tcPop {
+    0%   { transform: scale(0.4) translateY(8px); opacity: 0; }
+    60%  { transform: scale(1.08) translateY(0);  opacity: 1; }
+    100% { transform: scale(1) translateY(0);     opacity: 1; }
+}
+@keyframes tcBadgePop {
+    0%   { transform: scale(0);   opacity: 0; }
+    70%  { transform: scale(1.25); opacity: 1; }
+    100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes tcDraw   { to { stroke-dashoffset: 0; } }
+@keyframes tcRise   { to { opacity: 1; transform: translateY(0); } }
+@keyframes tcRing {
+    0%   { transform: scale(0.3); opacity: 0; }
+    18%  { opacity: 0.85; }
+    100% { transform: scale(2.1); opacity: 0; }
+}
+@keyframes tcShimmer {
+    0%   { left: -60%; }
+    100% { left: 130%; }
+}
+@keyframes tcWiggle {
+    0%, 100% { transform: rotate(0deg); }
+    25%      { transform: rotate(-9deg); }
+    60%      { transform: rotate(7deg); }
+    80%      { transform: rotate(-3deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tc-ring, .tc-shimmer, .tc-handset { animation: none; }
+    .tc-anim-tile { animation: tcFadeIn 0.3s ease forwards; transform: none; opacity: 1; }
+    .tc-badge, .tc-anim-word, .tc-anim-tag { animation: tcFadeIn 0.3s ease 0.1s forwards; opacity: 1; transform: none; }
+    .tc-check { stroke-dashoffset: 0; animation: none; }
+}
+
+/* Never print the animation overlay */
+@media print {
+    .tc-anim-overlay { display: none !important; }
+
+    /* ── Page-break behaviour for commercial cards ──────────────────
+       A whole-card `break-inside: avoid` makes any card that doesn't fit in
+       the remaining page space jump to the next page in one piece, leaving a
+       large blank gap above it. Instead let cards flow across the page
+       boundary; the pieces that must stay together are protected below
+       (table section groups via their per-section <tbody>, and the Truecaller
+       card via its .tc-blk blocks). */
+    .quote-doc-section.sku-card {
+        page-break-inside: auto !important;
+        break-inside: auto !important;
+    }
+
+    /* Truecaller commercial: the framed card may span a page boundary.
+       overflow must be visible for the engine to fragment it, and the default
+       box-decoration-break: slice keeps the border continuous across the seam
+       (no double border). Each inner block stays whole. */
+    .truecaller-card,
+    .truecaller-card > div {
+        overflow: visible !important;
+        page-break-inside: auto !important;
+        break-inside: auto !important;
+    }
+    .truecaller-card .tc-blk {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+    }
 }
