@@ -970,6 +970,26 @@
     background: #e0f2fe;
 }
 
+/* SKU / commercial heading. Squared off against a left accent bar so it reads
+   as part of the document rather than as a floating rounded chip - the same
+   treatment the introduction paragraph uses. */
+.sku-card-title {
+    font-size: 1rem;
+    background: #f8fafc;
+    border-left: 3px solid #0284c7;
+    border-radius: 0 4px 4px 0;
+    padding: 9px 14px;
+    margin-bottom: 12px;
+    color: #0f172a;
+    letter-spacing: 0.06em;
+}
+
+/* The hairline rule that trails the plain section headings would cut across
+   the tinted block, so it is dropped here. */
+.sku-card-title::after {
+    display: none;
+}
+
 .quote-intro-text {
     font-size: 0.82rem;
     color: #475569;

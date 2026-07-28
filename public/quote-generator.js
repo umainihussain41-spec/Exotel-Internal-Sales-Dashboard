@@ -6486,7 +6486,7 @@ function _renderBundleItemsHTML(bundleItems) {
     if (!QG.bundleMergeMode) {
       allSectionsHTML += `
       <div class="quote-doc-section sku-card" style="margin-top:24px;">
-        <div class="quote-doc-section-title" style="font-size:1.05rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
+        <div class="quote-doc-section-title sku-card-title">
           ${sanitize(sectionTitle)}
         </div>
         <table class="quote-sku-table">
@@ -7593,7 +7593,7 @@ function updatePreview() {
       </div>
 
       <div class="quote-doc-section" style="margin-top:24px;">
-        <div class="quote-doc-section-title" style="font-size:1.05rem;background:#f0f9ff;padding:10px 14px;border-radius:6px;margin-bottom:16px;border-left:4px solid #0284c7;">
+        <div class="quote-doc-section-title sku-card-title">
           ${sanitize(sku0.label)}: Side-by-Side Plan Comparison
         </div>
         <div style="overflow-x:auto;">
@@ -8569,7 +8569,7 @@ function updatePreview() {
 
       allSectionsHTML += `
       <div class="quote-doc-section sku-card" style="margin-top:24px;">
-        <div class="quote-doc-section-title" style="font-size:1.15rem; background:#e0f2fe; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
+        <div class="quote-doc-section-title sku-card-title">
           ${sanitize(sectionTitle)}
         </div>
         <table class="quote-sku-table">
@@ -8649,7 +8649,7 @@ function updatePreview() {
 
     allSectionsHTML += `
     <div class="quote-doc-section sku-card" style="margin-top:24px;">
-      <div class="quote-doc-section-title" style="font-size:1.15rem; background:#f0f9ff; padding:10px 14px; border-radius:6px; margin-bottom:12px; border-left:4px solid #0284c7;">
+      <div class="quote-doc-section-title sku-card-title">
         ${sanitize(sectionTitle)}
       </div>
       <table class="quote-sku-table">
@@ -8800,6 +8800,9 @@ window.printQuote = async function () {
      /* ── Doc sections ──────────────────────────────────────────── */
      .quote-doc-section { margin-top: 8px !important; padding: 0 !important; }
      .quote-doc-section-title { font-size: 0.78rem !important; padding: 4px 8px !important; margin-bottom: 6px !important; break-after: avoid !important; page-break-after: avoid !important; }
+     .sku-card-title { font-size: 0.86rem !important; padding: 6px 10px !important; margin-bottom: 7px !important; background: #f8fafc !important; border-left: 3px solid #0284c7 !important; border-radius: 0 3px 3px 0 !important; }
+     /* the trailing hairline would cut across the tinted heading */
+     .sku-card-title::after { display: none !important; }
 
      /* ── SKU grid: BLOCK layout - no height-fill, no blank gaps ── */
      .quote-skus-grid { display: block !important; margin-top: 8px !important; }
