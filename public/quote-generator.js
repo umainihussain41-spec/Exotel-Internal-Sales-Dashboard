@@ -30,10 +30,13 @@ const QG = {
   activeBundle: 'A',
   savedSingleState: null,
   bundleMergeMode: false,  // true when Bundle Merge (club SKUs) mode is active
-  bundleRenameOverrides: {},  // { "itemId:fieldId": customLabel } — per-row label overrides in bundle mode
-  bundleReaddedFields: [],    // [ "itemId:fieldId" ] — duplicate fields the user chose to show again
+  bundleRenameOverrides: {},  // { "itemId:fieldId": customLabel } - per-row label overrides in bundle mode
+  bundleReaddedFields: [],    // [ "itemId:fieldId" ] - duplicate fields the user chose to show again
   _bundleRenamingKey: null,   // which "itemId:fieldId" is currently being renamed inline
   _bundleShowDupes: false,    // reveal the greyed overlapping fields collapsed by smart dedup
+  // ── Exclusive features (entitlement-gated) ─────────────────
+  features: {},               // { unit_pricing: true } - resolved from the server
+  _renamingRowKey: null,      // "itemId:fieldId" being renamed outside bundle mode
 };
 
 // ── SKU Definitions ────────────────────────────────────────
@@ -48,7 +51,7 @@ const I_MONITOR = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" s
 const I_HASH = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>`;
 const I_BOT = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11a9 9 0 0 1 18 0"></path><rect x="2" y="9" width="2" height="5" rx="1"></rect><rect x="20" y="9" width="2" height="5" rx="1"></rect><rect x="4" y="8" width="16" height="9" rx="2"></rect><path d="M12 8V5"></path><circle cx="12" cy="4" r="1" fill="currentColor"></circle><circle cx="9" cy="12" r="1" fill="currentColor"></circle><circle cx="15" cy="12" r="1" fill="currentColor"></circle><path d="M10 15h4M20 12v3a2 2 0 0 1-2 2h-3"></path><circle cx="14" cy="17" r="1" fill="currentColor"></circle></svg>`;
 
-// Bundle Compare — VS split-panel icon with styled text
+// Bundle Compare - VS split-panel icon with styled text
 const I_VS = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="1" y="3" width="9" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
   <rect x="14" y="3" width="9" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
@@ -56,7 +59,7 @@ const I_VS = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns=
   <text x="12" y="15.5" text-anchor="middle" font-size="5.5" font-weight="800" fill="currentColor" font-family="system-ui,sans-serif" letter-spacing="-0.3">VS</text>
 </svg>`;
 
-// Bundle Merge — package/bundle icon
+// Bundle Merge - package/bundle icon
 const I_MERGE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
   <rect x="1" y="3" width="6" height="8" rx="1.5"/>
   <rect x="9" y="3" width="6" height="8" rx="1.5"/>
@@ -66,7 +69,7 @@ const I_MERGE = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" str
   <circle cx="12" cy="21" r="1.5" fill="currentColor" stroke="none"/>
 </svg>`;
 
-// Truecaller — blue app-tile with white handset + verified badge (self-coloured, brand blue)
+// Truecaller - blue app-tile with white handset + verified badge (self-coloured, brand blue)
 const I_TRUECALLER = `<svg width="30" height="30" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
   <rect x="3" y="3" width="42" height="42" rx="12" fill="#0087FF"/>
   <path d="M18.1 12.8c-1.2 0-2.2 1-2.2 2.2 0 9.4 7.7 17.1 17.1 17.1 1.2 0 2.2-1 2.2-2.2v-3.5c0-1.1-.8-2-1.9-2.2l-3.5-.4c-1-.1-2 .4-2.4 1.4l-.6 1.3c-2.7-1.4-4.9-3.6-6.3-6.3l1.3-.6c1-.4 1.5-1.4 1.4-2.4l-.4-3.5c-.2-1.1-1.1-1.9-2.2-1.9h-2z" fill="#fff"/>
@@ -89,7 +92,8 @@ const SKUS = [
 
   // ── International Commercial (USD pricing) ────────────────────────
   { key: 'voice_intl', label: 'International', sub: 'USD · Country-Specific', entity: 'Exotel', theme: 'intl', icon: I_GLOBE, hasTiers: false, isIntl: true },
-  
+  { key: 'voice_intl_stream', label: 'Intl. Web Streaming', sub: 'USD · WebSocket / Bot', entity: 'Exotel', theme: 'intl', icon: I_GLOBE, hasTiers: false, isIntl: true },
+
   // ── Startup Plan (single SKU, sub-product via tier selector) ─────
   { key: 'startup', label: 'Startup Plan', sub: 'Free Trial Bundle', entity: 'Exotel', theme: 'startup', icon: I_PHONE, hasTiers: true, isStartup: true },
 
@@ -99,11 +103,12 @@ const SKUS = [
   { key: 'num_1400', label: '1400 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
   { key: 'num_1600', label: '1600 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
 
-  // ── Bundle Compare — special toggle card (not a real SKU) ────────
+  // ── Bundle Compare - special toggle card (not a real SKU) ────────
   { key: 'bundle_compare', label: 'Bundle Compare', sub: 'Compare Option A vs B', entity: 'Both', theme: 'bundle', icon: I_VS, hasTiers: false, isBundleCompare: true },
 
-  // ── Bundle Merge — special toggle card (not a real SKU) ─────────
+  // ── Bundle Merge - special toggle card (not a real SKU) ─────────
   { key: 'bundle_merge', label: 'Bundle Package', sub: 'Club SKUs into one proposal', entity: 'Both', theme: 'bundle', icon: I_MERGE, hasTiers: false, isBundleMerge: true },
+
 ];
 
 // Tier defaults
@@ -114,7 +119,77 @@ const TIER_DEFAULTS = {
   elite:      { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 },
 };
 // SKUs that support a custom plan name rename
-const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl', 'truecaller_exotel'];
+const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl', 'voice_intl_stream', 'truecaller_exotel'];
+
+// SKUs priced in USD - they never mix with the INR plans and are excluded from
+// the INR grand total.
+const USD_SKUS = ['voice_intl', 'voice_intl_stream'];
+function isUsdSku(key) { return USD_SKUS.includes(key); }
+// International Web Streaming: flat per-channel monthly fee in USD; talk-time
+// falls back to the standard international PSTN rate card.
+const INTL_STREAM_CHANNEL_USD = 48;
+
+// ── Unit-price lines ────────────────────────────────────────────────────────
+// "Some RMs ask for an x amount of prepaid and then reduce per/unit cost."
+//
+// Any single line on any SKU can be marked as a unit price: the value still
+// prints on the proposal, but it is never multiplied by a volume and never
+// reaches the total. The prepaid the client actually pays is just whatever
+// stays billed (typically the credits line).
+//
+// Stored per item as `item.unitOnly[fieldId]`, so it travels with the quote and
+// a proforma invoice regenerated months later re-prices exactly as written.
+//
+// Duration fields are deliberately excluded: they are multipliers, not
+// priceable lines, and suppressing one would silently zero out every charge it
+// spans while the calculation rows still showed a term.
+const UNIT_ONLY_EXCLUDED = new Set(['num_months', 'validity', 'extra_validity']);
+function canBeUnitOnly(f) {
+  if (!f || f.nonEditable || f.waived) return false;
+  if (f.id === PREPAID_DEPOSIT_ID) return false;   // the deposit is the charge
+  if (UNIT_ONLY_EXCLUDED.has(f.id)) return false;
+  // Toggles, selectors and the intl rate table carry no multipliable amount.
+  return !f.type || f.type === 'rental_toggle';
+}
+function isUnitOnly(item, id) {
+  return !!(item && item.unitOnly && item.unitOnly[id]);
+}
+function itemHasUnitOnly(item) {
+  return !!(item && item.unitOnly && Object.keys(item.unitOnly).some(k => item.unitOnly[k]));
+}
+// Quantities read straight out of item.values bypass readNum, so they need the
+// same suppression applied explicitly.
+function unitQty(item, id, raw) {
+  return isUnitOnly(item, id) ? 0 : raw;
+}
+
+// ── 1400 / 1600 series channel pricing ──────────────────────────────────────
+// Channels on the number series are not sold individually: they come in fixed
+// 50-channel blocks, minimum one block.
+const CHANNELS_PER_BLOCK = 50;
+const CHANNEL_BLOCK_COST = 12500;   // ₹ per 50-channel block per month
+const NUM_SERIES_SKUS = ['num_1400', 'num_1600'];
+function isNumSeries(key) { return NUM_SERIES_SKUS.includes(key); }
+// Channel blocks + user charges for the number series. Kept out of the generic
+// channel/user maths because there is no per-channel rate to multiply, and
+// because users bill on whichever of the two models the rep picked.
+function numSeriesUserCost(item, getSafeNum, months) {
+  const users = Math.max(0, Number(getSafeNum('num_users')) || 0);
+  if (item.values['user_model_exotel'] === 1) {
+    // Exotel model: a block of free users, the rest at the extra-user rate.
+    const free = Math.max(0, Number(getSafeNum('exotel_free_users')) || 0);
+    const charge = Number(getSafeNum('exotel_user_charge')) || 0;
+    return Math.max(0, users - free) * charge * months;
+  }
+  // Veeno model: every user charged from the first.
+  return users * (Number(getSafeNum('user_charge')) || 0) * months;
+}
+function numSeriesSubtotal(item, getSafeNum, months) {
+  if (!isNumSeries(item.sku_key)) return 0;
+  const blocks = Math.max(0, Number(getSafeNum('channel_blocks')) || 0);
+  const blockCost = Number(getSafeNum('block_cost')) || 0;
+  return (blocks * blockCost * months) + numSeriesUserCost(item, getSafeNum, months);
+}
 
 // ── Truecaller Commercial (Exotel-resold verified caller-ID package) ─────────
 // Source: "Truecaller commercials" proposal, dated 27-02-2026.
@@ -143,7 +218,7 @@ function tcSelectedPlan(item) {
   if (v === 12 || v === '12') return '12';
   return '6';
 }
-// Pre-GST INR contributed to the grand total. "Both" is a comparison — no single line total.
+// Pre-GST INR contributed to the grand total. "Both" is a comparison - no single line total.
 function truecallerSubtotalINR(item) {
   const p = tcSelectedPlan(item);
   if (p === 'both') return 0;
@@ -159,7 +234,7 @@ function _tcFmt(v) {
 // price stays in item.values[fieldId] so the input keeps editing the list price.
 //
 // Recalculation is achieved without touching the dozens of per-SKU row/calc
-// sites: the value-reading helpers return a "discount box" — a Number object
+// sites: the value-reading helpers return a "discount box" - a Number object
 // that behaves exactly like its discounted value in every arithmetic/compare
 // operation (so all subtotals/totals recompute automatically), while carrying
 // the original so the money formatters can render "<s>old</s> new".
@@ -181,7 +256,7 @@ function applyDiscount(item, id, base) {
   box.__orig = orig;                   // remembered for strikethrough display
   return box;
 }
-// Effective numeric value (discount if set, else base) — for direct calc reads
+// Effective numeric value (discount if set, else base) - for direct calc reads
 // that bypass the reading helpers.
 function effVal(item, id, base) {
   const d = itemDiscount(item, id);
@@ -189,19 +264,145 @@ function effVal(item, id, base) {
   if (d !== null && orig !== null && d !== orig) return d;
   return orig === null ? base : orig;
 }
-// Format a value that may be a discount box: strike original, show discounted.
-// `fmt` formats a plain value; returns HTML string when discounted.
+// ── Value boxes ─────────────────────────────────────────────────────────────
+// The discount box above proved a useful trick: a Number that behaves as its
+// numeric self in every calculation while carrying display metadata. Two more
+// flavours ride on the same rails, so a mode flip reshapes every SKU's pricing
+// without editing a single per-SKU render branch:
+//
+//   __disc   a discounted price   → arithmetic uses the new price, display strikes the old
+//   __text   free-text value      → arithmetic sees 0 (no maths), display prints the words
+//   __blank  suppressed quantity  → arithmetic sees 0, display prints an em-dash
+//
+// Because every `if (qty > 0)` guard in the renderers sees 0, all the
+// "5 × 12 months × ₹499 = …" calculation rows vanish on their own.
+function textBox(s) {
+  const b = new Number(0);
+  b.__text = String(s);
+  b.toString = function () { return this.__text; };
+  return b;
+}
+// A unit-price line: shows its real value, but counts as 0 everywhere it would
+// otherwise be multiplied out or summed. Every `if (qty > 0)` guard in the
+// renderers therefore drops its own calculation row without being told to.
+function unitBox(v) {
+  const b = new Number(0);
+  b.__unit = true;
+  b.__unitVal = v;
+  b.toString = function () { return String(this.__unitVal); };
+  return b;
+}
+function isTextBox(v) { return !!(v && typeof v === 'object' && v.__text !== undefined); }
+function isUnitBox(v) { return !!(v && typeof v === 'object' && v.__unit); }
+// The real number behind a unit box, for display-only arithmetic (deriving one
+// shown figure from another). Never use this where the result reaches a total.
+function realVal(v) {
+  const n = parseFloat(isUnitBox(v) ? v.__unitVal : v);
+  return isNaN(n) ? 0 : n;
+}
+// A raw string that isn't a number - the rep typed words instead of digits.
+function isFreeText(v) {
+  if (typeof v !== 'string') return false;
+  const s = v.trim();
+  return s !== '' && isNaN(parseFloat(s));
+}
+
+// Format a value that may be a box: strike original, print text, or blank out.
+// `fmt` formats a plain value; returns HTML string for boxed values.
 function discWrap(v, fmt) {
+  if (isUnitBox(v)) return `<span class="q-unitval">${discWrap(v.__unitVal, fmt)}</span>`;
+  if (isTextBox(v)) return `<span class="q-textval">${sanitize(v.__text)}</span>`;
+  if (isFreeText(v)) return `<span class="q-textval">${sanitize(v)}</span>`;
   if (v && typeof v === 'object' && v.__disc) {
     return `<span class="q-disc-old">${fmt(v.__orig)}</span> <span class="q-disc-new">${fmt(Number(v))}</span>`;
   }
   return fmt(v);
+}
+
+// ── Canonical field readers ─────────────────────────────────────────────────
+// Every preview/export scope used to hand-roll its own getSafeNum/getVal. They
+// all funnel through these two now, so text entry, discounts, exclusions and
+// Rate Card mode behave identically in the live preview, the PDF, the bundle
+// package, the comparison columns and the proforma text export.
+function readNum(item, fields, id, opts = {}) {
+  const f = fields.find(x => x.id === id);
+  if (!f || f.waived) return 0;
+  if (opts.respectExclusions && item.excludedFields && item.excludedFields[id]) return 0;
+  const raw = item.values[id] !== undefined ? item.values[id] : (f.value ?? 0);
+  if (isUnitOnly(item, id)) return unitBox(applyDiscount(item, id, parseFloat(raw)));
+  const n = parseFloat(raw);
+  if (isNaN(n)) {
+    const s = String(raw ?? '').trim();
+    return s === '' ? 0 : textBox(s);
+  }
+  return applyDiscount(item, id, n);
+}
+function readVal(item, fields, id) {
+  const f = fields.find(x => x.id === id);
+  if (!f) return undefined;
+  return applyDiscount(item, id, item.values[id] !== undefined ? item.values[id] : f.value);
+}
+
+// ── Dead calculation rows ───────────────────────────────────────────────────
+// A unit-price line multiplies out to zero, so any "5 × 12 months × ₹499 = ₹0"
+// working left behind is noise. Rows guarded by `if (qty > 0)` drop themselves;
+// this sweeps up the unguarded ones so the proposal shows the rate alone.
+const DEAD_CALC_RESULT = /=\s*(?:₹|\$)\s*0(?:\.0+)?\s*$/;
+function stripDeadCalcRows(tableHTML) {
+  if (typeof document === 'undefined') return tableHTML;
+  const host = document.createElement('table');
+  host.innerHTML = tableHTML;
+  host.querySelectorAll('tr.sub-row').forEach(tr => {
+    const cells = tr.querySelectorAll('td');
+    if (cells.length < 2) return;
+    const label = (cells[0].textContent || '').trim();
+    if (!/calculation|breakdown|allocation/i.test(label)) return;
+    if (DEAD_CALC_RESULT.test((cells[1].textContent || '').trim())) tr.remove();
+  });
+  // A rate left dangling under a section header reads better as a full row.
+  host.querySelectorAll('tr.sub-row').forEach(tr => {
+    const prev = tr.previousElementSibling;
+    if (prev && !prev.classList.contains('section-header-row')) return;
+    tr.classList.remove('sub-row');
+    const nameCell = tr.querySelector('td');
+    if (nameCell) nameCell.className = 'sku-row-name';
+  });
+  return host.innerHTML;
+}
+
+// ── Per-row label overrides ─────────────────────────────────────────────────
+// Bundle Package mode let reps rename any line in the merged table. The same
+// affordance now works on a plain single-SKU quote: renames are stored against
+// the field's *canonical* label (its form label minus the unit in brackets),
+// which is exactly the label the proposal renderers print - so one rename in
+// the config panel retitles that line everywhere it appears.
+function rowLabelKey(fieldLabel) { return cleanLabel(fieldLabel); }
+function setRowLabel(item, fieldLabel, custom) {
+  if (!item.rowLabels) item.rowLabels = {};
+  const key = rowLabelKey(fieldLabel);
+  const trimmed = (custom || '').trim();
+  if (!trimmed || trimmed === key) delete item.rowLabels[key];
+  else item.rowLabels[key] = trimmed;
+}
+function getRowLabel(item, fieldLabel) {
+  const key = rowLabelKey(fieldLabel);
+  return (item && item.rowLabels && item.rowLabels[key]) || key;
+}
+// Applied by the proposal renderers to every row title they emit.
+function rowLabel(item, lbl) {
+  if (!item || !item.rowLabels) return lbl;
+  if (typeof QG !== 'undefined' && QG.bundleMergeMode) return lbl; // bundle mode renames via bundleRenameOverrides
+  return item.rowLabels[lbl] || lbl;
 }
 // True when the item has any active discount (for form indicator / preview note).
 function itemHasAnyDiscount(item) {
   if (!item || !item.fieldDiscounts) return false;
   return Object.keys(item.fieldDiscounts).some(id => itemDiscount(item, id) !== null);
 }
+// Rate Card per-line toggle: a price tag (quote the unit price) vs a sigma
+// (sum it out by quantity).
+const I_TAG = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7.2-7.2A2 2 0 0 1 2.8 12V4.8a2 2 0 0 1 2-2H12a2 2 0 0 1 1.4.6l7.2 7.2a2 2 0 0 1 0 2.8z"></path><circle cx="7.5" cy="7.5" r="1.3" fill="currentColor" stroke="none"></circle></svg>`;
+const I_SIGMA = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 4H6l6 8-6 8h12"></path></svg>`;
 // Strikethrough "S" glyph for the per-field discount button.
 const I_STRIKE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17.2 7.2C16.6 5.3 14.6 4.2 12 4.2c-2.9 0-4.9 1.4-4.9 3.4 0 1.4.9 2.3 2.6 2.9M7 16.6c.5 2 2.6 3.2 5.2 3.2 3 0 5-1.5 5-3.6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="3.5" y1="12" x2="20.5" y2="12" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/></svg>`;
 // Build the full ".quote-doc-section sku-card" HTML for a Truecaller item.
@@ -296,7 +497,7 @@ function buildTruecallerCardHTML(item, sku) {
     </div>`;
 }
 
-// Full-screen Truecaller reveal animation — plays when the SKU card is clicked.
+// Full-screen Truecaller reveal animation - plays when the SKU card is clicked.
 function playTruecallerAnimation() {
   // Never stack two overlays
   if (document.getElementById('tc-anim-overlay')) return;
@@ -923,7 +1124,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
   if (tncKey === 'voice_exotel_tfn') {
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
-        <li style="margin-bottom:8px;"><strong>Toll-Free Number (TFN) – Incoming Only</strong>
+        <li style="margin-bottom:8px;"><strong>Toll-Free Number (TFN) - Incoming Only</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>TFN numbers are designated for <strong>incoming calls only</strong>. Outgoing calls are not supported on Toll-Free Numbers.</li>
             <li>Callers across India can reach the TFN at no cost to themselves; charges are borne by the business account.</li>
@@ -1003,7 +1204,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
     const prodName = isVoicebot ? 'Voicebot' : 'Voice Streaming';
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
-        <li style="margin-bottom:8px;"><strong>${entity} ${prodName} – Product Overview</strong>
+        <li style="margin-bottom:8px;"><strong>${entity} ${prodName} - Product Overview</strong>
           <div style="margin:4px 0 2px 0;">This advanced solution allows businesses to:</div>
           <ul style="margin:0 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Deploy conversational bots and AI assistants for automated, intelligent interactions.</li>
@@ -1210,25 +1411,25 @@ function getSkuTncHtml(item, entity = 'Exotel') {
           </ul>
         </li>
         <li style="margin-bottom:8px;"><strong>Example Scenarios</strong>
-          <div style="margin:4px 0 2px 0;"><strong>Case 1 – User Replies After All Template Messages Are Sent</strong></div>
+          <div style="margin:4px 0 2px 0;"><strong>Case 1 - User Replies After All Template Messages Are Sent</strong></div>
           <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
             <li><strong>Message Flow:</strong><br>
-              12:00 PM – Marketing template message sent<br>
-              2:00 PM – Utility template message sent<br>
-              8:00 PM – Utility template message sent<br>
-              9:00 PM – User replies (after all messages)
+              12:00 PM - Marketing template message sent<br>
+              2:00 PM - Utility template message sent<br>
+              8:00 PM - Utility template message sent<br>
+              9:00 PM - User replies (after all messages)
             </li>
             <li><strong>Total Charges:</strong> 3 messages (1 Marketing + 2 Utility)<br>
               ✅ Both Utility messages are chargeable as they were sent outside the service window.
             </li>
           </ul>
-          <div style="margin:0 0 2px 0;"><strong>Case 2 – User Replies Before Utility Messages Are Sent</strong></div>
+          <div style="margin:0 0 2px 0;"><strong>Case 2 - User Replies Before Utility Messages Are Sent</strong></div>
           <ul style="margin:0 0 6px 0; padding-left:18px; list-style-type:circle;">
             <li><strong>Message Flow:</strong><br>
-              12:00 PM – Marketing template message sent<br>
-              1:00 PM – User replies (service window opens)<br>
-              2:00 PM – Utility template message sent<br>
-              8:00 PM – Utility template message sent
+              12:00 PM - Marketing template message sent<br>
+              1:00 PM - User replies (service window opens)<br>
+              2:00 PM - Utility template message sent<br>
+              8:00 PM - Utility template message sent
             </li>
             <li><strong>Total Charges:</strong> 1 message (Only the Marketing message)<br>
               ✅ Both Utility messages are free, as they were sent within the open customer service window.
@@ -1722,33 +1923,317 @@ function getSkuTncHtml(item, entity = 'Exotel') {
     `;
   }
 
+  // ── 1400 / 1600 Series numbers (Veeno) ────────────────────────────────
+  if (tncKey === 'num_1400' || tncKey === 'num_1600') {
+    const series = tncKey === 'num_1400' ? '1400' : '1600';
+    const isPromoSeries = tncKey === 'num_1400';   // the 1400 series exists for promotional calling
+    const blocks = Math.max(1, parseFloat(getVal('channel_blocks')) || 1);
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>Number Allotment &amp; DLT Registration</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>The ${series} series number is allotted by the operator against a one-time procurement charge, followed by a recurring monthly number rental.</li>
+            <li><strong>A DLT (Distributed Ledger Technology) registration with TATA is mandatory</strong> before the ${series} series number can be activated. Entity registration, header and consent-template approvals must be completed on the TATA DLT platform.</li>
+            <li>The DLT registration is raised in the customer's own name; TATA's registration fees and approval timelines apply and are outside ${entity}'s control.</li>
+            <li>Calls cannot be dialled on the series until the DLT entity and headers are approved.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Channels</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Channels are provisioned in fixed blocks of ${CHANNELS_PER_BLOCK}. There is no per-channel pricing.</li>
+            <li>Additional capacity is added in further ${CHANNELS_PER_BLOCK}-channel blocks.</li>
+            <li>Each block of ${CHANNELS_PER_BLOCK} channels is charged at ₹${CHANNEL_BLOCK_COST.toLocaleString('en-IN')} per month. This proposal covers ${blocks} block(s), i.e. ${blocks * CHANNELS_PER_BLOCK} concurrent channels.</li>
+            <li>No separate PRI line charges.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Users</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            ${getVal('user_model_exotel') === 1
+              ? `<li>This plan is billed on the <strong>Exotel user model</strong>: ${parseFloat(getVal('exotel_free_users')) || 0} user logins are included at no charge, and each additional user is billed monthly at the rate quoted above.</li>`
+              : `<li>This plan is billed on the <strong>Veeno user model</strong>: user charges apply from the first user and are billed monthly for the full term of the plan.</li>`}
+            <li>Charges apply to every created agent profile (verified or unverified, active or inactive).</li>
+            <li>Delete unused agents before month-end to avoid an additional month's charge.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Call Charges</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Outgoing calls are charged per minute of connected duration at the rate quoted above.</li>
+            <li>Rates may change as per TRAI regulations with a 30-day notice.</li>
+            ${isPromoSeries
+              ? `<li>The ${series} series is designated for <strong>promotional / outbound campaign calling</strong>. Calls must stay within the scope of the approved DLT headers and consent templates.</li>`
+              : `<li>The ${series} series is designated for <strong>transactional and service calling only</strong>. Promotional calling on this series is not permitted, and calls to DND-registered numbers are restricted by TRAI.</li>`}
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments &amp; Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid model; usage is debited against available balance.</li>
+            <li>Unused balance is carried forward. Minimum recharge: ₹500.</li>
+            <li>Payment receipt issued on the date of payment; tax invoices issued monthly for actual usage.</li>
+            <li>Number rental and channel block invoices are raised in the following month.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST &amp; TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>If GST unregistered, submit a declaration on company letterhead:<br><em>"This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit."</em></li>
+            <li>TDS deduction: u/s 194J @2% (if applicable).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following via the ${entity} Dashboard:</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            <li>Company PAN Card</li>
+            <li>Certificate of Incorporation / Owner's Passport</li>
+            <li>Company Address Proof (recent postpaid bill, rental agreement, or bank statement)</li>
+            <li>Director's passport-size photo</li>
+            <li>Accepted formats: PNG, GIF, JPEG, PDF</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Number Ownership</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>The ${series} series number remains the property of the operator and cannot be ported; ownership is not transferred.</li>
+            <li>If the number is withdrawn by the provider, an alternate number from the same series will be allotted.</li>
+            <li>Minimum commitment: 6 months for any number allocated to the account.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Proposal is valid for 30 days from the date of issue.</li>
+          </ul>
+        </li>
+      </ol>`;
+  }
+
+  // ── International Web Streaming (USD) ─────────────────────────────────
+  if (tncKey === 'voice_intl_stream') {
+    const chCost = getVal('channel_cost_usd') || INTL_STREAM_CHANNEL_USD;
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>USD Pricing &amp; Account Billing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Pricing and billing for this plan are denominated exclusively in US Dollars (USD).</li>
+            <li>Fixed prepaid model: monthly channel and rental fees are deducted from the prepaid balance on the 1st of each month.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Streaming Channels</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Each concurrent streaming channel is charged at $${chCost} per channel per month.</li>
+            <li>A channel represents one concurrent bi-directional WebSocket media stream. Concurrency beyond the subscribed channels is rejected.</li>
+            <li>Channels are billed for the full month regardless of usage; mid-month additions are billed pro-rata.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Call Charges</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Talk-time on streaming calls is billed at the standard <strong>international PSTN rates</strong> for the destination country, as listed above and in the attached rate card.</li>
+            <li>Calls terminate on the WebSocket media stream to your bot, so only the destination country leg is billed. There is no agent leg on a streamed call.</li>
+            <li>Incoming calls to the streaming number are free; outgoing calls are charged at the destination country's outbound rate.</li>
+            ${getVal('human_handoff') === 1
+              ? `<li>Where a call is handed off from the bot to a live agent, the agent leg is billed at the applicable rate for the agent's location, for the duration of the transfer only.</li>`
+              : ''}
+            <li>Pulse rate: all calls are billed on a 60-second pulse.</li>
+            <li>Channel charges are separate from and additional to call charges.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Compliance &amp; Virtual Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Virtual numbers remain the property of Exotel and are subject to destination country regulations and KYC guidelines.</li>
+            <li>Recording, transcription and streaming of call media must comply with the consent laws of the destination country.</li>
+          </ul>
+        </li>
+      </ol>`;
+  }
+
   return null;
+}
+
+// ── Refund & Credit Utilisation ─────────────────────────────────────────────
+// One policy, appended to every proposal regardless of SKU or entity.
+// Rendered as a numbered clause inside each SKU's <ol>, using the same nested
+// circle-bullet markup every other clause uses.
+function getRefundPolicyClause(entity = 'Exotel') {
+  return `<strong>Refund &amp; Credit Utilisation</strong>
+    <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+      <li>All plans are strictly prepaid. Amounts once paid are <strong>non-refundable</strong> and cannot be returned as cash or reversed to the original payment method.</li>
+      <li>Your balance is never lost, only redirected: unused ${entity} credits stay in your wallet and can be applied to <strong>any</strong> ${entity} service on the account: voice calls, SMS, WhatsApp and RCS messaging, Flows and Apps, or any other ${entity} product you choose to enable.</li>
+      <li>Credits are account-bound and non-transferable between accounts, and are consumed in line with the usage rates set out in this proposal.</li>
+    </ul>`;
+}
+
+// Splice the cross-SKU clauses into a SKU's numbered T&C list so they read as
+// clauses 5, 6, ... rather than as a footnote bolted on after the disclaimer.
+// They land next to Payments & Invoicing, which is where the money terms live.
+function withCommonTncClauses(skuHtml, entity) {
+  const clauses = [getRefundPolicyClause(entity)];
+
+  if (typeof document === 'undefined') return skuHtml;
+  const host = document.createElement('div');
+  host.innerHTML = skuHtml;
+  const list = host.querySelector('ol') || host.querySelector('ul');
+  if (!list) return skuHtml;
+
+  const isOl = list.tagName === 'OL';
+  const items = Array.from(list.children).filter(n => n.tagName === 'LI');
+  // Match on the clause title only (the leading <strong>), so a passing mention
+  // of "billing" inside some other clause's bullets can't win the anchor.
+  const title = (n) => (n.querySelector(':scope > strong')?.textContent || '').trim();
+  const byTitle = (re) => items.find(n => re.test(title(n)));
+  // Sit next to the money terms: the payments clause, else GST & TDS, else the
+  // billing clause the USD plans open with. Failing all three, drop it in
+  // before the closing "Commercial Validity", or at the very end.
+  const after = byTitle(/payments?\s*&\s*invoicing/i)
+             || byTitle(/gst\s*&\s*tds/i)
+             || byTitle(/billing/i);
+  const before = after ? null : byTitle(/commercial validity/i);
+
+  let cursor = after;
+  clauses.forEach(inner => {
+    const li = document.createElement('li');
+    li.setAttribute('style', isOl ? 'margin-bottom:8px;' : 'margin-bottom:6px;');
+    li.innerHTML = inner;
+    if (cursor) { cursor.after(li); cursor = li; }
+    else if (before) before.before(li);
+    else list.appendChild(li);
+  });
+  return host.innerHTML;
+}
+
+// ── International Web Streaming rows ────────────────────────────────────────
+// Built once and injected into every proposal scope (live preview, PDF, bundle
+// package) via that scope's own row/format helpers.
+function buildIntlStreamRows(item, h) {
+  const { secRow, stdRow, indRow, getSafeNum, getVal, FREE } = h;
+  const fmtUsd = (v) => {
+    if (v === null || v === undefined) return '-';
+    const n = parseFloat(v);
+    if (isNaN(n)) return String(v);
+    return '$' + n.toFixed(4).replace(/\.?0+$/, '');
+  };
+  const fmtUsdFixed = (v, dec = 2) => {
+    if (v === null || v === undefined) return '-';
+    const n = parseFloat(v);
+    return isNaN(n) ? String(v) : '$' + n.toFixed(dec);
+  };
+  const perUnitU = (t) => `<span style="color:#94a3b8;font-size:0.8em;">${t}</span>`;
+
+  const prepaid = getSafeNum('prepaid_usd') || 400;
+  const months = getSafeNum('num_months') || 0;
+  const channels = getSafeNum('num_channels') || 0;
+  const chCostUsd = getSafeNum('channel_cost_usd') || INTL_STREAM_CHANNEL_USD;
+  const numUsers = getSafeNum('num_users') || 0;
+  const userCharge = getSafeNum('user_charge_usd') || 15;
+  const numCharge = getSafeNum('number_charge_usd') || 15;
+  const numberQty = getSafeNum('intl_number_qty') || 1;
+  const unlimitedUsers = getSafeNum('unlimited_users') === 1;
+
+  const entries = Array.isArray(item.values.intl_entries) && item.values.intl_entries.length
+    ? item.values.intl_entries
+    : [{ dest: 'United States', rm: 'India', count: 1, ...intlComputeRates('United States', 'India') }];
+
+  let html = '';
+  html += secRow('Plan Details');
+  html += stdRow('Credits (USD)', fmtUsdFixed(prepaid));
+  html += stdRow('Setup Charges', null, true);
+  html += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+  html += stdRow('No. of Months', months);
+
+  html += secRow('Streaming Channels');
+  html += stdRow('No. of Channels', channels);
+  html += stdRow('Channel Cost', `${fmtUsdFixed(chCostUsd)} ${perUnitU('/channel/month')}`);
+  if (channels > 0 && months > 0) {
+    html += indRow('Calculation', `${channels} channels × ${months} months × ${fmtUsdFixed(chCostUsd)} = <strong>${fmtUsdFixed(channels * months * chCostUsd)}</strong>`);
+  }
+  if (getSafeNum('human_handoff') === 1) {
+    html += stdRow('Human Handoff', 'Enabled (bot to live agent)');
+  }
+
+  html += secRow('User Plan');
+  html += stdRow('No. of Agents', unlimitedUsers ? 'Unlimited' : numUsers);
+  html += stdRow('User Charge', unlimitedUsers ? FREE : `${fmtUsdFixed(userCharge)} ${perUnitU('/agent/month')}`);
+
+  html += secRow('Number Plan');
+  html += stdRow('No. of Numbers', numberQty);
+  html += stdRow('Number Rental', `${fmtUsdFixed(numCharge)} ${perUnitU('/number/month')}`);
+  if (numberQty > 0) {
+    html += indRow('Rental Calculation', `${numberQty} number(s) × ${fmtUsdFixed(numCharge)} / month = <strong>${fmtUsdFixed(numberQty * numCharge)} / month</strong>`);
+  }
+
+  // Talk-time is billed at the standard international PSTN rate card for the
+  // destination. There is no second leg to bill: the call terminates on the
+  // WebSocket stream to the bot, not on a human agent in another country. A leg
+  // only appears if the rep has enabled human handoff.
+  const handoff = getSafeNum('human_handoff') === 1;
+  entries.forEach(e => {
+    html += secRow(`Call Charges - ${sanitize(e.dest)}`);
+    html += stdRow('Incoming', FREE);
+    html += indRow('Bot leg', `Inbound calls are streamed to your bot over WebSocket: no forwarding leg is billed.`);
+    html += stdRow('Outgoing', `${fmtUsd(e.voipOut)} / min`);
+    html += indRow('Rate Basis', `Billed at the standard ${sanitize(e.dest)} international PSTN outbound rate.`);
+    if (handoff) {
+      html += stdRow('Human Handoff Leg', `${fmtUsd(e.rmRate)} / min`);
+      html += indRow('Applies when', `A call transferred from the bot to a live agent in ${sanitize(e.rm)} adds that agent leg for the duration of the transfer.`);
+    }
+  });
+
+  return html;
 }
 
 function generateTncHtml(validItems, entity) {
   let html = '';
   validItems.forEach(item => {
     const skuHtml = getSkuTncHtml(item, entity);
-    if (skuHtml) html += skuHtml;
+    // The refund policy (and, in Rate Card mode, the rate card basis) applies to
+    // every SKU on both entities, so it is woven into each SKU's own numbered
+    // list rather than appended as a separate block.
+    if (skuHtml) html += withCommonTncClauses(skuHtml, entity);
   });
 
   // Fallback if no specific T&Cs are defined yet
   if (!html) {
-    html = `<ul style="margin:0; padding-left:20px; text-align:left;">
+    html = withCommonTncClauses(`<ul style="margin:0; padding-left:20px; text-align:left;">
       <li style="margin-bottom:6px;">All prices are exclusive of GST unless stated otherwise. GST @ 18% applicable.</li>
       <li style="margin-bottom:6px;">This quotation is valid for 30 days from the date of issue.</li>
       <li style="margin-bottom:6px;">Setup charges are waived as indicated. Waived amounts are non-refundable once service is activated.</li>
       <li style="margin-bottom:6px;">Call credits are consumed as per usage and are non-transferable.</li>
       <li style="margin-bottom:6px;">Services are subject to ${entity}'s standard Terms of Service and Acceptable Use Policy.</li>
       <li style="margin-bottom:6px;">Payment terms: 100% advance unless otherwise agreed in writing.</li>
-    </ul>`;
+    </ul>`, entity);
   }
 
   return html;
 }
 
+// ── Prepaid deposit ─────────────────────────────────────────────────────────
+// Once a line is quoted as a unit price it stops billing, and on SKUs with no
+// credits line (Voice User, for one) that can leave nothing to charge at all.
+// This field is the amount the client actually pays up front. It sits at 0 and
+// stays out of the way until the first unit price is set, then appears.
+const PREPAID_DEPOSIT_ID = 'prepaid_deposit';
+// SKUs that already carry their own prepaid concept, or that are never billed.
+function skuTakesDeposit(skuKey) {
+  if (!skuKey) return false;
+  if (isUsdSku(skuKey)) return false;              // prepaid_usd covers these
+  if (skuKey === 'startup' || STARTUP_PARENT_MAP[skuKey]) return false;
+  if (skuKey === 'truecaller_exotel') return false; // fixed-price package
+  return true;
+}
+function depositAmount(item, fields) {
+  return parseFloat(item && item.values ? item.values[PREPAID_DEPOSIT_ID] : 0) || 0;
+}
+
 // Per-SKU default fields: { id, label, value, locked, stopType, stopVal, note, waived, nonEditable }
 function getSkuFields(skuKey, tier) {
+  const fields = getSkuFieldsBase(skuKey, tier);
+  if (fields.length && skuTakesDeposit(skuKey) && !fields.some(f => f.id === PREPAID_DEPOSIT_ID)) {
+    // First in the list so it lands at the top of the form the moment it appears.
+    fields.unshift({
+      id: PREPAID_DEPOSIT_ID,
+      label: 'Prepaid Deposit (₹)',
+      value: 0,
+      locked: false,
+    });
+  }
+  return fields;
+}
+function getSkuFieldsBase(skuKey, tier) {
   const t = TIER_DEFAULTS[tier] || TIER_DEFAULTS.dabbler;
   const sms_field = { id: 'sms_cost', label: 'SMS Cost (p/msg)', value: 21, locked: true, stopType: 'lower', stopVal: 17, note: 'SMS Add-on' };
   const wa_fields = [
@@ -1767,14 +2252,14 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'Call Credits (₹)', value: t.credits, locked: true, stopType: 'lower', stopVal: t.credits },
-        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
-        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'single_leg', label: 'Single Leg Charge (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single },
         { id: 'incoming', label: 'Incoming (Single Leg) (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single },
         { id: 'outgoing', label: 'Outgoing (Double Leg) (p/min)', value: t.single_leg * 2, locked: true, stopType: 'lower', stopVal: t.stop_single * 2 },
@@ -1793,14 +2278,14 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         {
-          id: 'user_charge', label: 'User Charge – Veeno Model (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000,
+          id: 'user_charge', label: 'User Charge - Veeno Model (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000,
           note: 'Non-waiveable. Charged from user 1.'
         },
         { id: 'user_model_exotel', label: 'Pricing Model', value: 0, type: 'model_toggle', locked: false },
         { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: false },
-        { id: 'exotel_user_charge', label: 'Extra User Charge – Exotel model (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 199 },
+        { id: 'exotel_user_charge', label: 'Extra User Charge - Exotel model (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 199 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
@@ -1809,8 +2294,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'did_cost', label: 'Mobile DID Rate (₹/Mobile DID/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 4000 },
-        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
-        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'single_leg', label: 'Single Leg Charge (p/min)', value: 52, locked: true, stopType: 'lower', stopVal: 52 },
         { id: 'incoming', label: 'Incoming Call Charges (p/min, 0=Free)', value: 0, locked: false, stopType: 'lower', stopVal: 0, note: '0 means Free for client' },
         { id: 'outgoing', label: 'Outgoing (Single Leg) (p/min)', value: 52, locked: true, stopType: 'lower', stopVal: 52 },
@@ -1826,7 +2311,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'user_charge', label: 'User Charge (₹/user/month)', value: 2000, locked: true, stopType: 'lower', stopVal: 1600 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
@@ -1844,7 +2329,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
         {
           id: 'user_charge', label: 'User Charge (₹/user/month)', value: 2000, locked: true, stopType: 'lower', stopVal: 2000,
@@ -1868,7 +2353,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'num_numbers', label: 'No. of TFN Numbers', value: 1, locked: false },
         { id: 'number_cost', label: 'TFN Number Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
@@ -1885,18 +2370,19 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'No. of Channels', value: 5, locked: true, stopType: 'lower', stopVal: 3 },
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 4000 },
-        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
         { id: 'human_handoff', label: 'Enable Human Handoff? (Voicebot to Agent)', type: 'boolean', value: 0 },
         { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 6, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true, stopType: 'upper', stopVal: 5 },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -1908,6 +2394,7 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'Free Channels (Included)', value: 5, locked: true, stopType: 'lower', stopVal: 1 },
         { id: 'num_paid_channels', label: 'No. of Paid Channels', value: 0, locked: false, note: 'Additional channels charged at the rate below' },
@@ -1920,7 +2407,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'human_handoff', label: 'Enable Human Handoff? (Voicebot to Agent)', type: 'boolean', value: 0 },
         { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 6, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true, stopType: 'upper', stopVal: 5 },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -1934,7 +2421,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -1948,7 +2435,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -1971,7 +2458,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'number_cost', label: 'Number (₹/month)', value: 499, locked: true, note: 'Can be waived' },
         { id: 'credits', label: 'RCS Credits (₹)', value: 35000, locked: true, stopType: 'lower', stopVal: 35000 },
@@ -1995,7 +2482,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t2.free_users ?? 'Unlimited', locked: true, stopType: t2.users_stop ? 'upper' : null, stopVal: t2.users_stop },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'free_numbers', label: 'Free Numbers', value: t2.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
@@ -2004,8 +2491,8 @@ function getSkuFields(skuKey, tier) {
         { id: 'did_cost', label: 'Mobile DID Rate (₹/Mobile DID/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'remove_std_numbers', label: 'Remove landline numbers?', value: 0, type: 'boolean', locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: t2.credits, locked: true, stopType: 'lower', stopVal: t2.credits },
-        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
-        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
@@ -2019,8 +2506,18 @@ function getSkuFields(skuKey, tier) {
         { id: 'procurement', label: 'Number Procurement (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 2000 },
         { id: 'rental', label: 'Number Rental (₹/month)', value: 850, locked: true, stopType: 'lower', stopVal: 850 },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'num_channels', label: 'No. of Channels', value: 30, locked: true, stopType: 'lower', stopVal: 10 },
-        { id: 'channel_cost', label: 'Channel Cost (₹/month)', value: 1000, locked: true, nonEditable: true },
+        // Channels are sold only in blocks of 50 - there is no per-channel rate,
+        // and 50 is the floor.
+        { id: 'channel_blocks', label: 'Channel Blocks (50 channels each)', value: 1, locked: true, stopType: 'lower', stopVal: 1, note: 'Each block = 50 channels' },
+        { id: 'block_cost', label: 'Channel Block Cost (₹/50 channels/month)', value: CHANNEL_BLOCK_COST, locked: true, stopType: 'lower', stopVal: CHANNEL_BLOCK_COST, note: 'Sold in 50-channel chunks only' },
+        // Users bill on either model, same as Veeno STD: Veeno charges every
+        // user from the first, Exotel gives free users and charges the rest.
+        { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'user_charge', label: 'User Charge - Veeno Model (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000, note: 'Non-waiveable. Charged from user 1.' },
+        { id: 'user_model_exotel', label: 'Pricing Model', value: 0, type: 'model_toggle', locked: false },
+        { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: false },
+        { id: 'exotel_user_charge', label: 'Extra User Charge - Exotel model (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 199 },
         { id: 'num_months', label: 'No. of Months', value: 12, locked: true, stopType: 'lower', stopVal: 6 },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 20000 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 50 },
@@ -2033,14 +2530,14 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: t.free_numbers, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'credits', label: 'Call Credits (₹)', value: t.credits, locked: true, stopType: 'lower', stopVal: t.credits },
-        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted – no charge to client' },
-        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (\u20b9)', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'call_rate', label: 'Campaign Rate (p/min)', value: t.single_leg, locked: true, stopType: 'lower', stopVal: t.stop_single, note: 'Single-leg: one charge per call per minute' },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
       ];
@@ -2061,14 +2558,14 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
-        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted – no charge to client' },
-        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'single_leg', label: 'Single Leg Charge (p/min)', value: 60, locked: false },
         { id: 'incoming', label: 'Incoming (Single Leg) (p/min)', value: 60, locked: false },
         { id: 'outgoing', label: 'Outgoing (Double Leg) (p/min)', value: 120, locked: false },
@@ -2098,18 +2595,19 @@ function getSkuFields(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'No. of Channels', value: 5, locked: true, stopType: 'lower', stopVal: 3 },
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 4000 },
-        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'incoming', label: 'Incoming (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 16 },
         { id: 'outgoing', label: 'Outgoing (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
         { id: 'human_handoff', label: 'Enable Human Handoff? (Voicebot to Agent)', type: 'boolean', value: 0 },
         { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 6, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true, stopType: 'upper', stopVal: 5 },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -2137,7 +2635,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -2151,7 +2649,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -2168,7 +2666,7 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'num_months', label: 'No. of Months', value: 1, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'number_cost', label: 'Number Cost (₹/month)', value: 0, locked: false },
         { id: 'credits', label: 'RCS Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
@@ -2183,14 +2681,14 @@ function getSkuFields(skuKey, tier) {
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
-        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
-        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted – no charge to client' },
-        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted – no charge to client' },
+        { id: 'extra_credits', label: 'Additional Credits (₹)', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'extra_validity', label: 'Additional Validity (months)', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'call_rate', label: 'Campaign Rate (p/min)', value: 60, locked: false },
       ];
 
@@ -2206,9 +2704,9 @@ function getSkuFields(skuKey, tier) {
         { id: 'unlimited_users', label: 'Unlimited User Access (Free)', value: 0, type: 'boolean' },
         { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
-        // Number Plan — multi-entry table
+        // Number Plan - multi-entry table
         { id: 'intl_entries', label: 'International Numbers & Rates', type: 'intl_numbers_table', value: [] },
-        // Standalone rental quantity (independent of the rate table above — lets you rent
+        // Standalone rental quantity (independent of the rate table above - lets you rent
         // several numbers from the same region without adding extra rate rows)
         { id: 'intl_number_qty', label: 'No. of Numbers', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
         // Legacy single-entry kept for backward compat (hidden by table)
@@ -2220,6 +2718,28 @@ function getSkuFields(skuKey, tier) {
         { id: 'voip_outgoing_usd', label: 'VoIP Outgoing (USD/min)', value: 0.02, locked: false, note: '_legacy_intl' },
         { id: 'pstn_incoming_usd', label: 'PSTN Incoming (USD/min)', value: 0.08, locked: false, note: '_legacy_intl' },
         { id: 'pstn_outgoing_usd', label: 'PSTN Outgoing (USD/min)', value: 0.10, locked: false, note: '_legacy_intl' },
+      ];
+
+    // ── International Web Streaming (USD) ──────────────────────────
+    // Channels bill at a flat USD rate; the talk-time is billed at the same
+    // international PSTN rates as the International Commercial SKU.
+    case 'voice_intl_stream':
+      return [
+        { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
+        { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
+        { id: 'call_rate_mode', label: 'Call Rate Display', value: 1, type: 'call_mode_select' },
+        { id: 'fee_type', label: 'Apply Fee to Quote', value: 2, type: 'fee_select' },
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
+        { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
+        { id: 'num_channels', label: 'No. of Streaming Channels', value: 5, locked: true, stopType: 'lower', stopVal: 1 },
+        { id: 'channel_cost_usd', label: 'Channel Cost (USD/channel/month)', value: INTL_STREAM_CHANNEL_USD, locked: true, stopType: 'lower', stopVal: INTL_STREAM_CHANNEL_USD },
+        { id: 'human_handoff', label: 'Enable Human Handoff? (Voicebot to Agent)', type: 'boolean', value: 0 },
+        { id: 'unlimited_users', label: 'Unlimited User Access (Free)', value: 0, type: 'boolean' },
+        { id: 'num_users', label: 'No. of Users (Agents)', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
+        { id: 'user_charge_usd', label: 'User Charge (USD/agent/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
+        { id: 'intl_entries', label: 'International Numbers & PSTN Rates', type: 'intl_numbers_table', value: [] },
+        { id: 'intl_number_qty', label: 'No. of Numbers', value: 1, locked: false, stopType: 'lower', stopVal: 1 },
+        { id: 'number_charge_usd', label: 'Number Rental (USD/number/month)', value: 15, locked: true, stopType: 'lower', stopVal: 10 },
       ];
 
     default: return [];
@@ -2291,7 +2811,7 @@ function updateIntlRates(item, card) {
   const country = item.values['intl_country'] || 'United States';
   const rmCountry = item.values['rm_country'] || 'India';
 
-  // Destination leg rate — Priority: Fixed > All > Mobile
+  // Destination leg rate - Priority: Fixed > All > Mobile
   const destRates = getIntlCountryRates(country);
   let destRate = 0;
   if (destRates.length > 0) {
@@ -2301,7 +2821,7 @@ function updateIntlRates(item, card) {
     destRate = (fixed || all || mobile)?.rate ?? 0;
   }
 
-  // RM / Agent leg rate — lookup from rate card (India = $0.08 hardcoded as default)
+  // RM / Agent leg rate - lookup from rate card (India = $0.08 hardcoded as default)
   let rmRate = 0.08; // India default
   if (rmCountry !== 'India') {
     const rmRates = getIntlCountryRates(rmCountry);
@@ -2498,7 +3018,7 @@ function renderSkuItemManager() {
       : 'Choose the product plan for this quote. The logo and entity will switch automatically.';
   }
 
-  // Item rows — inline rename: pencil click swaps label into an input in-place
+  // Item rows - inline rename: pencil click swaps label into an input in-place
   if (!QG._renamingItemId) QG._renamingItemId = null;
 
   let itemsHtml = QG.skuItems.map((item, idx) => {
@@ -2585,7 +3105,7 @@ window.openItemRename = function(itemId) {
   const item = QG.skuItems.find(i => i.id === itemId);
   if (!item) return;
   if (QG._renamingItemId === itemId) {
-    // Toggle off — commit and close
+    // Toggle off - commit and close
     window.commitItemRename(itemId);
     return;
   }
@@ -2676,7 +3196,7 @@ window.removeSkuItem = function (itemId) {
 
   // In compare mode for tier-compare SKUs, let updateCompareTiers handle the full re-render.
   // Calling selectSku here would call updateCompareTiers internally which reads checkboxes
-  // and would add the removed tier back — so we skip it entirely.
+  // and would add the removed tier back - so we skip it entirely.
   const tierCompareSkus = ['voice_exotel_std', 'sip_veeno'];
   if (QG.compareMode && QG.currentSku && tierCompareSkus.includes(QG.currentSku)) {
     window.updateCompareTiers();
@@ -2686,7 +3206,7 @@ window.removeSkuItem = function (itemId) {
 
   // Non-compare-mode path: standard re-render
   if (QG.activeItemId === itemId && QG.currentSku) {
-    // don't call selectSku — just re-render directly
+    // don't call selectSku - just re-render directly
   }
   renderSkuItemManager();
   renderSkuSelector();
@@ -2869,9 +3389,22 @@ window.toggleBundleMergeMode = function (enabled) {
   updatePreview();
 };
 
-// ── Bundle Package Mode — per-row label rename ─────────────────────────────
+// ── Exclusive feature: per-field unit pricing ──────────────────────────────
+// Granted by the developer, not by admins, so the ability to quote a line
+// without billing it stays with a named few.
+function canUseUnitPricing() {
+  return !!(QG.features && QG.features.unit_pricing);
+}
+function loadFeatureFlags() {
+  return fetch('/api/features/me')
+    .then(r => r.ok ? r.json() : { features: {} })
+    .then(d => { QG.features = d.features || {}; })
+    .catch(() => { QG.features = {}; });
+}
+
+// ── Bundle Package Mode - per-row label rename ─────────────────────────────
 // The rename UI lives in the SKU config panel (renderFieldRow), so these must
-// re-render that panel — not just the preview — to open/close the inline input.
+// re-render that panel - not just the preview - to open/close the inline input.
 function _bundleRenameKey(itemId, fieldId) { return itemId + ':' + fieldId; }
 function _bundleReRenderConfig() {
   const cfg = document.getElementById('sku-config-area');
@@ -2913,7 +3446,7 @@ window.bundleClearRename = function (itemId, fieldId) {
   _bundleReRenderConfig();
 };
 
-// ── Bundle Package Mode — reveal / re-hide a covered duplicate field ───────
+// ── Bundle Package Mode - reveal / re-hide a covered duplicate field ───────
 window.bundleReaddDupe = function (key) {
   if (!QG.bundleReaddedFields.includes(key)) {
     QG.bundleReaddedFields.push(key);
@@ -2966,7 +3499,7 @@ window.switchBundle = function (bundleLabel) {
       else { cfgArea.innerHTML = ''; renderSkuForm(QG.currentSku, QG.currentTier); }
     } else { cfgArea.innerHTML = ''; }
   }
-  // Do NOT call updatePreview() here synchronously — renderSkuForm's setTimeout(10ms)
+  // Do NOT call updatePreview() here synchronously - renderSkuForm's setTimeout(10ms)
   // fires toggleAddons first (which sets smsAddon/waAddon flags), then calls updatePreview.
   // Calling it here would render the preview before addon flags are updated for the new bundle.
   if (!QG.currentSku) updatePreview(); // only if no form will be rendered
@@ -3014,7 +3547,7 @@ function renderSkuSelector() {
   const grid = document.getElementById('sku-selector-grid');
   if (!grid) return;
 
-  // In bundle compare/merge mode each bundle is independent — show all SKUs, no cross-entity lock
+  // In bundle compare/merge mode each bundle is independent - show all SKUs, no cross-entity lock
   // Always include the bundle_compare and bundle_merge cards regardless of entity lock
   let filtered;
   if (QG.multiSkuMode && QG.lockedEntity && !QG.bundleCompareMode && !QG.bundleMergeMode) {
@@ -3028,7 +3561,7 @@ function renderSkuSelector() {
 
   grid.innerHTML = filtered.map(s => {
     if (s.isBundleCompare) {
-      // Special toggle card — not a regular SKU
+      // Special toggle card - not a regular SKU
       const isActive = QG.bundleCompareMode;
       return `
       <div class="sku-option sku-bundle${isActive ? ' selected' : ''}" data-sku="bundle_compare"
@@ -3124,7 +3657,7 @@ function selectSku(key, userInitiated = false) {
     playTruecallerAnimation();
   }
 
-  // Entity lock enforcement — only applies within a bundle (not across bundles in compare mode)
+  // Entity lock enforcement - only applies within a bundle (not across bundles in compare mode)
   if (QG.multiSkuMode && QG.lockedEntity && sku.entity !== QG.lockedEntity && sku.entity !== 'Both' && !QG.bundleCompareMode && !QG.bundleMergeMode) {
     showAlert(`This quote is locked to ${QG.lockedEntity} plans. Remove all items to start a new quote with a different entity.`, { type: 'warning', title: 'Entity Lock' });
     return;
@@ -3132,7 +3665,7 @@ function selectSku(key, userInitiated = false) {
 
   // Bundle Package: clicking a SKU appends a new row when the active row is
   // already a different configured SKU, so several SKUs can be stacked just by
-  // clicking them in turn — no need to press "Add SKU" between each.
+  // clicking them in turn - no need to press "Add SKU" between each.
   const activeItem = getActiveItem();
   const bundleAppend = QG.bundleMergeMode && activeItem && activeItem.sku_key && activeItem.sku_key !== key;
   if (bundleAppend && QG.skuItems.length >= 3) {
@@ -3144,8 +3677,8 @@ function selectSku(key, userInitiated = false) {
   // When appending, the active row is kept, so weigh the whole set.
   if (QG.multiSkuMode && !QG.bundleCompareMode) {
     const otherItems = bundleAppend ? QG.skuItems : QG.skuItems.filter(i => i.id !== QG.activeItemId);
-    const hasIntl = otherItems.some(i => i.sku_key === 'voice_intl');
-    const isSelectingIntl = key === 'voice_intl';
+    const hasIntl = otherItems.some(i => isUsdSku(i.sku_key));
+    const isSelectingIntl = isUsdSku(key);
     if (otherItems.some(i => i.sku_key) && ((hasIntl && !isSelectingIntl) || (!hasIntl && isSelectingIntl))) {
       showAlert("International USD plans cannot be mixed with standard INR plans in a single quote.", { type: 'warning', title: 'Currency Mismatch' });
       return;
@@ -3196,7 +3729,7 @@ function selectSku(key, userInitiated = false) {
       window.updateCompareTiers();
       return;
     } else {
-      // Different SKU selected — always kill compare mode and clear extra items
+      // Different SKU selected - always kill compare mode and clear extra items
       if (ctSelector) ctSelector.style.display = 'none';
       QG.compareMode = false;
       const mainItem = QG.skuItems[0] || _makeItem('item_0');
@@ -3577,6 +4110,13 @@ window.updateCompareTiers = function (el) {
   updatePreview();
 };
 
+// The deposit only exists to backstop unit-priced lines, so it stays hidden
+// until there is one.
+function visibleFields(fields, item) {
+  if (itemHasUnitOnly(item)) return fields;
+  return fields.filter(f => f.id !== PREPAID_DEPOSIT_ID);
+}
+
 function renderFieldsGroupedCombined(items) {
   const SECTION_MAP = {
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
@@ -3591,6 +4131,7 @@ function renderFieldsGroupedCombined(items) {
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
     num_paid_channels: 'Number Plan',
+    channel_blocks: 'Number Plan', block_cost: 'Number Plan', channel_cost_usd: 'Number Plan',
     number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
     prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
@@ -3612,7 +4153,7 @@ function renderFieldsGroupedCombined(items) {
   items.forEach(item => {
     const k = item.sku_key || QG.currentSku;
     const t = item.tier || QG.currentTier;
-    const fields = getSkuFields(k, t) || [];
+    const fields = visibleFields(getSkuFields(k, t) || [], item);
     fields.forEach(f => {
       const sec = SECTION_MAP[f.id] || 'Settings';
       if (!sectionMap[sec]) { sectionMap[sec] = []; sectionOrder.push(sec); }
@@ -3677,7 +4218,7 @@ function renderFieldsGroupedCombined(items) {
   return search + body;
 }
 
-// ── Bundle Package — SKU primacy ranking for smart field ownership ─────────
+// ── Bundle Package - SKU primacy ranking for smart field ownership ─────────
 // Lower = more "primary" (a complete base plan). The most-primary clubbed SKU
 // owns each shared field; specialised SKUs only surface their unique fields.
 const _BUNDLE_PRIMARY_RANK = {
@@ -3688,7 +4229,7 @@ const _BUNDLE_PRIMARY_RANK = {
   voice_exotel_stream: 5, voice_exotel_voicebot: 5,
   sms_exotel: 6, whatsapp_exotel: 6, rcs_exotel: 6,
   num_1400: 7, num_1600: 7,
-  voice_intl: 8,
+  voice_intl: 8, voice_intl_stream: 8,
 };
 function _bundleRank(item) {
   const k = item.sku_key === 'startup' ? 'startup' : item.sku_key;
@@ -3729,7 +4270,7 @@ function _bundleComputeOwnership(items) {
   });
   return { owners, coveredBy };
 }
-// ── Bundle Package — "search hidden fields to add back" dropdown ───────────
+// ── Bundle Package - "search hidden fields to add back" dropdown ───────────
 window.bundleShowSearch = function () {
   const list = document.getElementById('bundle-hidden-list');
   if (list) list.classList.add('open');
@@ -3753,7 +4294,7 @@ window.bundleFilterHidden = function (inp) {
   if (empty) empty.style.display = any ? 'none' : 'block';
 };
 
-// ── Bundle Package — per-component "Add-ons" checkbox bar ──────────────────
+// ── Bundle Package - per-component "Add-ons" checkbox bar ──────────────────
 // Mirrors the single-SKU add-on toolbar (SMS / WhatsApp / Call Transfer) inside
 // the unified bundle card. Only the SKU that *owns* an add-on field in the merge
 // shows its checkbox, so a clubbed field never gets two competing toggles.
@@ -4053,6 +4594,30 @@ function renderSkuForm(skuKey, tier) {
           }
           item.values[f.id] = isNaN(numVal) ? val : numVal;
 
+          // Text values opt out of pricing entirely: no stop-lock breach, no
+          // discount control, and a badge so the rep can see it won't be summed.
+          const isTextNow = isFreeText(val);
+          const row = input.closest('.q-field-row');
+          if (row) {
+            row.classList.toggle('text-value-row', isTextNow);
+            if (isTextNow) input.classList.remove('stop-lock-violation');
+            const valueCell = row.querySelector('.q-field-value');
+            let pill = valueCell?.querySelector('.q-text-pill');
+            const discBtn = valueCell?.querySelector('.q-disc-btn');
+            const discPill = valueCell?.querySelector('.q-disc-pill');
+            if (isTextNow && !pill && valueCell) {
+              pill = document.createElement('span');
+              pill.className = 'q-text-pill';
+              pill.title = 'Text value: printed as-is, not multiplied into any total';
+              pill.textContent = 'abc · not calculated';
+              valueCell.appendChild(pill);
+            } else if (!isTextNow && pill) {
+              pill.remove();
+            }
+            if (discBtn) discBtn.style.display = isTextNow ? 'none' : '';
+            if (discPill) discPill.style.display = isTextNow ? 'none' : '';
+          }
+
           if (item.sku_key === 'voice_exotel_voicebot' && (f.id === 'volume' || f.id === 'outgoing' || f.id === 'num_months')) {
             const vol = parseFloat(item.values['volume'] ?? fields.find(x => x.id === 'volume')?.value ?? 1000);
             const rate = parseFloat(item.values['outgoing'] ?? fields.find(x => x.id === 'outgoing')?.value ?? 500);
@@ -4068,6 +4633,38 @@ function renderSkuForm(skuKey, tier) {
 
           if (QG.activeItemId === item.id) syncActiveAliases();
           updatePreview();
+        });
+      });
+
+      // ── Per-field unit-price toggle ─────────────────────────────────
+      card.querySelectorAll('.q-unit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const fid = btn.dataset.unit;
+          const hadAny = itemHasUnitOnly(item);
+          if (!item.unitOnly) item.unitOnly = {};
+          if (item.unitOnly[fid]) delete item.unitOnly[fid];
+          else item.unitOnly[fid] = true;
+          QG._dirty = true;
+          const nowAny = itemHasUnitOnly(item);
+          renderSkuForm(QG.currentSku, QG.currentTier);
+          updatePreview();
+          // The first unit price is what reveals the deposit field - point the
+          // rep straight at it, since it is now the only thing being charged.
+          if (!hadAny && nowAny) {
+            setTimeout(() => {
+              const dep = document.getElementById('qf_' + PREPAID_DEPOSIT_ID + '_' + item.id);
+              if (!dep) return;
+              dep.closest('.q-field-row')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              dep.focus();
+              dep.select();
+              const row = dep.closest('.q-field-row');
+              if (row) {
+                row.classList.add('deposit-reveal');
+                setTimeout(() => row.classList.remove('deposit-reveal'), 1600);
+              }
+            }, 30);
+          }
         });
       });
 
@@ -4129,9 +4726,9 @@ function renderSkuForm(skuKey, tier) {
   setTimeout(() => {
     setupLockButtons();
     itemsToRender.forEach(item => window.toggleAddons(item.id, item.sku_key || skuKey, item.tier || tier));
-    // Initialize International rates if voice_intl
+    // Initialize International rates for the USD SKUs
     itemsToRender.forEach(item => {
-      if (item.sku_key === 'voice_intl') {
+      if (isUsdSku(item.sku_key)) {
         const card = document.getElementById('sku-fields-card-' + item.id);
         if (card) updateIntlRates(item, card);
       }
@@ -4221,16 +4818,22 @@ window.toggleAddons = function (itemId, skuKey, tier) {
     }
   });
 
-  // Handle Veeno STD user model toggle – hide/show fields based on active model
-  if (skuKey === 'voice_veeno_std') {
+  // Handle the Veeno/Exotel user model toggle - hide/show fields based on the
+  // active model. Shared by Veeno STD and the 1400/1600 number series.
+  if (skuKey === 'voice_veeno_std' || isNumSeries(skuKey)) {
     // In Bundle mode every item's rows live in the shared bundle card. The
     // #qf_<field>_<itemId> ids are already item-specific, so we only need to
     // point at the right card here.
     const card = document.getElementById(QG.bundleMergeMode ? 'sku-fields-card-bundle' : 'sku-fields-card-' + itemId);
     if (card) {
       const showExotel = item.values['user_model_exotel'] === 1;
-      // Fields that belong only to the Veeno per-user model
-      ['num_users', 'extra_users', 'user_charge'].forEach(fid => {
+      // Fields that belong only to the Veeno per-user model. On the number
+      // series the head-count stays visible in both models, because the Exotel
+      // model prices the overflow above the free block and needs that input.
+      const veenoOnly = isNumSeries(skuKey)
+        ? ['user_charge']
+        : ['num_users', 'extra_users', 'user_charge'];
+      veenoOnly.forEach(fid => {
         const el = card.querySelector(`#qf_${fid}_${itemId}`);
         const row = el?.closest('.q-field-row');
         if (row) row.style.display = showExotel ? 'none' : 'flex';
@@ -4249,12 +4852,12 @@ window.toggleAddons = function (itemId, skuKey, tier) {
         const label = row.querySelector('.q-field-label');
         if (!label) return;
         const labelText = label.textContent.trim();
-        // Hide "User Charge – Veeno Model" label row when in Exotel model
-        if (labelText === 'User Charge – Veeno Model (₹/user/month)') {
+        // Hide "User Charge - Veeno Model" label row when in Exotel model
+        if (labelText === 'User Charge - Veeno Model (₹/user/month)') {
           row.style.display = showExotel ? 'none' : 'flex';
         }
         // Hide Exotel-model-only labels when in Veeno model
-        if (labelText === 'Free Users (Exotel model)' || labelText === 'Extra User Charge – Exotel model (₹/user/month)') {
+        if (labelText === 'Free Users (Exotel model)' || labelText === 'Extra User Charge - Exotel model (₹/user/month)') {
           row.style.display = showExotel ? 'flex' : 'none';
         }
       });
@@ -4476,13 +5079,40 @@ function renderFieldRow(f, item, opts = {}) {
           </div>
         `;
       }
+    } else {
+      // Outside Bundle Package mode the same affordance applies to plain
+      // single-SKU quotes: double-click any line's name to retitle it, and the
+      // proposal picks the new name up everywhere that line appears.
+      const key = item.id + ':' + f.id;
+      const safeInputId = 'row-rename-' + key.replace(/[^a-zA-Z0-9_-]/g, '_');
+      const isRenaming = QG._renamingRowKey === key;
+      const defaultLabel = rowLabelKey(f.label);
+      const displayLabel = getRowLabel(item, f.label);
+      const isRenamed = displayLabel !== defaultLabel;
+
+      if (isRenaming) {
+        lblHtml = `
+          <div style="display:flex; align-items:center; gap:4px; width:100%;">
+            <input type="text" id="${safeInputId}" value="${sanitize(displayLabel)}" placeholder="${sanitize(defaultLabel)}" class="q-input" style="padding:2px 4px; font-size:0.8rem; flex:1;" onkeydown="if(event.key==='Enter'){event.preventDefault();window.commitRowRename('${item.id}','${f.id}')}else if(event.key==='Escape'){window.cancelRowRename()}" />
+            <button class="bundle-icon-btn save" onclick="window.commitRowRename('${item.id}','${f.id}')" title="Save">&#10003;</button>
+            <button class="bundle-icon-btn cancel" onclick="window.cancelRowRename()" title="Cancel">&times;</button>
+          </div>
+        `;
+      } else {
+        lblHtml = `
+          <div style="display:flex; align-items:center; gap:6px; width:100%;">
+            <span class="bundle-rename-target" ondblclick="window.startRowRename('${item.id}','${f.id}')" title="Double-click to rename this line">${sanitize(isRenamed ? f.label.split(defaultLabel).join(displayLabel) : f.label)}</span>
+            ${isRenamed ? `<button class="q-row-reset-btn" onclick="window.resetRowRename('${item.id}','${f.id}')" title="Restore the original name">&#8630;</button>` : ''}
+          </div>
+        `;
+      }
     }
     return `<div class="q-field-label" style="${extraStyle}">${lblHtml}</div>`;
   };
   
   const v = item.values[f.id] !== undefined ? item.values[f.id] : (f.value !== undefined ? f.value : '');
 
-  // Hide legacy intl fields — they're managed by the intl_numbers_table widget
+  // Hide legacy intl fields - they're managed by the intl_numbers_table widget
   if (f.note === '_legacy_intl') return '';
 
   // Render intl numbers table
@@ -4644,28 +5274,89 @@ function renderFieldRow(f, item, opts = {}) {
       </div>`;
   }
 
+  // Words instead of digits: the value is shown verbatim in the proposal and
+  // takes no part in any calculation or total.
+  const _isText = isFreeText(String(v ?? ''));
+  const _textPill = _isText
+    ? `<span class="q-text-pill" title="Text value: printed as-is, not multiplied into any total">abc · not calculated</span>`
+    : '';
+
+  // Unit-price toggle: quote this single line as a rate rather than letting it
+  // multiply out into the total. Available only to entitled reps.
+  const _unitApplies = canUseUnitPricing() && canBeUnitOnly(f) && !isExcluded;
+  const _unitOn = isUnitOnly(item, f.id);
+  const _unitBtn = _unitApplies
+    ? `<button type="button" class="q-unit-btn${_unitOn ? ' active' : ''}" data-unit="${f.id}" data-item="${item.id}" tabindex="-1" title="${_unitOn
+        ? 'Unit price: shown on the proposal but not multiplied out or added to the total. Click to price it normally.'
+        : 'Priced normally: multiplied out and added to the total. Click to quote it as a unit price only.'}">${_unitOn ? I_TAG : I_SIGMA}</button>`
+    : '';
+
   const _discVal = itemDiscount(item, f.id);
   const _hasDisc = _discVal !== null && _discVal !== _num(v);
-  const _discBtn = `<button type="button" class="q-disc-btn${_hasDisc ? ' active' : ''}" data-disc="${f.id}" data-item="${item.id}" tabindex="-1" title="${_hasDisc ? 'Discount applied — click to edit or clear' : 'Strike this value and add a discounted price'}"${isExcluded ? ' disabled' : ''}>${I_STRIKE}</button>${_hasDisc ? `<span class="q-disc-pill" title="Discounted price shown to the client">→ ₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(_discVal)}</span>` : ''}`;
+  const _discBtn = `<button type="button" class="q-disc-btn${_hasDisc ? ' active' : ''}" data-disc="${f.id}" data-item="${item.id}" tabindex="-1" title="${_hasDisc ? 'Discount applied - click to edit or clear' : 'Strike this value and add a discounted price'}"${isExcluded ? ' disabled' : ''}>${I_STRIKE}</button>${_hasDisc ? `<span class="q-disc-pill" title="Discounted price shown to the client">→ ₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(_discVal)}</span>` : ''}`;
+
   return `
-    <div class="q-field-row${isExcluded ? ' excluded-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
+    <div class="q-field-row${isExcluded ? ' excluded-row' : ''}${_isText ? ' text-value-row' : ''}${_unitOn ? ' unit-only-row' : ''}" data-addon="${f.note || ''}" data-item="${item.id}" style="${isExcluded ? 'opacity: 0.55;' : ''}">
       ${getLabelHtml()}
       <div class="q-field-value">
         <input type="text"
-          inputmode="decimal"
           class="q-input"
           id="qf_${f.id}_${item.id}"
-          value="${v}"
+          value="${sanitize(String(v ?? ''))}"
           autocomplete="off"
           spellcheck="false"
+          title="Enter a number to price this line, or type words to show it as plain text"
           ${isExcluded ? 'disabled' : ''}>
-        ${_discBtn}
+        ${_unitBtn}
+        ${_textPill}
+        ${_isText ? '' : _discBtn}
       </div>
     </div>`;
 }
 
+// ── Per-row rename (single-SKU mode) ────────────────────────────────────────
+window.startRowRename = function (itemId, fieldId) {
+  QG._renamingRowKey = itemId + ':' + fieldId;
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  setTimeout(() => {
+    const el = document.getElementById('row-rename-' + (itemId + ':' + fieldId).replace(/[^a-zA-Z0-9_-]/g, '_'));
+    if (el) { el.focus(); el.select(); }
+  }, 10);
+};
+window.commitRowRename = function (itemId, fieldId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  const el = document.getElementById('row-rename-' + (itemId + ':' + fieldId).replace(/[^a-zA-Z0-9_-]/g, '_'));
+  if (item && el) {
+    const fields = getSkuFields(item.sku_key === 'startup' ? 'startup_' + (item.tier || 'voice') : item.sku_key, item.tier);
+    const f = fields.find(x => x.id === fieldId);
+    if (f) setRowLabel(item, f.label, el.value);
+    QG._dirty = true;
+  }
+  QG._renamingRowKey = null;
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+window.cancelRowRename = function () {
+  QG._renamingRowKey = null;
+  renderSkuForm(QG.currentSku, QG.currentTier);
+};
+window.resetRowRename = function (itemId, fieldId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (item) {
+    const fields = getSkuFields(item.sku_key === 'startup' ? 'startup_' + (item.tier || 'voice') : item.sku_key, item.tier);
+    const f = fields.find(x => x.id === fieldId);
+    if (f) setRowLabel(item, f.label, '');
+    QG._dirty = true;
+  }
+  QG._renamingRowKey = null;
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+
 function renderFieldsGrouped(fields, item) {
+  fields = visibleFields(fields, item);
   const SECTION_MAP = {
+    [PREPAID_DEPOSIT_ID]: 'Prepaid Deposit',
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
     channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
     num_months: 'Plan Overview',
@@ -4678,6 +5369,7 @@ function renderFieldsGrouped(fields, item) {
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Number Plan', channel_cost: 'Number Plan', did_cost: 'Number Plan',
     num_paid_channels: 'Number Plan',
+    channel_blocks: 'Number Plan', block_cost: 'Number Plan', channel_cost_usd: 'Number Plan',
     number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
     prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
@@ -4851,17 +5543,8 @@ function _renderBundleItemsHTML(bundleItems) {
     const sku = SKUS.find(s => s.key === item.sku_key);
     const fields = getSkuFields(item.sku_key, item.tier);
 
-    const getVal = (id) => {
-      const f = fields.find(x => x.id === id);
-      if (!f) return undefined;
-      return applyDiscount(item, id, item.values[id] ?? f.value);
-    };
-    const getSafeNum = (id) => {
-      const f = fields.find(x => x.id === id);
-      if (!f || f.waived) return 0;
-      if (QG.bundleMergeMode && item.excludedFields && item.excludedFields[id]) return 0;
-      return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0));
-    };
+    const getVal = (id) => readVal(item, fields, id);
+    const getSafeNum = (id) => readNum(item, fields, id, { respectExclusions: QG.bundleMergeMode });
     const fmtRupee = (v) => discWrap(v, (x) => {
       if (x === null || x === undefined) return '-';
       return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x);
@@ -4928,7 +5611,8 @@ function _renderBundleItemsHTML(bundleItems) {
       const found = fields.find(f => { const fl = clean(f.label); return fl.includes(target) || target.includes(fl); });
       return found ? found.id : label;
     };
-    const stdRow = (lbl, val, isWaived, customId) => {
+    const stdRow = (rawLbl, val, isWaived, customId) => {
+      const lbl = rowLabel(item, rawLbl);
       if (QG.bundleMergeMode) {
         allBundleRows.push({
           item,
@@ -4945,7 +5629,8 @@ function _renderBundleItemsHTML(bundleItems) {
       const disp = isWaived ? W : hasHTML(val) ? val : sanitize(String(val ?? '-'));
       return `<tr><td class="sku-row-name">${sanitize(lbl)}</td><td>${disp}</td></tr>`;
     };
-    const indRow = (lbl, val, customId) => {
+    const indRow = (rawLbl, val, customId) => {
+      const lbl = rowLabel(item, rawLbl);
       if (QG.bundleMergeMode) {
         allBundleRows.push({
           item,
@@ -5309,6 +5994,7 @@ function _renderBundleItemsHTML(bundleItems) {
       const rentalStream = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
       tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
       if (isVoicebot) {
@@ -5379,7 +6065,10 @@ function _renderBundleItemsHTML(bundleItems) {
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Validity', campValidity + ' Months');
-      tableHTML += stdRow('Account Rental', W);
+      // Rental follows the tier (and any manual override) - it is only "Waived"
+      // when the rep actually sets it to 0.
+      const campRental = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', campRental === 0 ? null : fmtRupee(campRental), campRental === 0);
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       const fuCamp = getVal('free_users');
@@ -5502,11 +6191,21 @@ function _renderBundleItemsHTML(bundleItems) {
     } else if (effectiveSk === 'num_1400' || sk === 'num_1600') {
       const numRental = getSafeNum('rental') || 0;
       const numMosN = getSafeNum('num_months') || 0;
-      const numChsN = getSafeNum('num_channels') || 0;
-      const chCostN = getSafeNum('channel_cost') || 0;
+      const numBlocksN = getSafeNum('channel_blocks') || 0;
+      const blockCostN = getSafeNum('block_cost') || 0;
       const procurement = getSafeNum('procurement') || 0;
+      const numUsersN = getSafeNum('num_users') || 0;
+      const userChargeN = getSafeNum('user_charge') || 0;
+      const extraFreeUsersN = getSafeNum('extra_users') || 0;
+      const nsExotelModel = getSafeNum('user_model_exotel') === 1;
+      const nsExoFreeUsers = getSafeNum('exotel_free_users') || 0;
+      const nsExoUserCharge = getSafeNum('exotel_user_charge') || 0;
+      const nsChargedUsers = Math.max(0, numUsersN - (nsExotelModel ? nsExoFreeUsers : 0));
       const totalRental = numRental * numMosN;
-      const totalChs = numChsN * numMosN * chCostN;
+      const totalChs = numBlocksN * numMosN * blockCostN;
+      const totalUsersCost = nsExotelModel
+        ? nsChargedUsers * numMosN * nsExoUserCharge
+        : numUsersN * numMosN * userChargeN;
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Number Procurement', fmtRupee(procurement));
@@ -5514,13 +6213,52 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += indRow('Rental Calculation', `${numMosN} months × ${fmtRupee(numRental)} = <strong>${fmtRupee(totalRental)}</strong>`);
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('No. of Months', numMosN);
+
       tableHTML += secRow('Channels');
-      tableHTML += stdRow('No. of Channels', numChsN);
-      tableHTML += stdRow('Channel Cost', `${fmtRupee(chCostN)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per month</span>`);
-      tableHTML += indRow('Channel Calculation', `${numChsN} channels × ${numMosN} months × ${fmtRupee(chCostN)} = <strong>${fmtRupee(totalChs)}</strong>`);
+      tableHTML += stdRow('Channels Included', `${realVal(numBlocksN) * CHANNELS_PER_BLOCK} Channels`);
+      tableHTML += indRow('Allocation', `${numBlocksN} × ${CHANNELS_PER_BLOCK}-channel block(s) · channels are provisioned in blocks of ${CHANNELS_PER_BLOCK}`);
+      tableHTML += stdRow('Channel Block Cost', `${fmtRupee(blockCostN)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per ${CHANNELS_PER_BLOCK} channels / month</span>`);
+      tableHTML += indRow('Channel Calculation', `${numBlocksN} block(s) × ${numMosN} months × ${fmtRupee(blockCostN)} = <strong>${fmtRupee(totalChs)}</strong>`);
+
+      tableHTML += secRow('User Plan');
+      if (nsExotelModel) {
+        // Exotel model: free users included, only the overflow is charged.
+        const nsFreeDisplay = extraFreeUsersN > 0
+          ? `${nsExoFreeUsers} + ${extraFreeUsersN} Users (Free)`
+          : `${nsExoFreeUsers} Users (Free)`;
+        tableHTML += stdRow('Free Users', nsFreeDisplay);
+        tableHTML += indRow('Extra User Cost', `${fmtRupee(nsExoUserCharge)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per user / month</span>`);
+        if (nsChargedUsers > 0) {
+          tableHTML += stdRow('Charged Users', `${nsChargedUsers} users`);
+          tableHTML += indRow('User Calculation', `${nsChargedUsers} users × ${numMosN} months × ${fmtRupee(nsExoUserCharge)} = <strong>${fmtRupee(totalUsersCost)}</strong>`);
+        }
+      } else {
+        // Veeno model: every user charged from the first.
+        tableHTML += stdRow('No. of Users', extraFreeUsersN > 0 ? `${numUsersN} + ${extraFreeUsersN} User(s) (Free)` : `${numUsersN} User(s)`);
+        tableHTML += stdRow('User Charge', `${fmtRupee(userChargeN)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per user / month</span>`);
+        if (numUsersN > 0 && userChargeN > 0) {
+          tableHTML += indRow('User Calculation', `${numUsersN} users × ${numMosN} months × ${fmtRupee(userChargeN)} = <strong>${fmtRupee(totalUsersCost)}</strong>`);
+        }
+      }
+
       tableHTML += secRow('Call Credits & Charges');
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+
+    } else if (sk === 'voice_intl_stream') {
+      // ── International Web Streaming (USD pricing) ───────────────
+      tableHTML += buildIntlStreamRows(item, { secRow, stdRow, indRow, getSafeNum, getVal, FREE });
+      const prepaidS = getSafeNum('prepaid_usd') || 400;
+      const feeTypeS = getSafeNum('fee_type');
+      const convFeeS = feeTypeS === 1 ? Math.round(prepaidS * 0.03 * 100) / 100 : 0;
+      const gstFeeS  = feeTypeS === 2 ? Math.round(prepaidS * 0.18 * 100) / 100 : 0;
+      const totalWithFeeS = Math.round((prepaidS + convFeeS + gstFeeS) * 100) / 100;
+      item._intlSubtotalCardB = `<div style="margin-top:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
+        <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${prepaidS.toFixed(2)}</strong></div>
+        ${feeTypeS === 1 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Convenience Fee (3%): $${convFeeS.toFixed(2)}</div>` : ''}
+        ${feeTypeS === 2 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstFeeS.toFixed(2)}</div>` : ''}
+        ${feeTypeS > 0 ? `<div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total: $${totalWithFeeS.toFixed(2)}</div>` : ''}
+      </div>`;
 
     } else if (sk === 'voice_intl') {
       // ── International Commercial (USD pricing) ──────────────────
@@ -5680,7 +6418,13 @@ function _renderBundleItemsHTML(bundleItems) {
     }
 
 
+    const depositItem = depositAmount(item, fields);
+    if (depositItem > 0) {
+      tableHTML += secRow('Prepaid Deposit');
+      tableHTML += stdRow('Prepaid Deposit', fmtRupee(depositItem));
+    }
     if (!isFirstSec) tableHTML += '</tbody>';
+    if (itemHasUnitOnly(item)) tableHTML = stripDeadCalcRows(tableHTML);
 
     const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
     const credits = getSafeNum('credits');
@@ -5698,15 +6442,17 @@ function _renderBundleItemsHTML(bundleItems) {
     const setup = getSafeNum('setup');
     const isVoicebotItem = item.sku_key === 'voice_exotel_voicebot';
     const paidChsItem = isVoicebotItem
-      ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0))
-      : Math.max(0, parseFloat(item.values['num_channels'] ?? 0));
+      ? Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0)))
+      : Math.max(0, unitQty(item, 'num_channels', parseFloat(item.values['num_channels'] ?? 0)));
     const chCostItem = getSafeNum('channel_cost') * paidChsItem * months;
-    const numUsersItem = parseFloat(item.values['num_users'] ?? 0);
+    const numUsersItem = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
     const userChargeItem = getSafeNum('user_charge');
-    const numNumbersItem = parseFloat(item.values['num_numbers'] ?? 1);
+    const numNumbersItem = unitQty(item, 'num_numbers', parseFloat(item.values['num_numbers'] ?? 1));
     const numberCostItem = getSafeNum('number_cost') * numNumbersItem * months;
 
     let subtotal = credits + rental + brand + procure + setup + chCostItem + numberCostItem;
+    subtotal += depositAmount(item, fields);
+    subtotal += numSeriesSubtotal(item, getSafeNum, months);
     if (item.sku_key === 'voice_veeno_std') {
       const useExotelModel = item.values['user_model_exotel'] === 1;
       if (useExotelModel) {
@@ -5717,15 +6463,19 @@ function _renderBundleItemsHTML(bundleItems) {
       } else {
         if (numUsersItem && userChargeItem) subtotal += numUsersItem * userChargeItem * months;
       }
-    } else {
+    } else if (!isNumSeries(item.sku_key)) {
       if (numUsersItem && userChargeItem) subtotal += numUsersItem * userChargeItem * months;
     }
-    const numPaidNumsItem = parseFloat(item.values['num_paid_numbers'] ?? 0);
+    const numPaidNumsItem = unitQty(item, 'num_paid_numbers', parseFloat(item.values['num_paid_numbers'] ?? 0));
     const extraNumCostItem = getSafeNum('extra_number');
     if (numPaidNumsItem && extraNumCostItem) subtotal += numPaidNumsItem * extraNumCostItem * (months + (getSafeNum('extra_validity') || 0));
-    const didNumbersItem = parseFloat(item.values['did_numbers'] ?? 0);
+    const didNumbersItem = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
     if (didNumbersItem > 0) subtotal += didNumbersItem * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
 
+    // Rate Card mode: lines left on unit pricing contribute nothing (their
+    // quantities are blank boxes, so every term multiplies out to zero). Lines
+    // the rep switched back to quantity pricing keep their real value and are
+    // billed on top of the prepaid balance.
     grandSubtotal += isStartup ? 0 : subtotal;
 
     const tierLabel = sku.hasTiers && item.tier
@@ -5743,7 +6493,7 @@ function _renderBundleItemsHTML(bundleItems) {
           <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
           ${tableHTML}
         </table>
-        ${sk === 'voice_intl' ? (item._intlSubtotalCardB || '') : (subtotal > 0 ? `<div style="text-align:right; font-weight:600; padding:10px 14px; font-size:0.88rem; color:#0f172a; border-top:1px solid #f1f5f9;">Item Subtotal: ${fmtRupee(subtotal)}</div>` : '')}
+        ${isUsdSku(sk) ? (item._intlSubtotalCardB || '') : (subtotal > 0 ? `<div style="text-align:right; font-weight:600; padding:10px 14px; font-size:0.88rem; color:#0f172a; border-top:1px solid #f1f5f9;">Item Subtotal: ${fmtRupee(subtotal)}</div>` : '')}
       </div>`;
     }
   }
@@ -5828,7 +6578,7 @@ function _renderBundleItemsHTML(bundleItems) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
-// BUNDLE PACKAGE MODE — Core engine (from scratch)
+// BUNDLE PACKAGE MODE - Core engine (from scratch)
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
@@ -5857,6 +6607,7 @@ function _computeBundleRows(items) {
   const SKIP_FIELD_IDS = new Set([
     'attach_isd_pdf', 'user_model_exotel', 'remove_std_numbers',
     'pulse',           // shown inline but not as a standalone row
+    PREPAID_DEPOSIT_ID, // rendered as its own section, not a merged field row
     'extra_users', 'extra_validity', 'extra_credits',
     'single_leg',      // derived from incoming/outgoing
     'call_transfer',   // shown as addon note, not main row
@@ -5874,6 +6625,7 @@ function _computeBundleRows(items) {
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
     remove_std_numbers: 'Number Plan', num_channels: 'Channel Plan', channel_cost: 'Channel Plan', did_cost: 'Number Plan',
     num_paid_channels: 'Channel Plan', bot_sessions: 'Channel Plan', session_cost: 'Channel Plan',
+    channel_blocks: 'Channel Plan', block_cost: 'Channel Plan', channel_cost_usd: 'Channel Plan',
     number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Call Credits & Charges', extra_credits: 'Call Credits & Charges', extra_validity: 'Call Credits & Charges', volume: 'Call Credits & Charges',
     prepaid_usd: 'Plan Details', attach_intl_pdf: 'Plan Details', attach_isd_pdf: 'Plan Details', fee_type: 'Plan Details',
@@ -5889,17 +6641,17 @@ function _computeBundleRows(items) {
   const fieldSection = (id, sku_key) => SECTION_MAP[id] || 'Plan Details';
 
   // Shared ownership: which clubbed SKU covers each field (priority + concept).
-  // A field only shows — and is only charged — under its owner; the same field
+  // A field only shows - and is only charged - under its owner; the same field
   // on a less-primary SKU is a covered duplicate.
   const { owners: bundleOwners } = _bundleComputeOwnership(items);
   const isDupeField = (item, fieldId) => !bundleOwners.has(item.id + ':' + fieldId);
-  // Duration/context fields drive multipliers, not standalone charges — always
+  // Duration/context fields drive multipliers, not standalone charges - always
   // read each SKU's own value even when the field repeats across SKUs.
   const DURATION_FIELDS = new Set(['num_months', 'validity', 'extra_validity']);
   // Non-editable info rows that must still appear in bundles: per-message rates
   // for WhatsApp and RCS are fixed (nonEditable) but are shown for reference.
   const BUNDLE_KEEP_NONEDITABLE = new Set(['wa_utility', 'wa_promo', 'rcs_biz', 'rcs_rich', 'rcs_reply']);
-  // Fields shown as indented sub-rows in the single-SKU proposal — mirror that
+  // Fields shown as indented sub-rows in the single-SKU proposal - mirror that
   // here so the bundle breakdown reads the same (└ under their parent row).
   const BUNDLE_SUB_FIELDS = new Set(['extra_user_cost', 'extra_number', 'did_cost']);
 
@@ -5920,13 +6672,8 @@ function _computeBundleRows(items) {
 
     const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x || 0));
 
-    const getVal = (id) => applyDiscount(item, id, item.values[id] !== undefined ? item.values[id] : fields.find(x => x.id === id)?.value);
-    const getSafeNum = (id) => {
-      if (item.excludedFields && item.excludedFields[id]) return 0;
-      const f = fields.find(x => x.id === id);
-      if (!f || f.waived) return 0;
-      return applyDiscount(item, id, parseFloat(item.values[id] !== undefined ? item.values[id] : (f.value ?? 0)) || 0);
-    };
+    const getVal = (id) => readVal(item, fields, id);
+    const getSafeNum = (id) => readNum(item, fields, id, { respectExclusions: true });
 
     fields.forEach(f => {
       if (SKIP_FIELD_IDS.has(f.id)) return;
@@ -6056,7 +6803,7 @@ function _computeBundleRows(items) {
       };
 
       if (isDupeField(item, f.id)) {
-        // A more-primary SKU already covers this field — it's a covered duplicate
+        // A more-primary SKU already covers this field - it's a covered duplicate
         dupeRows.push(rowObj);
       } else {
         primaryRows.push(rowObj);
@@ -6197,7 +6944,7 @@ function _renderBundlePackagePreview(doc, validItems, firstSku, logoSrc, company
     grouped[sec].forEach(row => {
       if (row.isExcluded) return;
 
-      // Indented sub-rows (calculation lines and "extra/cost" fields) — rendered
+      // Indented sub-rows (calculation lines and "extra/cost" fields) - rendered
       // like the single-SKU proposal's indented rows (└ prefix + grey via CSS).
       if (row.isCalc || row.isSub) {
         const subVal = row.isWaived
@@ -6345,7 +7092,7 @@ function updatePreview() {
   const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot'].includes(validItems[0].sku_key);
   if (isStreamSku) {
     const item = validItems[0];
-    const didNums = parseFloat(item.values['did_numbers'] ?? 0);
+    const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
     if (didNums > 0) {
       effectiveEntity = 'Veeno';
     } else {
@@ -6361,7 +7108,7 @@ function updatePreview() {
   const tenantId = document.getElementById('q-client-tenantid')?.value || '';
   const seName = document.getElementById('q-se-name')?.textContent || '';
   const seEmail = document.getElementById('q-se-email')?.textContent || '';
-  const sePhone = (document.getElementById('q-se-phone-text')?.textContent || '').replace(/—/g, '').trim()
+  const sePhone = (document.getElementById('q-se-phone-text')?.textContent || '').replace(/-/g, '').trim()
                    || document.getElementById('q-se-phone')?.value || '';
   const quoteNum = document.getElementById('q-quote-number')?.textContent || '';
   const dateStr = document.getElementById('q-date')?.textContent || today();
@@ -6389,8 +7136,8 @@ function updatePreview() {
 
     const colData = validItems.map(item => {
       const fields = getSkuFields(item.sku_key, item.tier);
-      const getVal = (id) => { const f = fields.find(x => x.id === id); if (!f) return undefined; return applyDiscount(item, id, item.values[id] ?? f.value); };
-      const getSN = (id) => { const f = fields.find(x => x.id === id); if (!f || f.waived) return 0; return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0)); };
+      const getVal = (id) => readVal(item, fields, id);
+      const getSN = (id) => readNum(item, fields, id);
       return { item, fields, getVal, getSN };
     });
 
@@ -6606,8 +7353,8 @@ function updatePreview() {
     // Build row data per item
     const colData = validItems.map(item => {
       const fields = getSkuFields(item.sku_key, item.tier);
-      const getVal = (id) => { const f = fields.find(x => x.id === id); if (!f) return undefined; return applyDiscount(item, id, item.values[id] ?? f.value); };
-      const getSN = (id) => { const f = fields.find(x => x.id === id); if (!f || f.waived) return 0; return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0)); };
+      const getVal = (id) => readVal(item, fields, id);
+      const getSN = (id) => readNum(item, fields, id);
       return { item, fields, getVal, getSN };
     });
 
@@ -6622,17 +7369,17 @@ function updatePreview() {
       const procure = getSN('procurement');
       const setup = getSN('setup');
       const chCost = getSN('channel_cost') * parseFloat(item.values['num_channels'] ?? 0) * months;
-      const numUsers = parseFloat(item.values['num_users'] ?? 0);
+      const numUsers = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
       const userCharge = getSN('user_charge');
-      const numNumbers = parseFloat(item.values['num_numbers'] ?? 1);
+      const numNumbers = unitQty(item, 'num_numbers', parseFloat(item.values['num_numbers'] ?? 1));
       const numberCost = getSN('number_cost') * numNumbers * months;
       let sub = credits + rental + brand + procure + setup + chCost + numberCost;
       if (numUsers && userCharge) sub += numUsers * userCharge * months;
-      const numPaidNums = parseFloat(item.values['num_paid_numbers'] ?? 0);
+      const numPaidNums = unitQty(item, 'num_paid_numbers', parseFloat(item.values['num_paid_numbers'] ?? 0));
       const extraNumCost = getSN('extra_number');
       const extraVal = parseFloat(item.values['extra_validity'] ?? 0);
       if (numPaidNums && extraNumCost) sub += numPaidNums * extraNumCost * (months + extraVal);
-      const didNums = parseFloat(item.values['did_numbers'] ?? 0);
+      const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
       if (didNums > 0) sub += didNums * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
       return sub;
     });
@@ -6761,7 +7508,7 @@ function updatePreview() {
       if (isVBotCmp) {
         tableRows += cmpRow('Free Channels', colData.map(({ getSN }) => `${getSN('num_channels') || 5} Channels (Included Free)`));
         tableRows += cmpRow('Paid Channels', colData.map(({ getSN, item }) => {
-          const paid = Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0));
+          const paid = Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0)));
           return paid > 0 ? `${paid} Channel(s)` : '-';
         }));
       } else {
@@ -6771,7 +7518,7 @@ function updatePreview() {
       tableRows += cmpRow('Channel Calculation', colData.map(({ getSN, item }) => {
         const mos = getSN('num_months');
         const cost = getSN('channel_cost');
-        const paid = isVBotCmp ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0)) : getSN('num_channels');
+        const paid = isVBotCmp ? Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0))) : getSN('num_channels');
         return `${paid} ch × ${mos} mo × ${fmtR(cost)} = ${fmtR(paid * mos * cost)}`;
       }), false, true);
 
@@ -7009,16 +7756,8 @@ function updatePreview() {
     const fields = getSkuFields(item.sku_key, item.tier);
 
     // Values explicitly from this item
-    const getVal = (id) => {
-      const f = fields.find(x => x.id === id);
-      if (!f) return undefined;
-      return applyDiscount(item, id, item.values[id] ?? f.value);
-    };
-    const getSafeNum = (id) => {
-      const f = fields.find(x => x.id === id);
-      if (!f || f.waived) return 0;
-      return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0));
-    };
+    const getVal = (id) => readVal(item, fields, id);
+    const getSafeNum = (id) => readNum(item, fields, id);
 
     const fmtRupee = (v) => discWrap(v, (x) => {
       if (x === null || x === undefined) return '-';
@@ -7051,11 +7790,13 @@ function updatePreview() {
       isFirstSec = false;
       return res;
     };
-    const stdRow = (lbl, val, isWaived) => {
+    const stdRow = (rawLbl, val, isWaived) => {
+      const lbl = rowLabel(item, rawLbl);
       const disp = isWaived ? W : hasHTML(val) ? val : sanitize(String(val ?? '-'));
       return `<tr><td class="sku-row-name">${sanitize(lbl)}</td><td>${disp}</td></tr>`;
     };
-    const indRow = (lbl, val) => {
+    const indRow = (rawLbl, val) => {
+      const lbl = rowLabel(item, rawLbl);
       const disp = hasHTML(val) ? val : sanitize(String(val ?? '-'));
       return `<tr class="sub-row"><td>${sanitize(lbl)}</td><td>${disp}</td></tr>`;
     };
@@ -7406,6 +8147,7 @@ function updatePreview() {
       const rentalStream = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
       tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
       if (isVoicebot) {
@@ -7476,7 +8218,10 @@ function updatePreview() {
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Validity', campValidity + ' Months');
-      tableHTML += stdRow('Account Rental', W);
+      // Rental follows the tier (and any manual override) - it is only "Waived"
+      // when the rep actually sets it to 0.
+      const campRental = getSafeNum('rental');
+      tableHTML += stdRow('Account Rental', campRental === 0 ? null : fmtRupee(campRental), campRental === 0);
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       const fuCamp = getVal('free_users');
@@ -7599,11 +8344,21 @@ function updatePreview() {
     } else if (effectiveSk === 'num_1400' || sk === 'num_1600') {
       const numRental = getSafeNum('rental') || 0;
       const numMosN = getSafeNum('num_months') || 0;
-      const numChsN = getSafeNum('num_channels') || 0;
-      const chCostN = getSafeNum('channel_cost') || 0;
+      const numBlocksN = getSafeNum('channel_blocks') || 0;
+      const blockCostN = getSafeNum('block_cost') || 0;
       const procurement = getSafeNum('procurement') || 0;
+      const numUsersN = getSafeNum('num_users') || 0;
+      const userChargeN = getSafeNum('user_charge') || 0;
+      const extraFreeUsersN = getSafeNum('extra_users') || 0;
+      const nsExotelModel = getSafeNum('user_model_exotel') === 1;
+      const nsExoFreeUsers = getSafeNum('exotel_free_users') || 0;
+      const nsExoUserCharge = getSafeNum('exotel_user_charge') || 0;
+      const nsChargedUsers = Math.max(0, numUsersN - (nsExotelModel ? nsExoFreeUsers : 0));
       const totalRental = numRental * numMosN;
-      const totalChs = numChsN * numMosN * chCostN;
+      const totalChs = numBlocksN * numMosN * blockCostN;
+      const totalUsersCost = nsExotelModel
+        ? nsChargedUsers * numMosN * nsExoUserCharge
+        : numUsersN * numMosN * userChargeN;
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Number Procurement', fmtRupee(procurement));
@@ -7611,13 +8366,41 @@ function updatePreview() {
       tableHTML += indRow('Rental Calculation', `${numMosN} months × ${fmtRupee(numRental)} = <strong>${fmtRupee(totalRental)}</strong>`);
       tableHTML += stdRow('Setup Charges', null, true);
       tableHTML += stdRow('No. of Months', numMosN);
+
       tableHTML += secRow('Channels');
-      tableHTML += stdRow('No. of Channels', numChsN);
-      tableHTML += stdRow('Channel Cost', `${fmtRupee(chCostN)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per month</span>`);
-      tableHTML += indRow('Channel Calculation', `${numChsN} channels × ${numMosN} months × ${fmtRupee(chCostN)} = <strong>${fmtRupee(totalChs)}</strong>`);
+      tableHTML += stdRow('Channels Included', `${realVal(numBlocksN) * CHANNELS_PER_BLOCK} Channels`);
+      tableHTML += indRow('Allocation', `${numBlocksN} × ${CHANNELS_PER_BLOCK}-channel block(s) · channels are provisioned in blocks of ${CHANNELS_PER_BLOCK}`);
+      tableHTML += stdRow('Channel Block Cost', `${fmtRupee(blockCostN)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per ${CHANNELS_PER_BLOCK} channels / month</span>`);
+      tableHTML += indRow('Channel Calculation', `${numBlocksN} block(s) × ${numMosN} months × ${fmtRupee(blockCostN)} = <strong>${fmtRupee(totalChs)}</strong>`);
+
+      tableHTML += secRow('User Plan');
+      if (nsExotelModel) {
+        // Exotel model: free users included, only the overflow is charged.
+        const nsFreeDisplay = extraFreeUsersN > 0
+          ? `${nsExoFreeUsers} + ${extraFreeUsersN} Users (Free)`
+          : `${nsExoFreeUsers} Users (Free)`;
+        tableHTML += stdRow('Free Users', nsFreeDisplay);
+        tableHTML += indRow('Extra User Cost', `${fmtRupee(nsExoUserCharge)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per user / month</span>`);
+        if (nsChargedUsers > 0) {
+          tableHTML += stdRow('Charged Users', `${nsChargedUsers} users`);
+          tableHTML += indRow('User Calculation', `${nsChargedUsers} users × ${numMosN} months × ${fmtRupee(nsExoUserCharge)} = <strong>${fmtRupee(totalUsersCost)}</strong>`);
+        }
+      } else {
+        // Veeno model: every user charged from the first.
+        tableHTML += stdRow('No. of Users', extraFreeUsersN > 0 ? `${numUsersN} + ${extraFreeUsersN} User(s) (Free)` : `${numUsersN} User(s)`);
+        tableHTML += stdRow('User Charge', `${fmtRupee(userChargeN)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per user / month</span>`);
+        if (numUsersN > 0 && userChargeN > 0) {
+          tableHTML += indRow('User Calculation', `${numUsersN} users × ${numMosN} months × ${fmtRupee(userChargeN)} = <strong>${fmtRupee(totalUsersCost)}</strong>`);
+        }
+      }
+
       tableHTML += secRow('Call Credits & Charges');
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+
+    } else if (sk === 'voice_intl_stream') {
+      // ── International Web Streaming (USD pricing) ───────────────
+      tableHTML += buildIntlStreamRows(item, { secRow, stdRow, indRow, getSafeNum, getVal, FREE });
 
     } else if (sk === 'voice_intl') {
       // ── International Commercial (USD pricing) ──────────────────
@@ -7757,12 +8540,18 @@ function updatePreview() {
       });
     }
 
+    const depositMain = depositAmount(item, fields);
+    if (depositMain > 0) {
+      tableHTML += secRow('Prepaid Deposit');
+      tableHTML += stdRow('Prepaid Deposit', fmtRupee(depositMain));
+    }
     if (!isFirstSec) {
       tableHTML += '</tbody>';
     }
+    if (itemHasUnitOnly(item)) tableHTML = stripDeadCalcRows(tableHTML);
 
-    // ── International SKU: USD subtotal (not added to INR grand total) ──────
-    if (sk === 'voice_intl') {
+    // ── International SKUs: USD subtotal (not added to INR grand total) ─────
+    if (isUsdSku(sk)) {
       const prepaidV = getSafeNum('prepaid_usd') || 400;
 
       grandSubtotal += 0; // USD SKU excluded from INR grand total
@@ -7804,7 +8593,7 @@ function updatePreview() {
     // voice_exotel_std rental is always a one-time flat fee in the subtotal (not × months)
     const isRentalOneTime = item.values['rental_onetime'] === 1 || item.sku_key === 'voice_exotel_std';
     if (rentalF && rentalF.type === 'rental_toggle' && !isRentalOneTime) {
-      // Veeno STD monthly rental — multiply by validity months
+      // Veeno STD monthly rental - multiply by validity months
       rental = rental * months;
     } else if (rentalF && rentalF.label.toLowerCase().includes('/month')) {
       // Other SKUs that have '/month' in label
@@ -7815,15 +8604,17 @@ function updatePreview() {
     const setup = getSafeNum('setup');
     const isVoicebot = item.sku_key === 'voice_exotel_voicebot';
     const paidChs = isVoicebot
-      ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0))
-      : Math.max(0, parseFloat(item.values['num_channels'] ?? 0));
+      ? Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0)))
+      : Math.max(0, unitQty(item, 'num_channels', parseFloat(item.values['num_channels'] ?? 0)));
     const chCost = getSafeNum('channel_cost') * paidChs * months;
-    const numUsers = parseFloat(item.values['num_users'] ?? 0);
+    const numUsers = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
     const userCharge = getSafeNum('user_charge');
-    const numNumbers = parseFloat(item.values['num_numbers'] ?? 1);
+    const numNumbers = unitQty(item, 'num_numbers', parseFloat(item.values['num_numbers'] ?? 1));
     const numberCost = getSafeNum('number_cost') * numNumbers * months;
 
     let subtotal = credits + rental + brand + procure + setup + chCost + numberCost;
+    subtotal += depositAmount(item, fields);
+    subtotal += numSeriesSubtotal(item, getSafeNum, months);
     // For Veeno STD: respect the pricing model toggle
     if (item.sku_key === 'voice_veeno_std') {
       const useExotelModel = item.values['user_model_exotel'] === 1;
@@ -7836,15 +8627,19 @@ function updatePreview() {
         const userCharge = getSafeNum('user_charge');
         if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
       }
-    } else {
+    } else if (!isNumSeries(item.sku_key)) {
       if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
     }
-    const numPaidNums = parseFloat(item.values['num_paid_numbers'] ?? 0);
+    const numPaidNums = unitQty(item, 'num_paid_numbers', parseFloat(item.values['num_paid_numbers'] ?? 0));
     const extraNumCost = getSafeNum('extra_number');
     if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSafeNum('extra_validity') || 0));
-    const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
+    const didNumbers = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
     if (didNumbers > 0) subtotal += didNumbers * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
 
+    // Rate Card mode: lines left on unit pricing contribute nothing (their
+    // quantities are blank boxes, so every term multiplies out to zero). Lines
+    // the rep switched back to quantity pricing keep their real value and are
+    // billed on top of the prepaid balance.
     grandSubtotal += isStartup ? 0 : subtotal;
 
     const tierLabel = sku.hasTiers && item.tier
@@ -7961,7 +8756,7 @@ window.printQuote = async function () {
     if(renderBtn) renderBtn.innerHTML = '⚙️ Generating Perfect PDF...';
 
     // Force a fresh render of the preview RIGHT NOW so the PDF snapshot
-    // exactly matches what the user sees — the async prompt above could have
+    // exactly matches what the user sees - the async prompt above could have
     // allowed a background updatePreview() to change the DOM.
     updatePreview();
 
@@ -7981,7 +8776,7 @@ window.printQuote = async function () {
      @page { margin: ${QG.bundleCompareMode ? '6mm 8mm' : '10mm 12mm'}; size: A4 portrait; }
      body { background: white !important; margin: 0 !important; padding: 0 !important; font-size: 10px !important; -webkit-print-color-adjust: exact; }
 
-     /* Strip screen paper styling — use high specificity to beat the 210mm width rule */
+     /* Strip screen paper styling - use high specificity to beat the 210mm width rule */
      html body #quote-document,
      #quote-document { width: 100% !important; min-height: 0 !important; height: auto !important; margin: 0 !important; border: none !important; box-shadow: none !important; padding: 0 !important; flex-shrink: 0 !important; }
 
@@ -8006,7 +8801,7 @@ window.printQuote = async function () {
      .quote-doc-section { margin-top: 8px !important; padding: 0 !important; }
      .quote-doc-section-title { font-size: 0.78rem !important; padding: 4px 8px !important; margin-bottom: 6px !important; break-after: avoid !important; page-break-after: avoid !important; }
 
-     /* ── SKU grid: BLOCK layout — no height-fill, no blank gaps ── */
+     /* ── SKU grid: BLOCK layout - no height-fill, no blank gaps ── */
      .quote-skus-grid { display: block !important; margin-top: 8px !important; }
      .quote-doc-section.sku-card { display: block !important; height: auto !important; min-height: 0 !important; margin-top: 8px !important; flex: none !important; break-inside: auto !important; page-break-inside: auto !important; }
      .quote-doc-section.sku-card .quote-sku-table { flex-grow: unset !important; }
@@ -8036,7 +8831,7 @@ window.printQuote = async function () {
      .quote-total-row { padding: 3px 6px !important; font-size: 0.75rem !important; }
      .quote-total-row.grand-total { font-size: 0.85rem !important; }
 
-     /* ── T&C — flows and breaks naturally, no forced jumps ─────── */
+     /* ── T&C - flows and breaks naturally, no forced jumps ─────── */
      .quote-tnc { font-size: 0.7rem !important; line-height: 1.45 !important; }
      .quote-tnc li { margin-bottom: 3px !important; }
      /* Section header rows never orphaned at bottom of a page */
@@ -8117,14 +8912,21 @@ window.printQuote = async function () {
        gap: 10px !important;
        width: 100% !important;
        margin-top: 8px !important;
-       page-break-inside: avoid !important;
-       break-inside: avoid !important;
+       /* Must fragment. Avoiding a break on the whole container pushes the
+          entire comparison onto page 2 the moment it is taller than the space
+          left on page 1, leaving the first page all but blank. The pieces that
+          have to stay whole are protected individually (table sections via
+          their own tbody, and the subtotal cards). */
+       page-break-inside: auto !important;
+       break-inside: auto !important;
      }
      .bundle-col {
        display: flex !important;
        flex-direction: column !important;
        min-width: 0 !important;
        gap: 10px !important;
+       page-break-inside: auto !important;
+       break-inside: auto !important;
      }
      .bundle-col-header {
        padding: 8px 10px !important;
@@ -8157,7 +8959,7 @@ window.printQuote = async function () {
        width: 26px !important;
        height: 26px !important;
      }
-     /* Compact table rows for bundle compare — portrait A4 each col ~82mm wide */
+     /* Compact table rows for bundle compare - portrait A4 each col ~82mm wide */
      .quote-sku-table th, .quote-sku-table td { font-size: 0.58rem !important; padding: 2px 4px !important; }
      .quote-sku-table .section-header-row td { font-size: 0.56rem !important; padding: 2px 4px !important; }
      .quote-sku-table .sub-row td { font-size: 0.54rem !important; padding: 1px 4px !important; }
@@ -8218,7 +9020,7 @@ async function generateQuote() {
   const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot'].includes(validItems[0]?.sku_key);
   if (isStreamSku) {
     const item = validItems[0];
-    const didNums = parseFloat(item.values['did_numbers'] ?? 0);
+    const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
     if (didNums > 0) {
       effectiveEntity = 'Veeno';
     } else {
@@ -8349,7 +9151,7 @@ async function generateQuote() {
           body: JSON.stringify({ draft_key: emergencyDraftKey, draft_data: emergencyData })
         }).catch(() => null);
         localStorage.setItem('returnToDraft', emergencyDraftKey);
-      } catch (_) { /* silent – session is already dead, best effort */ }
+      } catch (_) { /* silent - session is already dead, best effort */ }
       showAlert("Your session has expired. Your draft has been saved. It will be waiting for you after you log back in.", { type: 'warning', title: 'Session Expired' });
       setTimeout(() => { window.location.href = '/login'; }, 2500);
       return;
@@ -8405,7 +9207,7 @@ async function saveDraft(e, silent = false) {
   const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot'].includes(validItems[0].sku_key);
   if (isStreamSku) {
     const item = validItems[0];
-    const didNums = parseFloat(item.values['did_numbers'] ?? 0);
+    const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
     if (didNums > 0) {
       effectiveEntity = 'Veeno';
     } else {
@@ -9123,16 +9925,8 @@ window.confirmGenerateProforma = async function () {
       if (isStartup) continue;
 
       const fields = getSkuFields(item.sku_key, item.tier);
-      const getSN = (id) => {
-        const f = fields.find(x => x.id === id);
-        if (!f || f.waived) return 0;
-        return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0) || 0);
-      };
-      const getV = (id) => {
-        const f = fields.find(x => x.id === id);
-        if (!f) return undefined;
-        return applyDiscount(item, id, item.values[id] ?? f.value);
-      };
+      const getSN = (id) => readNum(item, fields, id);
+      const getV = (id) => readVal(item, fields, id);
 
       const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 1);
       let rental = getSN('rental');
@@ -9144,18 +9938,20 @@ window.confirmGenerateProforma = async function () {
       const setup = getSN('setup');
       const isVoicebot = item.sku_key === 'voice_exotel_voicebot';
       const paidChs = isVoicebot
-        ? Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0))
-        : Math.max(0, parseFloat(item.values['num_channels'] ?? 0));
+        ? Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0)))
+        : Math.max(0, unitQty(item, 'num_channels', parseFloat(item.values['num_channels'] ?? 0)));
       const chCost = getSN('channel_cost') * paidChs * months;
-      const numUsers = parseFloat(item.values['num_users'] ?? 0);
+      const numUsers = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
       const userCharge = getSN('user_charge');
-      const numNumbers = parseFloat(item.values['num_numbers'] ?? 1);
+      const numNumbers = unitQty(item, 'num_numbers', parseFloat(item.values['num_numbers'] ?? 1));
       const numberCost = getSN('number_cost') * numNumbers * months;
-      const numPaidNums = parseFloat(item.values['num_paid_numbers'] ?? 0);
+      const numPaidNums = unitQty(item, 'num_paid_numbers', parseFloat(item.values['num_paid_numbers'] ?? 0));
       const extraNumCost = getSN('extra_number');
-      const didNumbers = parseFloat(item.values['did_numbers'] ?? 0);
+      const didNumbers = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
 
       let subtotal = credits + rental + brand + procure + setup + chCost + numberCost;
+      subtotal += depositAmount(item, fields);
+      subtotal += numSeriesSubtotal(item, getSN, months);
       // For Veeno STD: respect the pricing model toggle
       if (item.sku_key === 'voice_veeno_std') {
         const useExotelModel = item.values['user_model_exotel'] === 1;
@@ -9168,7 +9964,7 @@ window.confirmGenerateProforma = async function () {
           const userChargeV = getSN('user_charge');
           if (numUsers && userChargeV) subtotal += numUsers * userChargeV * months;
         }
-      } else {
+      } else if (!isNumSeries(item.sku_key)) {
         if (numUsers && userCharge) subtotal += numUsers * userCharge * months;
       }
       if (numPaidNums && extraNumCost) subtotal += numPaidNums * extraNumCost * (months + (getSN('extra_validity') || 0));
@@ -9183,16 +9979,8 @@ window.confirmGenerateProforma = async function () {
       const getSkuDescriptionLines = (item, sku) => {
         const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
         const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        const getSN = (id) => {
-          const f = fields.find(x => x.id === id);
-          if (!f || f.waived) return 0;
-          return applyDiscount(item, id, parseFloat(item.values[id] ?? f.value ?? 0) || 0);
-        };
-        const getV = (id) => {
-          const f = fields.find(x => x.id === id);
-          if (!f) return undefined;
-          return applyDiscount(item, id, item.values[id] ?? f.value);
-        };
+        const getSN = (id) => readNum(item, fields, id);
+        const getV = (id) => readVal(item, fields, id);
 
         const fmtRupee = (v) => discWrap(v, (x) => {
           if (x === null || x === undefined) return '-';
@@ -9476,7 +10264,7 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Setup Charges: Waived`);
           
           if (isVoicebot) {
-            const paidChs = Math.max(0, parseFloat(item.values['num_paid_channels'] ?? 0));
+            const paidChs = Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0)));
             lines.push(`Free Channels: ${numChs} Channels (Included Free)`);
             lines.push(`Paid Channels: ${paidChs > 0 ? paidChs + ' Channel(s)' : '-'}`);
             lines.push(`Paid Channel Cost: ${fmtRupee(chCost)}/channel/month`);
@@ -9519,14 +10307,15 @@ window.confirmGenerateProforma = async function () {
             }
           }
         } else if (effectiveSk === 'voice_exotel_campaigns') {
-          lines.push(`No. of Months: ${getSN('num_months')}`);
+          // Campaigns is validity-based with a CPM channel pool - it has no
+          // num_months / per-channel fields to read.
+          const campVal = parseFloat(getV('validity')) || 0;
+          lines.push(`Validity: ${campVal} Months`);
           const rental = getSN('rental');
-          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
+          lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental)}`);
           lines.push(`Setup Charges: Waived`);
-          
-          lines.push(`No. of Channels: ${getSN('num_channels')}`);
-          lines.push(`Channel Cost: ${fmtRupee(getSN('channel_cost'))}/channel/month`);
-          
+          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
+
           const fuStr = getV('free_users');
           const fuStrExtra = getSN('extra_users') || 0;
           const fuStrDisplay = (fuStr === null || fuStr === 'Unlimited') ? 'Unlimited (Included)' : (fuStrExtra > 0 ? `${fuStr} + ${fuStrExtra} Users (Free)` : fuStr + ' Users (Free)');
@@ -9538,17 +10327,17 @@ window.confirmGenerateProforma = async function () {
           
           const paidNums = getSN('num_paid_numbers') || 0;
           if (paidNums > 0) {
-            const effMos = getSN('num_months') + (getSN('extra_validity') || 0);
+            const effMos = campVal + (getSN('extra_validity') || 0);
             lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effMos * getSN('extra_number'))} for ${effMos} months)`);
           }
-          
+
           lines.push(`Call Credits Included: ${fmtRupee(getSN('credits'))}`);
-          lines.push(`Outgoing Calls: ${fmtPaise(getSN('outgoing'))}`);
+          lines.push(`Campaign Call Charges: ${fmtPaise(getSN('call_rate'))}`);
         } else if (effectiveSk === 'voice_intl') {
           const prepaid = getSN('prepaid_usd') || 400;
           lines.push(`Credits Included: $${prepaid}`);
           const unlimitedUsers = getSN('unlimited_users') === 1;
-          const numUsers = parseFloat(item.values['num_users'] ?? 0);
+          const numUsers = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
           if (unlimitedUsers) {
             lines.push(`Agents: Unlimited User Access (Free)`);
           } else if (numUsers > 0) {
@@ -9582,7 +10371,7 @@ window.confirmGenerateProforma = async function () {
           const pulse = getSN('pulse');
           if (pulse > 0) lines.push(`Billing Pulse: ${pulse} sec`);
 
-          const numUsers = parseFloat(item.values['num_users'] ?? 0);
+          const numUsers = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
           const userCharge = getSN('user_charge');
           if (numUsers > 0 && userCharge > 0) {
             lines.push(`Users: ${numUsers} User(s) @ ${fmtRupee(userCharge)}/user/month`);
@@ -9596,7 +10385,7 @@ window.confirmGenerateProforma = async function () {
             }
           }
 
-          const did = parseFloat(item.values['did_numbers'] ?? 0);
+          const did = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
           const didCost = getSN('did_cost') || 1500;
           if (did > 0) {
             if (item.sku_key === 'whatsapp_exotel') {
@@ -9606,7 +10395,7 @@ window.confirmGenerateProforma = async function () {
             }
           }
 
-          const numPaid = parseFloat(item.values['num_paid_numbers'] ?? 0);
+          const numPaid = unitQty(item, 'num_paid_numbers', parseFloat(item.values['num_paid_numbers'] ?? 0));
           const extraN = getSN('extra_number');
           if (numPaid > 0 && extraN > 0) {
             lines.push(`Extra Numbers: ${numPaid} DID(s) @ ${fmtRupee(extraN)}/number/month`);
@@ -9619,6 +10408,9 @@ window.confirmGenerateProforma = async function () {
           if (setup > 0) lines.push(`Setup Charges: ${fmtRupee(setup)}`);
         }
 
+        const dep = depositAmount(item, fields);
+        if (dep > 0) lines.push(`Prepaid Deposit: ${fmtRupee(dep)}`);
+
         return lines;
       };
 
@@ -9629,6 +10421,7 @@ window.confirmGenerateProforma = async function () {
         amount: subtotal
       });
     }
+
 
     const gstAmt = grandSubtotal * 0.18;
     // TDS is deducted on the taxable value (before GST)
@@ -10053,6 +10846,7 @@ window.viewQuote = async function (id) {
 
     // Switch to New Quote tab
     document.querySelector('[data-qtab="new-quote"]').click();
+
 
     // ── Bundle Compare Mode restore ─────────────────────────────────
     if (data.bundleCompareMode && data.bundle_a_items?.length > 0) {
@@ -10613,6 +11407,7 @@ function resetQuoteForm() {
   QG._dirty = false;
   QG.currentQuoteId = null;   // exit edit mode
   QG._renamingItemId = null;
+  QG._renamingRowKey = null;
 
   // Clear SKU selector highlights and config area
   document.querySelectorAll('.sku-option').forEach(el => el.classList.remove('selected'));
@@ -11191,6 +11986,13 @@ function setupQuoteGenerator() {
   // Set date
   const dateEl = document.getElementById('q-date');
   if (dateEl) dateEl.textContent = today();
+
+  // Exclusive features (Rate Card) - the SKU grid hides what you can't use.
+  loadFeatureFlags().then(() => {
+    // The unit-price buttons live in the SKU form, so re-render it once the
+    // entitlement lands.
+    if (QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
+  });
 
   // Admin tabs
   fetch('/api/admin/check').then(r => r.json()).then(d => {

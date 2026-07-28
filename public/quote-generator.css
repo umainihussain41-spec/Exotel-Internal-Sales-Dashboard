@@ -227,6 +227,84 @@
     white-space: nowrap;
 }
 
+/* ── Free-text value: shown verbatim, never priced ──────────────────── */
+.q-text-pill {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #7c3aed;
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+    border-radius: 20px;
+    padding: 2px 8px;
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+.q-field-row.text-value-row .q-input {
+    border-color: #c4b5fd;
+    background: #fdfcff;
+}
+/* In the proposal: text values read as prose, not as a figure */
+.q-textval {
+    color: #0f172a;
+    font-weight: 600;
+}
+/* A line quoted as a unit price: shown, never multiplied into a total */
+.q-unitval { color: #0f172a; }
+
+/* ── Per-row rename: reset-to-default control ───────────────────────── */
+.q-row-reset-btn {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #e0f2fe;
+    color: #0284c7;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.75;
+    transition: opacity 0.15s;
+}
+.q-row-reset-btn:hover { opacity: 1; }
+
+/* ── Per-field unit-price toggle (exclusive feature) ─────────────────── */
+.q-unit-btn {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.q-unit-btn:hover {
+    border-color: #d97706;
+    color: #b45309;
+    background: #fffbeb;
+}
+.q-unit-btn.active {
+    border-color: #d97706;
+    color: #fff;
+    background: #d97706;
+}
+/* The value still matters (it is the rate shown), so only tint the row */
+.q-field-row.unit-only-row .q-input {
+    border-color: #fcd34d;
+    background: #fffdf5;
+}
+
 /* Discount shown in the quote preview / PDF: struck list price + new price */
 .q-disc-old {
     text-decoration: line-through;
@@ -478,7 +556,7 @@
     font-weight: 800;
 }
 
-/* Truecaller card — brand blue */
+/* Truecaller card - brand blue */
 .sku-truecaller .sku-option-icon {
     background: linear-gradient(135deg, #e6f3ff 0%, #cfe8ff 100%);
     color: #0087FF;
@@ -792,7 +870,7 @@
 /* The actual quote document */
 #quote-document {
     width: 210mm;
-    /* No min-height here — letting content drive height prevents blank page gaps */
+    /* No min-height here - letting content drive height prevents blank page gaps */
     margin: 32px auto;
     background: #fff;
     font-family: 'Inter', sans-serif;
@@ -805,7 +883,7 @@
 }
 
 /* Hide the print-table header/footer spacers in the browser preview ONLY.
-   Puppeteer uses screen media — we remove only the thead/tfoot height,
+   Puppeteer uses screen media - we remove only the thead/tfoot height,
    but keep the table structure intact so content flows correctly. */
 #quote-document .print-master-table > thead .print-master-header,
 #quote-document .print-master-table > tfoot .print-master-footer {
@@ -1615,9 +1693,27 @@
         margin-bottom: 15px;
     }
 
+    /* The T&C block runs well over a page, so avoiding a break on the whole
+       thing only forces it to start on a fresh page and leave a gap. Let it
+       flow and keep each numbered clause intact instead. */
     .quote-tnc {
+        page-break-inside: auto;
+        break-inside: auto;
+    }
+
+    .quote-tnc > ol > li,
+    .quote-tnc > ul > li {
         page-break-inside: avoid;
         break-inside: avoid;
+    }
+
+    /* Same reasoning for the side-by-side comparison: fragment the container,
+       protect the pieces. Mirrors the rule in the PDF export payload so a
+       browser Ctrl+P paginates the same way the downloaded PDF does. */
+    .bundle-compare-container,
+    .bundle-col {
+        page-break-inside: auto !important;
+        break-inside: auto !important;
     }
 
     .quote-totals {
@@ -1804,7 +1900,7 @@
     display: none !important;
 }
 
-/* Hide the sub-menu entirely in collapsed mode — it can't render cleanly at 80px */
+/* Hide the sub-menu entirely in collapsed mode - it can't render cleanly at 80px */
 .sidebar.sidebar-collapsed .nav-sub-menu {
     display: none !important;
 }
@@ -1890,7 +1986,7 @@ input[type="number"] {
     z-index: 100;
     display: block;
     margin: 12px 0;
-    /* no backdrop — it's inline */
+    /* no backdrop - it's inline */
 }
 
 .ai-listening-modal {
@@ -2029,10 +2125,10 @@ input[type="number"] {
 }
 
 /* ──────────────────────────────────────────────────────
-   QUOTE GENERATOR — MOBILE RESPONSIVENESS
+   QUOTE GENERATOR - MOBILE RESPONSIVENESS
    ────────────────────────────────────────────────────── */
 
-/* Preview toggle button — only shown on mobile */
+/* Preview toggle button - only shown on mobile */
 .preview-toggle-btn {
     display: none;
     position: fixed;
@@ -2185,7 +2281,7 @@ input[type="number"] {
     }
 }
 
-/* ── Bundle Package — search hidden fields to add back ──────────────────── */
+/* ── Bundle Package - search hidden fields to add back ──────────────────── */
 .bundle-field-search {
     position: relative;
     margin: 4px 0 16px;
@@ -2324,7 +2420,7 @@ input[type="number"] {
     margin-top: -6px;
 }
 
-/* Truecaller commercial card — keep the single panel child flush (override sku-card margin-top:auto) */
+/* Truecaller commercial card - keep the single panel child flush (override sku-card margin-top:auto) */
 .truecaller-card > div:last-child { margin-top: 0 !important; }
 @media (max-width: 560px) {
     .truecaller-card [style*="grid-template-columns:repeat(3,1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
@@ -2523,4 +2619,14 @@ input[type="number"] {
         page-break-inside: avoid !important;
         break-inside: avoid !important;
     }
+}
+/* ── Prepaid deposit: revealed when the first unit price is set ────────── */
+.q-field-row.deposit-reveal {
+    animation: deposit-flash 1.6s ease-out;
+    border-radius: 8px;
+}
+@keyframes deposit-flash {
+    0%   { background: #fef3c7; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.35); }
+    70%  { background: #fffbeb; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.12); }
+    100% { background: transparent; box-shadow: none; }
 }

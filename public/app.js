@@ -152,6 +152,14 @@ async function checkDeveloperStatus() {
             if (data.isDeveloper) {
                 document.getElementById('nav-dev-feedback')?.classList.remove('hidden');
                 document.getElementById('home-card-dev-feedback')?.classList.remove('hidden');
+                // The grants panel sits inside the Admin Panel but is developer-only.
+                const panel = document.getElementById('dev-feature-access');
+                if (panel) {
+                    panel.classList.remove('hidden');
+                    document.getElementById('btn-grant-feature')?.addEventListener('click', grantFeatureAccess);
+                    document.getElementById('feature-grant-feature')?.addEventListener('change', fetchFeatureGrants);
+                    fetchFeatureGrants();
+                }
             }
         }
     } catch (e) {
@@ -803,7 +811,7 @@ function logTerminal(message, type = 'info') {
 function _wip(featureName) {
     showAlert(
         `<strong>${featureName || 'This feature'}</strong> is currently <strong>under construction</strong> and will be available in a future update.<br><br>` +
-        `<span style="font-size:0.85em;color:#64748b;">The UI is live and fully functional — the backend integration for this section is still being wired up. Stay tuned! 🚀</span>`,
+        `<span style="font-size:0.85em;color:#64748b;">The UI is live and fully functional - the backend integration for this section is still being wired up. Stay tuned! 🚀</span>`,
         { title: '🚧 Under Construction', type: 'warning' }
     );
 }
@@ -1429,7 +1437,7 @@ window.loadOnlineUsers = async function() {
         if (offlineCount) offlineCount.textContent = offline;
 
         if (!users.length) {
-            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#94a3b8;">No users found yet — users appear here after they log in for the first time.</div>`;
+            grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px;color:#94a3b8;">No users found yet - users appear here after they log in for the first time.</div>`;
             return;
         }
 
@@ -1751,6 +1759,102 @@ function setupAdminPanel() {
     });
 }
 
+// ── Exclusive feature access control ─────────────────────────────────────────
+const FEATURE_LABELS = { unit_pricing: 'Unit Pricing' };
+
+async function fetchFeatureGrants() {
+    const listEl = document.getElementById('feature-grants-list');
+    const userEl = document.getElementById('feature-grant-user');
+    if (!listEl) return;
+    const fail = (msg) => {
+        listEl.innerHTML = `<p style="color:#b91c1c;font-size:0.85rem;margin:0;">${sanitizeHTML(msg)}</p>`;
+        if (userEl) userEl.innerHTML = '<option value="">Unavailable</option>';
+    };
+    try {
+        const res = await fetch('/api/dev/feature-grants');
+        if (!res.ok) {
+            let detail = `Request failed (${res.status}).`;
+            try { const j = await res.json(); if (j && j.error) detail = j.error; } catch (_) {}
+            if (res.status === 404) detail = 'Endpoint not found - the server is running an older build. Restart it to pick up the change.';
+            fail(detail);
+            return;
+        }
+        const data = await res.json();
+
+        if (userEl) {
+            const granted = new Set(data.grants.map(g => g.feature + '|' + g.user_email.toLowerCase()));
+            const feature = document.getElementById('feature-grant-feature')?.value || 'unit_pricing';
+            const options = (data.users || [])
+                .filter(u => !granted.has(feature + '|' + (u.email || '').toLowerCase()))
+                .map(u => `<option value="${sanitizeHTML(u.email)}">${sanitizeHTML(u.display_name || u.email)} · ${sanitizeHTML(u.email)}</option>`);
+            userEl.innerHTML = options.length
+                ? options.join('')
+                : '<option value="">Everyone already has this feature</option>';
+        }
+
+        const devs = (data.developers || []).map(e => `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 14px; border:1px dashed #e2e8f0; background:#f8fafc; border-radius:9px;">
+                <div style="min-width:0; overflow:hidden;">
+                    <div style="font-weight:600; color:#475569; font-size:0.86rem; overflow:hidden; text-overflow:ellipsis;">${sanitizeHTML(e)}</div>
+                    <div style="font-size:0.75rem; color:#94a3b8; margin-top:2px;">Developer &middot; holds every feature by default</div>
+                </div>
+                <span style="flex-shrink:0; font-size:0.72rem; font-weight:700; color:#64748b; background:#e2e8f0; border-radius:20px; padding:3px 10px;">Built in</span>
+            </div>`).join('');
+
+        const granted = data.grants.map(g => `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 14px; border:1px solid #e9d5ff; background:#faf5ff; border-radius:9px;">
+                <div style="min-width:0; overflow:hidden;">
+                    <div style="font-weight:600; color:#1e293b; font-size:0.86rem; overflow:hidden; text-overflow:ellipsis;">${sanitizeHTML(g.user_email)}</div>
+                    <div style="font-size:0.75rem; color:#7c3aed; margin-top:2px;">
+                        ${sanitizeHTML(FEATURE_LABELS[g.feature] || g.feature)} &middot; granted by ${sanitizeHTML(g.granted_by)}
+                    </div>
+                </div>
+                <button onclick="revokeFeatureAccess(${g.id})"
+                    style="flex-shrink:0; padding:6px 14px; background:#fff; color:#b91c1c; border:1px solid #fecaca; border-radius:7px; font-size:0.8rem; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s;"
+                    onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='#fff'">
+                    Revoke
+                </button>
+            </div>`).join('');
+
+        listEl.innerHTML = devs + granted +
+            (data.grants.length ? '' : `<p style="color:#94a3b8; font-size:0.83rem; margin:4px 0 0;">No one else has been granted a feature yet.</p>`);
+    } catch (e) {
+        fail('Could not reach the server: ' + e.message);
+    }
+}
+
+async function grantFeatureAccess() {
+    const feature = document.getElementById('feature-grant-feature')?.value;
+    const email = document.getElementById('feature-grant-user')?.value;
+    if (!email) {
+        showToast('Pick a user to grant access to.', 'error');
+        return;
+    }
+    const res = await fetch('/api/dev/feature-grants', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ feature, email })
+    });
+    if (res.ok) {
+        showToast(`${email} can now use ${FEATURE_LABELS[feature] || feature}.`, 'success');
+        fetchFeatureGrants();
+    } else {
+        let why = `Failed to grant access (${res.status}).`;
+        try { const j = await res.json(); if (j && j.error) why = j.error; } catch (_) {}
+        showToast(why, 'error');
+    }
+}
+
+window.revokeFeatureAccess = async function (id) {
+    const ok = await showConfirm('Remove this person\'s access to the feature?', {
+        title: 'Revoke Access', type: 'warning', confirmText: 'Revoke', cancelText: 'Cancel'
+    });
+    if (!ok) return;
+    const res = await fetch('/api/dev/feature-grants/' + id, { method: 'DELETE' });
+    if (res.ok) { showToast('Access revoked.', 'success'); fetchFeatureGrants(); }
+    else showToast('Failed to revoke access.', 'error');
+};
+
 async function fetchAdminLogs() {
     const from = document.getElementById('admin-log-from')?.value || '';
     const to   = document.getElementById('admin-log-to')?.value || '';
@@ -1930,6 +2034,7 @@ function setupFeedbackSystem() {
 
 function setupDevFeedbackApplet() {
     document.getElementById('btn-refresh-dev-feedback')?.addEventListener('click', fetchDevFeedback);
+
     document.getElementById('btn-clear-dev-feedback')?.addEventListener('click', async () => {
         if (!await showConfirm('Are you sure you want to clear all feedback messages? This cannot be undone.', { title: 'Clear All Feedback', confirmText: 'Clear All', danger: true, type: 'warning' })) return;
         try {

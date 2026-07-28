@@ -115,7 +115,54 @@ db.exec(`
         status      TEXT NOT NULL DEFAULT 'new',
         created_at  TEXT NOT NULL
     );
+
+    -- Exclusive quote-generator features an admin can hand to specific reps.
+    CREATE TABLE IF NOT EXISTS feature_grants (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        feature     TEXT NOT NULL,
+        user_email  TEXT NOT NULL,
+        granted_by  TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        UNIQUE(feature, user_email)
+    );
 `);
+
+// ─── Exclusive Features ──────────────────────────────────────────────────────
+// Off by default and handed out per user by the lead developer - deliberately
+// not by admins, so the grant list stays small and deliberate.
+const EXCLUSIVE_FEATURES = ['unit_pricing'];
+
+// The table is created at boot, but a database file carried over from an older
+// deploy (Railway's volume, or a local logs.db copied from elsewhere) can reach
+// a query first. Creating it on demand keeps both environments working without
+// a migration step.
+function ensureFeatureGrantsTable() {
+    db.exec(`CREATE TABLE IF NOT EXISTS feature_grants (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        feature     TEXT NOT NULL,
+        user_email  TEXT NOT NULL,
+        granted_by  TEXT NOT NULL,
+        created_at  TEXT NOT NULL,
+        UNIQUE(feature, user_email)
+    )`);
+}
+
+function userFeatures(email) {
+    const out = {};
+    if (!email) return out;
+    if (isDeveloper(email)) {
+        EXCLUSIVE_FEATURES.forEach(f => { out[f] = true; });
+        return out;
+    }
+    try {
+        ensureFeatureGrantsTable();
+        const rows = db.prepare(`SELECT feature FROM feature_grants WHERE lower(user_email) = lower(?)`).all(email);
+        rows.forEach(r => { if (EXCLUSIVE_FEATURES.includes(r.feature)) out[r.feature] = true; });
+    } catch (e) {
+        console.error('userFeatures lookup failed:', e.message);
+    }
+    return out;
+}
 
 // ─── Security Helpers ────────────────────────────────────────────────────────
 function isDeveloper(email) {
@@ -126,7 +173,12 @@ function isDeveloper(email) {
 function ensureDeveloper(req, res, next) {
     const email = req.user?.emails?.[0]?.value;
     if (isDeveloper(email)) return next();
-    res.status(403).json({ error: 'Access denied. Reserved for lead developer only.' });
+    res.status(403).json({
+        error: DEVELOPER_EMAILS.length
+            ? 'Access denied. Reserved for the lead developer.'
+            : 'No DEVELOPER_EMAILS configured on this server, so nobody holds developer access.',
+        notDeveloper: true
+    });
 }
 
 const insertLog = db.prepare(
@@ -261,7 +313,7 @@ app.post('/api/proxy', ensureAuthenticated, async (req, res) => {
 // ─── User Logs (own logs only, optionally since a given ISO timestamp) ─────────
 app.get('/api/logs', ensureAuthenticated, (req, res) => {
     const userEmail = req.user?.emails?.[0]?.value || 'unknown';
-    const since = req.query.since || null; // ISO string — session start time
+    const since = req.query.since || null; // ISO string - session start time
     try {
         let rows;
         if (since) {
@@ -321,7 +373,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// Explicit heartbeat — client pings every 30s
+// Explicit heartbeat - client pings every 30s
 app.post('/api/heartbeat', ensureAuthenticated, (req, res) => {
     res.json({ ok: true, ts: Date.now() });
 });
@@ -702,6 +754,68 @@ app.post('/api/admin/skus', ensureAuthenticated, ensureAdmin, (req, res) => {
     }
 });
 
+// ─── Exclusive Feature Grants ────────────────────────────────────────────────
+// GET  /api/features/me                     - what this user is entitled to
+// GET  /api/dev/feature-grants              - every grant + the pickable users
+// POST /api/dev/feature-grants              - grant { feature, email }
+// DELETE /api/dev/feature-grants/:id        - revoke
+// The grant routes are developer-only: admins cannot widen the list.
+app.get('/api/features/me', ensureAuthenticated, (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    try {
+        res.json({ email, isAdmin: isAdmin(email), features: userFeatures(email) });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to resolve features' });
+    }
+});
+
+app.get('/api/dev/feature-grants', ensureAuthenticated, ensureDeveloper, (req, res) => {
+    try {
+        ensureFeatureGrantsTable();
+        const grants = db.prepare(`SELECT * FROM feature_grants ORDER BY feature ASC, user_email ASC`).all();
+        // The picker list: everyone who has ever signed in, minus the developers
+        // who already hold every feature by default.
+        const users = db.prepare(`SELECT email, display_name FROM user_profiles ORDER BY email ASC`)
+            .all()
+            .filter(u => !isDeveloper(u.email));
+        res.json({ features: EXCLUSIVE_FEATURES, grants, users, developers: DEVELOPER_EMAILS });
+    } catch (e) {
+        console.error('feature-grants read failed:', e.message);
+        res.status(500).json({ error: 'Failed to read feature grants: ' + e.message });
+    }
+});
+
+app.post('/api/dev/feature-grants', ensureAuthenticated, ensureDeveloper, (req, res) => {
+    const grantedBy = req.user?.emails?.[0]?.value;
+    const feature = (req.body?.feature || '').trim();
+    const target = (req.body?.email || '').trim().toLowerCase();
+    if (!EXCLUSIVE_FEATURES.includes(feature)) return res.status(400).json({ error: 'Unknown feature' });
+    if (!target || !target.includes('@')) return res.status(400).json({ error: 'A valid email is required' });
+    try {
+        ensureFeatureGrantsTable();
+        db.prepare(`INSERT OR IGNORE INTO feature_grants (feature, user_email, granted_by, created_at) VALUES (?, ?, ?, ?)`)
+            .run(feature, target, grantedBy, new Date().toISOString());
+        addLog('FEATURE_GRANTED', 'SUCCESS', `${grantedBy} granted "${feature}" to ${target}`, grantedBy);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('feature grant failed:', e.message);
+        res.status(500).json({ error: 'Failed to grant feature: ' + e.message });
+    }
+});
+
+app.delete('/api/dev/feature-grants/:id', ensureAuthenticated, ensureDeveloper, (req, res) => {
+    const email = req.user?.emails?.[0]?.value;
+    try {
+        ensureFeatureGrantsTable();
+        const row = db.prepare(`SELECT * FROM feature_grants WHERE id = ?`).get(req.params.id);
+        db.prepare(`DELETE FROM feature_grants WHERE id = ?`).run(req.params.id);
+        if (row) addLog('FEATURE_REVOKED', 'SUCCESS', `${email} revoked "${row.feature}" from ${row.user_email}`, email);
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to revoke feature' });
+    }
+});
+
 app.post('/api/sku-requests', ensureAuthenticated, (req, res) => {
     const email = req.user?.emails?.[0]?.value;
     const { sku_name, description } = req.body;
@@ -740,8 +854,8 @@ app.post('/api/admin/sku-requests/:id/resolve', ensureAuthenticated, ensureAdmin
 });
 
 // ─── Reset Quote Counter ─────────────────────────────────────────────────────
-// POST /api/quotes/reset-counter   — resets YOUR counter to 0
-// POST /api/quotes/reset-counter?target=email   — admin only: reset another user
+// POST /api/quotes/reset-counter   - resets YOUR counter to 0
+// POST /api/quotes/reset-counter?target=email   - admin only: reset another user
 app.post('/api/quotes/reset-counter', ensureAuthenticated, (req, res) => {
     const callerEmail = req.user?.emails?.[0]?.value;
     const targetEmail = req.query.target || callerEmail;
@@ -783,6 +897,7 @@ app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => 
             db.prepare(`DELETE FROM skus`).run();
             db.prepare(`DELETE FROM approval_requests`).run();
             db.prepare(`DELETE FROM dev_feedback`).run();
+            db.prepare(`DELETE FROM feature_grants`).run();
             db.prepare(`DELETE FROM logs`).run();
             db.prepare(`DELETE FROM user_profiles`).run();
         })();
@@ -883,7 +998,7 @@ An SE (sales engineer) submitted the following feedback:
 "${feedbackText}"
 
 Submitted by: ${submitterEmail}
-${screenshotDataUrl ? '\nA screenshot has been attached — analyse it along with the text.' : ''}
+${screenshotDataUrl ? '\nA screenshot has been attached - analyse it along with the text.' : ''}
 
 Provide a concise analysis in this exact format:
 
@@ -894,7 +1009,7 @@ Provide a concise analysis in this exact format:
 [Bullet list of specific actions the product/dev team should take]
 
 *⚡ Priority*
-[Low / Medium / High — with one-line reason]`;
+[Low / Medium / High - with one-line reason]`;
 
                 // Build multimodal parts array
                 const parts = [{ text: prompt }];
@@ -949,7 +1064,7 @@ async function uploadScreenshotToPublicHost(dataUrl) {
 
 async function postToGoogleChat(message, imageUrl) {
     const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
-    if (!webhookUrl) { console.warn('[FEEDBACK] GOOGLE_CHAT_WEBHOOK_URL not set — skipping Google Chat notification'); return; }
+    if (!webhookUrl) { console.warn('[FEEDBACK] GOOGLE_CHAT_WEBHOOK_URL not set - skipping Google Chat notification'); return; }
     if (imageUrl) {
         // Use cards_v2 format to embed the image
         const payload = {
@@ -974,7 +1089,7 @@ async function postToGoogleChat(message, imageUrl) {
 async function sendFeedbackEmail(subject, body) {
     const user = process.env.FEEDBACK_GMAIL_USER;
     const pass = process.env.FEEDBACK_GMAIL_APP_PASSWORD;
-    if (!user || !pass) { console.warn('[FEEDBACK] FEEDBACK_GMAIL_USER or FEEDBACK_GMAIL_APP_PASSWORD not set — skipping email'); return; }
+    if (!user || !pass) { console.warn('[FEEDBACK] FEEDBACK_GMAIL_USER or FEEDBACK_GMAIL_APP_PASSWORD not set - skipping email'); return; }
     const transporter = nodemailer.createTransport({
         service: 'gmail',
         auth: { user, pass }
@@ -994,7 +1109,7 @@ app.post('/api/feedback', ensureAuthenticated, async (req, res) => {
     const now = new Date().toISOString();
     try {
         db.prepare(`INSERT INTO dev_feedback (user_email, message, created_at) VALUES (?, ?, ?)`).run(email, message, now);
-        res.json({ success: true }); // respond immediately — analysis runs in background
+        res.json({ success: true }); // respond immediately - analysis runs in background
     } catch (e) {
         return res.status(500).json({ error: 'Failed to submit feedback' });
     }
@@ -1003,7 +1118,7 @@ app.post('/api/feedback', ensureAuthenticated, async (req, res) => {
     setImmediate(async () => {
         console.log('[FEEDBACK] Background analysis started for:', email);
         try {
-            // Strip screenshot from display — keep only the human-written text
+            // Strip screenshot from display - keep only the human-written text
             const MARKER = '\n\n[SCREENSHOT_ATTACHED]\n';
             const markerIdx = message.indexOf(MARKER);
             const cleanText = markerIdx !== -1 ? message.substring(0, markerIdx) : message;
@@ -1013,10 +1128,10 @@ app.post('/api/feedback', ensureAuthenticated, async (req, res) => {
             const analysis = await analyseFeedbackWithGemini(message, email);
             console.log('[FEEDBACK] Gemini analysis OK:', analysis.slice(0, 80));
 
-            const screenshotNote = hasScreenshot ? '\n_(Screenshot attached — analysed by Gemini)_' : '';
+            const screenshotNote = hasScreenshot ? '\n_(Screenshot attached - analysed by Gemini)_' : '';
             let chatMsg = `*📬 New Dashboard Feedback from ${email}*\n\n*Original Feedback:*\n_${cleanText}_${screenshotNote}\n\n${analysis}`;
             // Google Chat hard limit: 4096 chars
-            if (chatMsg.length > 4000) chatMsg = chatMsg.substring(0, 3950) + '\n\n_[Analysis truncated — see email for full report]_';
+            if (chatMsg.length > 4000) chatMsg = chatMsg.substring(0, 3950) + '\n\n_[Analysis truncated - see email for full report]_';
             console.log('[FEEDBACK] Posting to Google Chat...');
             // Upload screenshot for display in chat if present
             let screenshotPublicUrl = null;
@@ -1046,12 +1161,12 @@ app.post('/api/feedback', ensureAuthenticated, async (req, res) => {
     });
 });
 
-// Test endpoint — visit in browser to verify Google Chat webhook works
+// Test endpoint - visit in browser to verify Google Chat webhook works
 app.get('/api/admin/test-feedback-notif', ensureAuthenticated, ensureAdmin, async (req, res) => {
     const webhookUrl = process.env.GOOGLE_CHAT_WEBHOOK_URL;
     if (!webhookUrl) return res.json({ ok: false, error: 'GOOGLE_CHAT_WEBHOOK_URL not set in .env' });
     try {
-        await axios.post(webhookUrl, { text: '*🧪 Test notification from Exotel Dashboard* — Google Chat webhook is working!' });
+        await axios.post(webhookUrl, { text: '*🧪 Test notification from Exotel Dashboard* - Google Chat webhook is working!' });
         res.json({ ok: true, message: 'Message sent to Google Chat successfully' });
     } catch (e) {
         const detail = e.response?.data || e.message;
@@ -1102,7 +1217,7 @@ app.post('/api/admin/dev-feedback/clear-all', ensureAuthenticated, ensureDevelop
 //   EXOTEL_API_KEY, EXOTEL_API_TOKEN, EXOTEL_ACCOUNT_SID, EXOTEL_SUBDOMAIN
 
 // ─── In-memory live call store (populated by Exotel webhooks) ────────────────
-// Map<CallSid, callData> — calls are removed when status = completed/failed/etc.
+// Map<CallSid, callData> - calls are removed when status = completed/failed/etc.
 const liveCallStore = new Map();
 
 // Prune stale entries (calls older than 3 hours that never got a completed event)
@@ -1113,7 +1228,7 @@ setInterval(() => {
     }
 }, 15 * 60 * 1000);
 
-// POST /api/webhook/call-event — Exotel posts here in real-time for every call state change
+// POST /api/webhook/call-event - Exotel posts here in real-time for every call state change
 // Configure this as the PassThru / Status Callback URL in your Exotel ExoPhone settings:
 //   http(s)://your-server/api/webhook/call-event?token=WEBHOOK_SECRET
 app.post('/api/webhook/call-event', (req, res) => {
@@ -1132,17 +1247,17 @@ app.post('/api/webhook/call-event', (req, res) => {
 
     if (ended) {
         liveCallStore.delete(sid);
-        console.log(`[WEBHOOK] Call ${sid} ended (${status}) — removed from live store`);
+        console.log(`[WEBHOOK] Call ${sid} ended (${status}) - removed from live store`);
     } else {
         const existing = liveCallStore.get(sid) || {};
         liveCallStore.set(sid, {
             Sid:           sid,
-            From:          body.From          || existing.From          || '—',
-            To:            body.To            || existing.To            || '—',
+            From:          body.From          || existing.From          || '-',
+            To:            body.To            || existing.To            || '-',
             Direction:     body.Direction     || existing.Direction     || 'inbound',
             Status:        body.Status        || body.CallStatus        || existing.Status || 'in-progress',
             StartTime:     body.StartTime     || existing.StartTime     || new Date().toISOString(),
-            PhoneNumberSid:body.To            || body.PhoneNumberSid   || existing.PhoneNumberSid || '—',
+            PhoneNumberSid:body.To            || body.PhoneNumberSid   || existing.PhoneNumberSid || '-',
             EndTime:       null,
             _receivedAt:   Date.now(),
             _source:       'webhook',
@@ -1163,7 +1278,7 @@ function exotelBase() {
     return { base: `https://${key}:${token}@${sub}/v1/Accounts/${sid}`, sid };
 }
 
-// GET /api/lwb/active-calls  — list all in-progress calls
+// GET /api/lwb/active-calls  - list all in-progress calls
 app.get('/api/lwb/active-calls', ensureAuthenticated, ensureAdmin, async (req, res) => {
     const email = req.user?.emails?.[0]?.value;
     const cfg = exotelBase();
@@ -1233,7 +1348,7 @@ app.get('/api/lwb/calls/:callSid/active-legs', ensureAuthenticated, ensureAdmin,
     }
 });
 
-// POST /api/lwb/calls/:callSid/legs  — create monitor leg (listen/whisper/barge)
+// POST /api/lwb/calls/:callSid/legs  - create monitor leg (listen/whisper/barge)
 app.post('/api/lwb/calls/:callSid/legs', ensureAuthenticated, ensureAdmin, async (req, res) => {
     const { callSid } = req.params;
     const email = req.user?.emails?.[0]?.value;
@@ -1252,7 +1367,7 @@ app.post('/api/lwb/calls/:callSid/legs', ensureAuthenticated, ensureAdmin, async
     }
 });
 
-// PUT /api/lwb/calls/:callSid/legs/:legSid  — upgrade monitor leg
+// PUT /api/lwb/calls/:callSid/legs/:legSid  - upgrade monitor leg
 app.put('/api/lwb/calls/:callSid/legs/:legSid', ensureAuthenticated, ensureAdmin, async (req, res) => {
     const { callSid, legSid } = req.params;
     const email = req.user?.emails?.[0]?.value;
@@ -1294,13 +1409,13 @@ app.post('/api/ai-quote-parse', ensureAuthenticated, async (req, res) => {
         // ── System instruction: baked-in domain context (cached, not charged per-call) ──
         const systemInstruction = `You are an AI assistant inside the Exotel Internal Sales Dashboard.
 Your job: listen to a sales rep's voice and extract quote details into structured JSON.
-Use reasoning and common sense — users speak casually. Understand their INTENT, not just keywords.
+Use reasoning and common sense - users speak casually. Understand their INTENT, not just keywords.
 
 === COMPANY CONTEXT ===
 Exotel is a CPaaS (cloud communications) company serving businesses in India and South-East Asia.
 Two brands:
-  1. Exotel — primary brand: cloud telephony, SMS, WhatsApp, RCS.
-  2. Veeno  — sister brand for SMBs: cloud telephony, SIP lines.
+  1. Exotel - primary brand: cloud telephony, SMS, WhatsApp, RCS.
+  2. Veeno  - sister brand for SMBs: cloud telephony, SIP lines.
 If the user asks for a general calling plan and does NOT mention "Veeno", default to Exotel voice products. However, if they specifically ask for "SIP lines", "web calling", "web calls", "1400 series", or "1600 series", ALWAYS assign the respective Veeno SKUs even if they don't say the word "Veeno". For "web calling" or "web calls", map to voice_veeno_std by default, but if they mention a "user charge" of more than 1000, map it to voice_veeno_user.
 
 === SKU CATALOG & INTENT MAPPING ===
@@ -1361,7 +1476,7 @@ default to voice_exotel_std. Example: "I need a plan for my sales team" → voic
 ENTITY RULE: Never mix Exotel and Veeno SKUs in a single quote.
 
 === TIERS (applies to: voice_exotel_std, voice_veeno_std, sip_veeno) ===
-  Dabbler    → "basic", "starter", "small", "entry", "cheap", "budget", "dabbler" — DEFAULT if none mentioned.
+  Dabbler    → "basic", "starter", "small", "entry", "cheap", "budget", "dabbler" - DEFAULT if none mentioned.
   Believer   → "standard", "mid", "middle", "regular", "normal", "believer".
   Influencer → "premium", "top", "advanced", "enterprise", "full", "large", "influencer".
 
@@ -1371,7 +1486,7 @@ ENTITY RULE: Never mix Exotel and Veeno SKUs in a single quote.
 
 === FIELD VALUE OVERRIDES ===
 Only add configurationOverrides when user EXPLICITLY states a value to change. Use the exact key names below.
-Each field belongs to specific SKUs — only include overrides relevant to the selected SKU.
+Each field belongs to specific SKUs - only include overrides relevant to the selected SKU.
 
 COMMON FIELDS (most SKUs):
   "credits / call credits / X rupees credits"             → key: "credits"
@@ -1404,7 +1519,7 @@ TFN FIELDS (voice_exotel_tfn):
   "extra user cost"                                      → key: "extra_user_cost"
   "outgoing rate"                                        → key: "outgoing"
 
-WEB STREAMING & VOICEBOT FIELDS (voice_exotel_stream, voice_exotel_voicebot) — channels are HERE not SIP:
+WEB STREAMING & VOICEBOT FIELDS (voice_exotel_stream, voice_exotel_voicebot) - channels are HERE not SIP:
   "number of channels / X channels"                      → key: "num_channels"
   "channel cost / X per channel"                         → key: "channel_cost"
   "incoming rate"                                        → key: "incoming"
@@ -1465,7 +1580,7 @@ Do NOT set compareMode=true for two different products.
 
 === OUTPUT RULES ===
 - Return valid JSON matching the schema.
-- Reason from intent — casual and simple speech is perfectly valid input.
+- Reason from intent - casual and simple speech is perfectly valid input.
 - If genuinely unclear after reasoning, return empty skus array (do not guess).
 - companyName: extract client/company name if mentioned, else leave empty.
 - Only add configurationOverrides when user explicitly gives a number to change.`;
@@ -1522,7 +1637,7 @@ Do NOT set compareMode=true for two different products.
             }
         };
 
-        // Lean per-call prompt — heavy domain context lives in systemInstruction above
+        // Lean per-call prompt - heavy domain context lives in systemInstruction above
         const skuKeyList = availableSkus.map(s => `${s.key} (${s.name})`).join(', ');
         const promptText = `Parse the attached audio clip and extract the quote details into JSON.\nValid SKU keys (use ONLY these): ${skuKeyList}`;
 
@@ -1608,6 +1723,6 @@ app.listen(PORT, () => {
     if (ADMIN_EMAILS.length > 0) {
         console.log(`Admin users: ${ADMIN_EMAILS.join(', ')}`);
     } else {
-        console.log('WARNING: No ADMIN_EMAILS set in .env — no one will have admin access.');
+        console.log('WARNING: No ADMIN_EMAILS set in .env - no one will have admin access.');
     }
 });

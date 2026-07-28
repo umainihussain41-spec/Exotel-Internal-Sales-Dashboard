@@ -1,15 +1,15 @@
 /*
  * ===================================================================
- *  EXOTEL SALES DASHBOARD — RESPONSIVE STYLESHEET
+ *  EXOTEL SALES DASHBOARD - RESPONSIVE STYLESHEET
  *  Covers:
  *    - Desktop fluid scaling  (1024px → 2560px+)
- *    - Tablet                 (769px – 1023px)
- *    - Mobile large           (≤ 768px)  — iPhone Plus, Pixel XL
- *    - Mobile standard        (≤ 430px)  — iPhone 14, Pixel 7
- *    - Mobile small           (≤ 375px)  — iPhone SE, small Android
- *    - Mobile tiny            (≤ 320px)  — very old / small devices
+ *    - Tablet                 (769px - 1023px)
+ *    - Mobile large           (≤ 768px)  - iPhone Plus, Pixel XL
+ *    - Mobile standard        (≤ 430px)  - iPhone 14, Pixel 7
+ *    - Mobile small           (≤ 375px)  - iPhone SE, small Android
+ *    - Mobile tiny            (≤ 320px)  - very old / small devices
  *
- *  Desktop/tablet styles are NOT changed — this file only ADDS
+ *  Desktop/tablet styles are NOT changed - this file only ADDS
  *  rules for viewports the existing CSS doesn't handle well.
  * ===================================================================
  */
@@ -23,7 +23,7 @@
    • iMac 27" / 4K (2560px+)
    ════════════════════════════════════════════════ */
 
-/* Medium desktop — tighten applet max-width so content isn't
+/* Medium desktop - tighten applet max-width so content isn't
    uncomfortably wide on 1280-1440 screens */
 @media (min-width: 1024px) and (max-width: 1280px) {
     .applet { max-width: 1040px; padding: 0 24px; }
@@ -31,13 +31,13 @@
     .sidebar { width: 230px; }
 }
 
-/* Standard MacBook / 1440p — comfortable reading width */
+/* Standard MacBook / 1440p - comfortable reading width */
 @media (min-width: 1281px) and (max-width: 1600px) {
     .applet { max-width: 1200px; padding: 0 32px; }
     .home-apps-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 }
 
-/* Large monitors & iMac — scale up type and spacing */
+/* Large monitors & iMac - scale up type and spacing */
 @media (min-width: 1601px) and (max-width: 2048px) {
     :root { font-size: 16.5px; }
     .applet { max-width: 1400px; padding: 0 40px; }
@@ -46,7 +46,7 @@
     .top-action-bar { height: 76px; }
 }
 
-/* 4K / iMac 27" / Retina — larger comfortable layout */
+/* 4K / iMac 27" / Retina - larger comfortable layout */
 @media (min-width: 2049px) {
     :root { font-size: 18px; }
     .applet { max-width: 1680px; padding: 0 48px; }
@@ -75,7 +75,7 @@
     }
 }
 
-/* Tablet breakpoint — side-by-side becomes stacked but still spacious */
+/* Tablet breakpoint - side-by-side becomes stacked but still spacious */
 @media (min-width: 769px) and (max-width: 1199px) {
     .quote-layout {
         flex-direction: column !important;
@@ -98,7 +98,7 @@
    ════════════════════════════════════════════════ */
 @media (max-width: 768px) {
 
-    /* ── Remove the burger-btn — we use bottom nav instead ── */
+    /* ── Remove the burger-btn - we use bottom nav instead ── */
     .burger-btn { display: none !important; }
 
     /* ── Hide desktop sidebar entirely on mobile ── */

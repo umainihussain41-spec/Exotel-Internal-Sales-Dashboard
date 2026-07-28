@@ -2277,7 +2277,7 @@ input:focus,
    MOBILE RESPONSIVENESS
    ────────────────────────────────────────────────────── */
 
-/* Burger button — hidden on desktop, shown on mobile */
+/* Burger button - hidden on desktop, shown on mobile */
 .burger-btn {
     display: none;
     align-items: center;
@@ -2293,7 +2293,7 @@ input:focus,
 }
 .burger-btn:hover { background: var(--border-light); }
 
-/* Sidebar overlay — hidden on desktop */
+/* Sidebar overlay - hidden on desktop */
 .sidebar-overlay {
     display: none;
     position: fixed;
