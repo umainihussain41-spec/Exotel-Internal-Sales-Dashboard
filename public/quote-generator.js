@@ -388,11 +388,57 @@ function getRowLabel(item, fieldLabel) {
   const key = rowLabelKey(fieldLabel);
   return (item && item.rowLabels && item.rowLabels[key]) || key;
 }
+// The proposal rarely prints a line under the exact wording the config panel
+// uses for it: the form says "No. of Mobile DID Numbers" where the proposal
+// says "Mobile DID Numbers", and "Mobile DID Cost" where it says "Mobile DID
+// Rate". An exact-string lookup therefore let a rename stop at the form. Both
+// sides are reduced to the same key before matching.
+// Keys and values here are already normalised (see rowLabelMatchKey).
+const ROW_LABEL_ALIASES = {
+  additionalchannelcost: 'channelcost',
+  mobiledidownnumber: 'mobiledidnumber',
+  mobiledid: 'mobiledidnumber',
+  callcreditsincluded: 'callcredit',
+};
+function rowLabelMatchKey(lbl) {
+  const s = String(lbl || '').toLowerCase()
+    .replace(/\s*\([^)]*\)/g, '')             // drop the unit in brackets
+    .replace(/^(?:no\.?|number)\s+of\s+/, '') // "No. of Paid Channels" -> "Paid Channels"
+    .replace(/\s+calls?(\s+charges?)?$/, '')  // "Outgoing Calls" -> "Outgoing"
+    .replace(/\brates?\b/g, 'cost')           // "Mobile DID Rate" == "Mobile DID Cost"
+    .replace(/[^a-z0-9]/g, '')
+    .replace(/s$/, '');                       // singular/plural agnostic
+  return ROW_LABEL_ALIASES[s] || s;
+}
 // Applied by the proposal renderers to every row title they emit.
 function rowLabel(item, lbl) {
   if (!item || !item.rowLabels) return lbl;
   if (typeof QG !== 'undefined' && QG.bundleMergeMode) return lbl; // bundle mode renames via bundleRenameOverrides
-  return item.rowLabels[lbl] || lbl;
+  if (item.rowLabels[lbl]) return item.rowLabels[lbl];
+  const want = rowLabelMatchKey(lbl);
+  const hit = Object.keys(item.rowLabels).find(k => rowLabelMatchKey(k) === want);
+  return hit ? item.rowLabels[hit] : lbl;
+}
+// The Mobile DID rows repeat the noun inside their value text ("2 Mobile DID(s)
+// × 6 months", "₹1,500 /Mobile DID/month"), so the noun has to follow the same
+// rename the row title does - otherwise a line retitled "Mobile Virtual Number"
+// still reads "Mobile DID" one column across.
+function didNoun(item) {
+  const renamed = rowLabel(item, 'Mobile DID Numbers');
+  return renamed === 'Mobile DID Numbers' ? 'Mobile DID(s)' : renamed;
+}
+function didPerUnit(item) {
+  const renamed = rowLabel(item, 'Mobile DID Numbers');
+  return renamed === 'Mobile DID Numbers' ? '/Mobile DID/month' : '/number/month';
+}
+// The rate sub-row hangs off the count row, so it has to carry the same name:
+// a line retitled "Mobile" reads "Mobile Rate" below it, not "Mobile DID Rate".
+// A rename applied to the rate field itself still wins over the inherited one.
+function didRateLabel(item) {
+  const own = rowLabel(item, 'Mobile DID Rate');
+  if (own !== 'Mobile DID Rate') return own;
+  const noun = rowLabel(item, 'Mobile DID Numbers');
+  return noun === 'Mobile DID Numbers' ? 'Mobile DID Rate' : `${noun} Rate`;
 }
 // True when the item has any active discount (for form indicator / preview note).
 function itemHasAnyDiscount(item) {
@@ -1224,6 +1270,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Call Charges</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            ${isVoicebot ? '<li>The voicebot charge covers the bot minute only. Incoming and outgoing call charges are levied separately, in addition to it, at the rates set out in this proposal.</li>' : ''}
             <li>For automated calls, a single leg will be consumed.</li>
             <li>For human-initiated outgoing calls (2-leg calls), charges apply separately to each leg (local/STD split).</li>
             <li>Call attempts (not answered calls) are also chargeable.</li>
@@ -2049,11 +2096,11 @@ function getSkuTncHtml(item, entity = 'Exotel') {
 // One policy, appended to every proposal regardless of SKU or entity.
 // Rendered as a numbered clause inside each SKU's <ol>, using the same nested
 // circle-bullet markup every other clause uses.
-function getRefundPolicyClause(entity = 'Exotel') {
+function getRefundPolicyClause() {
   return `<strong>Refund &amp; Credit Utilisation</strong>
     <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-      <li>All plans are strictly prepaid. Amounts once paid are <strong>non-refundable</strong> and cannot be returned as cash or reversed to the original payment method.</li>
-      <li>Your balance is never lost, only redirected: unused ${entity} credits stay in your wallet and can be applied to <strong>any</strong> ${entity} service on the account: voice calls, SMS, WhatsApp and RCS messaging, Flows and Apps, or any other ${entity} product you choose to enable.</li>
+      <li>All plans operate on a strictly prepaid basis. Amounts once paid are <strong>non-refundable</strong>.</li>
+      <li>Unused credits are not forfeited. They remain available in the account balance and may be utilised against any service activated on the same account.</li>
       <li>Credits are account-bound and non-transferable between accounts, and are consumed in line with the usage rates set out in this proposal.</li>
     </ul>`;
 }
@@ -2062,7 +2109,7 @@ function getRefundPolicyClause(entity = 'Exotel') {
 // clauses 5, 6, ... rather than as a footnote bolted on after the disclaimer.
 // They land next to Payments & Invoicing, which is where the money terms live.
 function withCommonTncClauses(skuHtml, entity) {
-  const clauses = [getRefundPolicyClause(entity)];
+  const clauses = [getRefundPolicyClause()];
 
   if (typeof document === 'undefined') return skuHtml;
   const host = document.createElement('div');
@@ -2401,8 +2448,12 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
         { id: 'volume', label: 'Monthly Call Volume (mins)', value: 1000, locked: false },
         { id: 'credits', label: 'Call Credits (₹)', value: 50000, locked: true, stopType: 'lower', stopVal: 50000, note: 'Volume × Rate × Months (Min ₹50,000)' },
-        { id: 'outgoing', label: 'Outgoing (p/min)', value: 500, locked: true, stopType: 'lower', stopVal: 300 },
-        { id: 'incoming', label: 'Incoming (p/min)', value: 500, locked: true, stopType: 'lower', stopVal: 300 },
+        // The bot charge is the platform rate for a streamed minute. Telephony
+        // is a separate leg and is charged on top of it, so the two PSTN rates
+        // sit alongside rather than replacing it.
+        { id: 'outgoing', label: 'Voicebot Charge (p/min)', value: 500, locked: true, stopType: 'lower', stopVal: 300, note: 'Bot rate only - call charges below apply in addition' },
+        { id: 'pstn_incoming', label: 'Incoming Call Charge (p/min)', value: 20, locked: true, stopType: 'lower', stopVal: 10 },
+        { id: 'pstn_outgoing', label: 'Outgoing Call Charge (p/min)', value: 60, locked: true, stopType: 'lower', stopVal: 40 },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
         { id: 'human_handoff', label: 'Enable Human Handoff? (Voicebot to Agent)', type: 'boolean', value: 0 },
         { id: 'attempt', label: 'Attempt Charges (p/failed call)', value: 6, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
@@ -4136,6 +4187,7 @@ function renderFieldsGroupedCombined(items) {
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
     prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
+    pstn_incoming: 'Call Charges', pstn_outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
@@ -4459,7 +4511,7 @@ function renderSkuForm(skuKey, tier) {
 
               // Scale calling rate fields: single_leg, incoming, outgoing, call_rate
               const scale = val / oldPulse;
-              const rateFields = ['single_leg', 'incoming', 'outgoing', 'call_rate'];
+              const rateFields = ['single_leg', 'incoming', 'outgoing', 'pstn_incoming', 'pstn_outgoing', 'call_rate'];
               rateFields.forEach(fieldId => {
                 const inputEl = card.querySelector('#qf_' + fieldId + '_' + item.id);
                 if (inputEl) {
@@ -5374,6 +5426,7 @@ function renderFieldsGrouped(fields, item) {
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
     prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
+    pstn_incoming: 'Call Charges', pstn_outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
     wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
@@ -5802,9 +5855,9 @@ function _renderBundleItemsHTML(bundleItems) {
       }
       if (didNums > 0) {
         const didTotalV = didNums * validity * DID_COST;
-        tableHTML += stdRow('Mobile DID Numbers', `${didNums} Mobile DID(s)`);
-        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(DID_COST)} ${perUnit('/Mobile DID/month')}`);
-        tableHTML += indRow('Calculation', `${didNums} Mobile DID(s) × ${validity} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotalV)}</strong>`);
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums} ${didNoun(item)}`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(DID_COST)} ${perUnit(didPerUnit(item))}`);
+        tableHTML += indRow('Calculation', `${didNums} ${didNoun(item)} × ${validity} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotalV)}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Charges');
@@ -5875,9 +5928,9 @@ function _renderBundleItemsHTML(bundleItems) {
       }
       const didNums2 = getSafeNum('did_numbers') || 0;
       if (didNums2 > 0) {
-        tableHTML += stdRow('Mobile DID Numbers', `${didNums2} Mobile DID(s)`);
-        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(1500)} ${perUnit('/Mobile DID/month')}`);
-        tableHTML += indRow('Calculation', `${didNums2} Mobile DID(s) × ${vMonthsS} months × ${fmtRupee(1500)} = <strong>${fmtRupee(didNums2 * vMonthsS * 1500)}</strong>`);
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums2} ${didNoun(item)}`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(1500)} ${perUnit(didPerUnit(item))}`);
+        tableHTML += indRow('Calculation', `${didNums2} ${didNoun(item)} × ${vMonthsS} months × ${fmtRupee(1500)} = <strong>${fmtRupee(didNums2 * vMonthsS * 1500)}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Charges');
@@ -5931,9 +5984,9 @@ function _renderBundleItemsHTML(bundleItems) {
       }
       if (isVeeno && didNums > 0) {
         const didTotal = didNums * numMonths * DID_COST;
-        tableHTML += stdRow('Mobile DID Numbers', `${didNums} Mobile DID(s)`);
-        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(DID_COST)} ${perUnit('/Mobile DID/month')}`);
-      tableHTML += indRow('Calculation', `${didNums} Mobile DID(s) × ${numMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotal)}</strong>`);
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums} ${didNoun(item)}`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(DID_COST)} ${perUnit(didPerUnit(item))}`);
+      tableHTML += indRow('Calculation', `${didNums} ${didNoun(item)} × ${numMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotal)}</strong>`);
       }
 
       tableHTML += secRow('Call Charges');
@@ -6040,10 +6093,22 @@ function _renderBundleItemsHTML(bundleItems) {
         ? `${fmtRupee(streamBaseCredits)} + ${fmtRupee(streamExtraCredits)}`
         : fmtRupee(streamBaseCredits);
       tableHTML += stdRow('Call Credits', streamCreditDisplay);
-      tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
-      tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
-      if (getSafeNum('human_handoff') === 1) {
-        tableHTML += stdRow('Human Handoff Calling Rate', fmtPaise(getSafeNum('outgoing')));
+      if (isVoicebot) {
+        // The bot rate buys the streamed minute; the telephony leg is billed on
+        // top of it, so all three lines are shown rather than the bot rate
+        // masquerading as the call rate.
+        tableHTML += stdRow('Voicebot Charge', fmtPaise(getSafeNum('outgoing')));
+        tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('pstn_incoming')));
+        tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('pstn_outgoing')));
+        if (getSafeNum('human_handoff') === 1) {
+          tableHTML += stdRow('Human Handoff Calling Rate', fmtPaise(getSafeNum('pstn_outgoing')));
+        }
+      } else {
+        tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
+        tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+        if (getSafeNum('human_handoff') === 1) {
+          tableHTML += stdRow('Human Handoff Calling Rate', fmtPaise(getSafeNum('outgoing')));
+        }
       }
       const attemptVal = getSafeNum('attempt');
       if (attemptVal > 0) {
@@ -6630,6 +6695,7 @@ function _computeBundleRows(items) {
     credits: 'Call Credits & Charges', extra_credits: 'Call Credits & Charges', extra_validity: 'Call Credits & Charges', volume: 'Call Credits & Charges',
     prepaid_usd: 'Plan Details', attach_intl_pdf: 'Plan Details', attach_isd_pdf: 'Plan Details', fee_type: 'Plan Details',
     single_leg: 'Call Credits & Charges', incoming: 'Call Credits & Charges', outgoing: 'Call Credits & Charges',
+    pstn_incoming: 'Call Credits & Charges', pstn_outgoing: 'Call Credits & Charges',
     attempt: 'Call Credits & Charges', call_rate: 'Call Credits & Charges', sms_cost: 'Messaging & Services',
     wa_utility: 'Messaging & Services', wa_promo: 'Messaging & Services', wa_api: 'Messaging & Services',
     rcs_biz: 'Messaging & Services', rcs_rich: 'Messaging & Services', rcs_reply: 'Messaging & Services',
@@ -6731,7 +6797,7 @@ function _computeBundleRows(items) {
         displayVal = item.sku_key === 'whatsapp_exotel' ? (rawVal + ' Own Number(s)') : (rawVal + ' Mobile DID(s)');
       } else if (f.id === 'did_cost') {
         displayVal = item.sku_key === 'whatsapp_exotel' ? (fmtR(numVal) + '/number/month') : (fmtR(numVal) + '/Mobile DID/month');
-      } else if (['sms_cost', 'wa_utility', 'wa_promo', 'wa_api', 'rcs_cost', 'rcs_biz', 'rcs_rich', 'rcs_reply', 'incoming', 'outgoing', 'single_leg', 'session_cost', 'attempt', 'call_rate'].includes(f.id)) {
+      } else if (['sms_cost', 'wa_utility', 'wa_promo', 'wa_api', 'rcs_cost', 'rcs_biz', 'rcs_rich', 'rcs_reply', 'incoming', 'outgoing', 'pstn_incoming', 'pstn_outgoing', 'single_leg', 'session_cost', 'attempt', 'call_rate'].includes(f.id)) {
         if (numVal === 0) displayVal = '✓ Free';
         else if (numVal >= 100) displayVal = '₹' + (numVal / 100).toFixed(2);
         else displayVal = numVal + 'p';
@@ -6761,7 +6827,7 @@ function _computeBundleRows(items) {
         }
         
         // Handle pulse override for calling rates
-        if (['incoming', 'outgoing', 'single_leg', 'session_cost'].includes(f.id)) {
+        if (['incoming', 'outgoing', 'pstn_incoming', 'pstn_outgoing', 'single_leg', 'session_cost'].includes(f.id)) {
           const currentPulse = parseFloat(getVal('pulse')) || 60;
           if (currentPulse !== 60) {
             suffixInner = 'p/' + currentPulse + 'secs';
@@ -7548,8 +7614,14 @@ function updatePreview() {
         const extra = parseFloat(item.values['extra_credits'] ?? 0);
         return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
       }));
-      tableRows += cmpRow('Incoming Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('incoming'), parseFloat(getVal('pulse')) || 60)));
-      tableRows += cmpRow('Outgoing Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
+      if (isVBotCmp) {
+        tableRows += cmpRow('Voicebot Charge', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
+        tableRows += cmpRow('Incoming Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('pstn_incoming'), parseFloat(getVal('pulse')) || 60)));
+        tableRows += cmpRow('Outgoing Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('pstn_outgoing'), parseFloat(getVal('pulse')) || 60)));
+      } else {
+        tableRows += cmpRow('Incoming Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('incoming'), parseFloat(getVal('pulse')) || 60)));
+        tableRows += cmpRow('Outgoing Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
+      }
       const hasAttempt = colData.some(({ getSN }) => getSN('attempt') > 0);
       if (hasAttempt) {
         tableRows += cmpRow('Attempt Charges', colData.map(({ getSN }) => {
@@ -7954,9 +8026,9 @@ function updatePreview() {
       }
       if (didNums > 0) {
         const didTotalV = didNums * validity * DID_COST;
-        tableHTML += stdRow('Mobile DID Numbers', `${didNums} Mobile DID(s)`);
-        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(DID_COST)} ${perUnit('/Mobile DID/month')}`);
-        tableHTML += indRow('Calculation', `${didNums} Mobile DID(s) × ${validity} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotalV)}</strong>`);
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums} ${didNoun(item)}`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(DID_COST)} ${perUnit(didPerUnit(item))}`);
+        tableHTML += indRow('Calculation', `${didNums} ${didNoun(item)} × ${validity} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotalV)}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Charges');
@@ -8027,9 +8099,9 @@ function updatePreview() {
       }
       const didNums2 = getSafeNum('did_numbers') || 0;
       if (didNums2 > 0) {
-        tableHTML += stdRow('Mobile DID Numbers', `${didNums2} Mobile DID(s)`);
-        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(1500)} ${perUnit('/Mobile DID/month')}`);
-        tableHTML += indRow('Calculation', `${didNums2} Mobile DID(s) × ${vMonthsS} months × ${fmtRupee(1500)} = <strong>${fmtRupee(didNums2 * vMonthsS * 1500)}</strong>`);
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums2} ${didNoun(item)}`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(1500)} ${perUnit(didPerUnit(item))}`);
+        tableHTML += indRow('Calculation', `${didNums2} ${didNoun(item)} × ${vMonthsS} months × ${fmtRupee(1500)} = <strong>${fmtRupee(didNums2 * vMonthsS * 1500)}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Charges');
@@ -8083,9 +8155,9 @@ function updatePreview() {
       }
       if (isVeeno && didNums > 0) {
         const didTotal = didNums * numMonths * DID_COST;
-        tableHTML += stdRow('Mobile DID Numbers', `${didNums} Mobile DID(s)`);
-        tableHTML += indRow('Mobile DID Rate', `${fmtRupee(DID_COST)} ${perUnit('/Mobile DID/month')}`);
-      tableHTML += indRow('Calculation', `${didNums} Mobile DID(s) × ${numMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotal)}</strong>`);
+        tableHTML += stdRow('Mobile DID Numbers', `${didNums} ${didNoun(item)}`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(DID_COST)} ${perUnit(didPerUnit(item))}`);
+      tableHTML += indRow('Calculation', `${didNums} ${didNoun(item)} × ${numMonths} months × ${fmtRupee(DID_COST)} = <strong>${fmtRupee(didTotal)}</strong>`);
       }
 
       tableHTML += secRow('Call Charges');
@@ -8193,10 +8265,22 @@ function updatePreview() {
         ? `${fmtRupee(streamBaseCredits)} + ${fmtRupee(streamExtraCredits)}`
         : fmtRupee(streamBaseCredits);
       tableHTML += stdRow('Call Credits', streamCreditDisplay);
-      tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
-      tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
-      if (getSafeNum('human_handoff') === 1) {
-        tableHTML += stdRow('Human Handoff Calling Rate', fmtPaise(getSafeNum('outgoing')));
+      if (isVoicebot) {
+        // The bot rate buys the streamed minute; the telephony leg is billed on
+        // top of it, so all three lines are shown rather than the bot rate
+        // masquerading as the call rate.
+        tableHTML += stdRow('Voicebot Charge', fmtPaise(getSafeNum('outgoing')));
+        tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('pstn_incoming')));
+        tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('pstn_outgoing')));
+        if (getSafeNum('human_handoff') === 1) {
+          tableHTML += stdRow('Human Handoff Calling Rate', fmtPaise(getSafeNum('pstn_outgoing')));
+        }
+      } else {
+        tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
+        tableHTML += stdRow('Outgoing Calls', fmtPaise(getSafeNum('outgoing')));
+        if (getSafeNum('human_handoff') === 1) {
+          tableHTML += stdRow('Human Handoff Calling Rate', fmtPaise(getSafeNum('outgoing')));
+        }
       }
       const attemptVal = getSafeNum('attempt');
       if (attemptVal > 0) {
@@ -10298,9 +10382,15 @@ window.confirmGenerateProforma = async function () {
           }
           
           lines.push(`Call Credits Included: ${fmtRupee(getSN('credits'))}`);
-          lines.push(`Incoming Calls: ${fmtPaise(getSN('incoming'))}`);
-          lines.push(`Outgoing Calls: ${fmtPaise(getSN('outgoing'))}`);
-          
+          if (isVoicebot) {
+            lines.push(`Voicebot Charge: ${fmtPaise(getSN('outgoing'))}`);
+            lines.push(`Incoming Calls: ${fmtPaise(getSN('pstn_incoming'))} (in addition to the voicebot charge)`);
+            lines.push(`Outgoing Calls: ${fmtPaise(getSN('pstn_outgoing'))} (in addition to the voicebot charge)`);
+          } else {
+            lines.push(`Incoming Calls: ${fmtPaise(getSN('incoming'))}`);
+            lines.push(`Outgoing Calls: ${fmtPaise(getSN('outgoing'))}`);
+          }
+
           if (isVoicebot) {
             const attempt = getSN('attempt');
             lines.push(`Attempt Charges: ${attempt === 0 ? 'Free' : fmtPaise(attempt) + ' / failed call'}`);
@@ -10770,7 +10860,7 @@ window.confirmGenerateProforma = async function () {
     <div><strong>Bank Branch Name</strong> - MG Road Branch</div>
     <div><strong>City</strong> - Bangalore</div>
     <br>
-    <div style="font-weight: bold;">Note:We don't have refund policy</div>
+    <div style="font-weight: bold;">Note: All amounts paid are non-refundable.</div>
   </div>
 
   <!-- Footer -->
