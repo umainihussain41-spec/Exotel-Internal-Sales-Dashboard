@@ -215,6 +215,56 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+// ─── Local development login bypass ──────────────────────────────────────────
+// Google OAuth needs a real callback URL, which makes signing in on a laptop a
+// chore. With DEV_AUTH_BYPASS=true the server fabricates a session user so the
+// dashboard opens straight up.
+//
+// It fails closed - all four of these must hold or the bypass is simply off:
+//   1. DEV_AUTH_BYPASS is exactly "true"
+//   2. none of Railway's injected variables are present
+//   3. NODE_ENV is not "production"
+//   4. the request itself arrived on loopback
+// (2) is what forces the real login on Railway. (4) means that even if the flag
+// were somehow set in production, a request from the public internet still gets
+// nothing. .env is gitignored and Railway reads its variables from the project
+// dashboard, so the flag has no route into production to begin with.
+const RAILWAY_VARS = [
+    'RAILWAY_ENVIRONMENT', 'RAILWAY_ENVIRONMENT_NAME', 'RAILWAY_PROJECT_ID',
+    'RAILWAY_SERVICE_ID', 'RAILWAY_PUBLIC_DOMAIN', 'RAILWAY_STATIC_URL',
+];
+const ON_RAILWAY = RAILWAY_VARS.some(v => process.env[v]);
+const DEV_BYPASS_ENABLED = process.env.DEV_AUTH_BYPASS === 'true'
+    && !ON_RAILWAY
+    && process.env.NODE_ENV !== 'production';
+
+// Deliberately reads the socket address rather than the Host header or
+// X-Forwarded-For, both of which a caller can set to whatever they like.
+function isLoopbackRequest(req) {
+    const ip = String(req.socket?.remoteAddress || req.ip || '').replace('::ffff:', '');
+    return ip === '127.0.0.1' || ip === '::1';
+}
+
+if (DEV_BYPASS_ENABLED) {
+    const devEmail = (process.env.DEV_AUTH_EMAIL || ADMIN_EMAILS[0] || 'dev@exotel.com').toLowerCase();
+    const devName = process.env.DEV_AUTH_NAME || 'Local Dev';
+    app.use((req, res, next) => {
+        if (!isLoopbackRequest(req)) return next();
+        if (req.isAuthenticated && req.isAuthenticated()) return next();
+        // Same shape as a Google profile, so every downstream
+        // req.user?.emails?.[0]?.value read keeps working unchanged.
+        req.user = {
+            id: 'dev-local',
+            provider: 'dev-bypass',
+            displayName: devName,
+            emails: [{ value: devEmail }],
+            photos: [],
+        };
+        req.isAuthenticated = () => true;
+        next();
+    });
+}
+
 // ─── Passport Google OAuth ───────────────────────────────────────────────────
 if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     console.error("WARNING: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing in .env!");
@@ -1724,5 +1774,13 @@ app.listen(PORT, () => {
         console.log(`Admin users: ${ADMIN_EMAILS.join(', ')}`);
     } else {
         console.log('WARNING: No ADMIN_EMAILS set in .env - no one will have admin access.');
+    }
+    if (DEV_BYPASS_ENABLED) {
+        const devEmail = (process.env.DEV_AUTH_EMAIL || ADMIN_EMAILS[0] || 'dev@exotel.com').toLowerCase();
+        console.log(`AUTH: login BYPASSED for loopback requests, signed in as ${devEmail} (DEV_AUTH_BYPASS=true).`);
+    } else if (process.env.DEV_AUTH_BYPASS === 'true') {
+        console.log(`AUTH: DEV_AUTH_BYPASS is set but ignored${ON_RAILWAY ? ' - running on Railway' : ' - NODE_ENV=production'}. Google login enforced.`);
+    } else {
+        console.log('AUTH: Google login enforced.');
     }
 });
