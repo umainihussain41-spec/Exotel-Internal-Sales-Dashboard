@@ -1287,7 +1287,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>${entity} Unlimited ${product} - What "Unlimited" Means</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li><strong>Domestic incoming and outgoing talk-time on the subscribed channels is unlimited</strong> for the full term of this proposal. There is no per-minute rate, no pulse, and no call-credit balance to top up.</li>
+            <li><strong>Domestic incoming and outgoing talk-time on the subscribed channels is unlimited</strong> for the full term of this proposal. There is no per-minute rate and no pulse.</li>
             <li>Failed or unanswered call attempts are <strong>not charged</strong> on this plan.</li>
             <li>The entire recurring charge is the per-channel monthly fee: ${rupee(chCostUnl)} per channel per month.</li>
             <li>At ${chQtyUnl} channels over ${monthsUnl} months, the channel charge is ${chQtyUnl} × ${monthsUnl} × ${rupee(chCostUnl)} = <strong>${rupee(chQtyUnl * monthsUnl * chCostUnl)}</strong>, exclusive of GST.</li>
@@ -1306,7 +1306,6 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         <li style="margin-bottom:8px;"><strong>Acceptable Use</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>The unlimited allowance is for the client's own genuine business communication on the subscribed channels.</li>
-            <li>It may not be resold, shared with third parties, or used for call termination, traffic pumping, or artificially generated traffic.</li>
             <li>All calling remains subject to TRAI regulations, DND/DLT rules and ${entity}'s Acceptable Use Policy.</li>
           </ul>
         </li>
