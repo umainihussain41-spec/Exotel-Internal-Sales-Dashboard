@@ -931,6 +931,7 @@
                                         <label for="feature-grant-feature" style="display:block; font-size:0.75rem; font-weight:600; color:#64748b; margin-bottom:5px;">Feature</label>
                                         <select id="feature-grant-feature" class="form-select" style="width:100%;">
                                             <option value="unit_pricing">Unit Pricing</option>
+                                            <option value="channel_calculator">Channel Calculator</option>
                                         </select>
                                     </div>
                                     <div style="flex:2 1 240px; min-width:200px;">
@@ -949,10 +950,18 @@
                                     </button>
                                 </div>
                             </div>
-                            <div style="flex:0 1 260px; min-width:220px; background:#faf5ff; border:1px solid #ede9fe; border-radius:10px; padding:12px 14px;">
-                                <div style="font-size:0.76rem; font-weight:700; color:#5b21b6; margin-bottom:5px;">Unit Pricing</div>
-                                <div style="font-size:0.78rem; color:#6b21a8; line-height:1.5;">
-                                    Adds a button beside every field in the Quote Generator that quotes that line as a rate: shown on the proposal, but never multiplied out or added to the total.
+                            <div style="flex:0 1 260px; min-width:220px; display:flex; flex-direction:column; gap:10px;">
+                                <div style="background:#faf5ff; border:1px solid #ede9fe; border-radius:10px; padding:12px 14px;">
+                                    <div style="font-size:0.76rem; font-weight:700; color:#5b21b6; margin-bottom:5px;">Unit Pricing</div>
+                                    <div style="font-size:0.78rem; color:#6b21a8; line-height:1.5;">
+                                        Adds a button beside every field in the Quote Generator that quotes that line as a rate: shown on the proposal, but never multiplied out or added to the total.
+                                    </div>
+                                </div>
+                                <div style="background:#faf5ff; border:1px solid #ede9fe; border-radius:10px; padding:12px 14px;">
+                                    <div style="font-size:0.76rem; font-weight:700; color:#5b21b6; margin-bottom:5px;">Channel Calculator</div>
+                                    <div style="font-size:0.78rem; color:#6b21a8; line-height:1.5;">
+                                        Adds a calculator to the Unlimited Web Streaming and Unlimited SIP Trunking plans that turns the client's call volume into a channel count, and writes it into the quote.
+                                    </div>
                                 </div>
                             </div>
                         </div>

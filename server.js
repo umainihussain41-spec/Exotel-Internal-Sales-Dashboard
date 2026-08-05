@@ -130,7 +130,7 @@ db.exec(`
 // ─── Exclusive Features ──────────────────────────────────────────────────────
 // Off by default and handed out per user by the lead developer - deliberately
 // not by admins, so the grant list stays small and deliberate.
-const EXCLUSIVE_FEATURES = ['unit_pricing'];
+const EXCLUSIVE_FEATURES = ['unit_pricing', 'channel_calculator'];
 
 // The table is created at boot, but a database file carried over from an older
 // deploy (Railway's volume, or a local logs.db copied from elsewhere) can reach
@@ -1490,6 +1490,23 @@ Pick the best-matching skuKey using reasoning. Use ONLY these exact keys:
   voice_exotel_voicebot → Voicebot plan for conversational bots and IVR.
                         USE FOR: "voicebot", "voice bot", "automated voicebot", "AI agent".
 
+  unlimited_stream   → Unlimited Web Streaming: flat per-channel monthly fee, unlimited minutes.
+                        USE FOR: "unlimited streaming", "unlimited web streaming",
+                        "unlimited plan" together with streaming/WebSocket/bot,
+                        "flat fee streaming", "no per minute streaming".
+                        Minimum 30 channels. Default channel cost 4000/channel/month.
+
+  unlimited_sip      → Unlimited SIP Trunking: flat per-channel monthly fee, unlimited minutes.
+                        USE FOR: "unlimited SIP", "unlimited SIP trunking", "unlimited trunk",
+                        "unlimited VSIP", "unlimited plan" together with SIP/trunking,
+                        "flat fee SIP", "no per minute SIP".
+                        Minimum 30 channels. Default channel cost 2000/channel/month.
+
+UNLIMITED RULE: Only pick an unlimited_* key when the user actually says "unlimited"
+(or "flat fee" / "no per-minute charge"). A plain "SIP" or "streaming" request stays on
+sip_veeno / voice_exotel_stream. Never emit credits, incoming, outgoing, attempt or pulse
+overrides for unlimited_* SKUs - those plans have no per-minute billing at all.
+
   sms_exotel         → SMS messaging plan.
                         USE FOR: "SMS", "text messages", "OTP", "alerts", "notifications",
                         "bulk SMS", "transactional messages", "send texts".
@@ -1576,6 +1593,15 @@ WEB STREAMING & VOICEBOT FIELDS (voice_exotel_stream, voice_exotel_voicebot) - c
   "outgoing rate"                                        → key: "outgoing"
   "human handoff / agent handoff / voicebot to agent"    → key: "human_handoff" (set value to 1)
   "volume / monthly volume / call volume / X minutes"    → key: "volume"
+
+UNLIMITED PLAN FIELDS (unlimited_stream, unlimited_sip):
+  "number of channels / X channels / X lines"            → key: "num_channels" (minimum 30)
+  "channel cost / X per channel"                         → key: "channel_cost"
+  "months / validity"                                    → key: "num_months"
+  "free users / X users free"                            → key: "free_users"
+  "free numbers"                                         → key: "free_numbers"
+  "extra paid numbers"                                   → key: "num_paid_numbers"
+  "DID numbers / Mobile DID numbers"                     → key: "did_numbers"
 
 SIP FIELDS (sip_veeno):
   "free users / X users free"                            → key: "free_users"
