@@ -2650,3 +2650,422 @@ input[type="number"] {
     70%  { background: #fffbeb; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.12); }
     100% { background: transparent; box-shadow: none; }
 }
+
+/* ==========================================================================
+   Channel Calculator (exclusive feature)
+   A reports-style dashboard: inputs on the left rail, results on the right.
+   Every input and every stat carries a data-tip. Rail tips open to the right
+   and result tips drop down, so nothing can spill outside the modal.
+   ========================================================================== */
+
+.cc-open-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 11px;
+    border: 1px solid #bae6fd;
+    border-radius: 7px;
+    background: #f0f9ff;
+    color: #0369a1;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.cc-open-btn:hover {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.18);
+}
+
+.cc-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 200000;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: cc-fade 0.16s ease-out;
+}
+@keyframes cc-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes cc-rise { from { opacity: 0; transform: translateY(12px) scale(0.99); } to { opacity: 1; transform: none; } }
+
+.cc-modal {
+    width: min(1060px, 100%);
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.45);
+    font-family: Inter, system-ui, sans-serif;
+    animation: cc-rise 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    overflow: hidden;
+}
+
+/* Header */
+.cc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 22px;
+    border-bottom: 1px solid #eef2f7;
+    flex-shrink: 0;
+}
+.cc-head-left { display: flex; align-items: center; gap: 12px; }
+.cc-head-icon {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: #e0f2fe;
+    color: #0284c7;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.cc-title { font-size: 1rem; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
+.cc-sub { font-size: 0.79rem; color: #64748b; margin-top: 1px; }
+.cc-x {
+    background: #f1f5f9;
+    border: none;
+    color: #475569;
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    font-size: 1.25rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+.cc-x:hover { background: #e2e8f0; color: #0f172a; }
+
+/* Two-pane body. The body is the ONLY scroll container: scrolling the rail
+   separately would make it a clipping context on both axes, which chops the
+   sideways tooltips off at the rail's edge. */
+.cc-body {
+    display: grid;
+    grid-template-columns: 296px minmax(0, 1fr);
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.cc-rail {
+    background: #f8fafc;
+    border-right: 1px solid #eef2f7;
+    padding: 16px 16px 20px;
+    min-width: 0;
+}
+.cc-rail-head {
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    margin-bottom: 10px;
+}
+
+.cc-main {
+    padding: 18px 20px 20px;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+/* Rail: presets, basis toggle, fields */
+.cc-presets { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 14px; }
+.cc-chip {
+    padding: 5px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #fff;
+    font-family: inherit;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: #475569;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.cc-chip:hover { border-color: #7dd3fc; color: #0369a1; background: #f0f9ff; }
+.cc-chip.active { border-color: #0284c7; background: #e0f2fe; color: #0369a1; }
+
+.cc-basis {
+    display: flex;
+    padding: 3px;
+    background: #e9eef5;
+    border-radius: 9px;
+    margin-bottom: 12px;
+}
+.cc-seg {
+    flex: 1;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.cc-seg.active { background: #fff; color: #0369a1; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12); }
+
+.cc-field {
+    display: block;
+    padding: 8px 9px;
+    border-radius: 8px;
+    cursor: default;
+}
+.cc-field + .cc-field { margin-top: 2px; }
+.cc-field:hover { background: #eef4fa; }
+.cc-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 5px;
+}
+.cc-q {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: #dde5ee;
+    color: #64748b;
+    font-size: 0.56rem;
+    font-weight: 800;
+    flex-shrink: 0;
+}
+.cc-field:hover .cc-q { background: #0284c7; color: #fff; }
+.cc-input-wrap { display: flex; align-items: center; gap: 8px; }
+.cc-field input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    border: 1px solid #d7e0ea;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #0f172a;
+    text-align: right;
+    background: #fff;
+    font-variant-numeric: tabular-nums;
+}
+.cc-field input:focus { outline: none; border-color: #0284c7; box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14); }
+.cc-unit { font-size: 0.72rem; color: #94a3b8; white-space: nowrap; flex-shrink: 0; width: 74px; }
+
+/* KPI strip: channels, CPS, CPM */
+.cc-kpis {
+    display: grid;
+    grid-template-columns: 1.5fr 1fr 1fr;
+    gap: 10px;
+}
+.cc-kpi {
+    border: 1px solid #eef2f7;
+    border-radius: 11px;
+    padding: 11px 13px;
+    background: #fff;
+    cursor: default;
+    min-width: 0;
+}
+.cc-kpi:hover { border-color: #bae6fd; }
+.cc-kpi.primary {
+    background: linear-gradient(140deg, #0284c7 0%, #0369a1 100%);
+    border-color: transparent;
+    box-shadow: 0 8px 18px -10px rgba(2, 132, 199, 0.8);
+}
+.cc-kpi-lbl {
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.cc-kpi.primary .cc-kpi-lbl { color: #bae6fd; }
+.cc-kpi-num {
+    font-size: 1.7rem;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: -0.03em;
+    color: #0f172a;
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+}
+.cc-kpi.primary .cc-kpi-num { font-size: 2.15rem; color: #fff; }
+.cc-kpi-cap { font-size: 0.7rem; color: #94a3b8; margin-top: 2px; }
+.cc-kpi.primary .cc-kpi-cap { color: #e0f2fe; }
+.cc-kpi-cap.warn { color: #b45309; font-weight: 600; }
+
+/* Input warning: only surfaces when a field would break the model. The host
+   stays out of the column flow (and out of its gap) while there is nothing
+   to say. */
+#cc-warn:empty { display: none; }
+.cc-warn-note {
+    border: 1px solid #fcd34d;
+    border-radius: 11px;
+    padding: 10px 14px;
+    background: #fffbeb;
+    font-size: 0.72rem; color: #b45309; line-height: 1.5;
+}
+
+/* Cards */
+.cc-card {
+    border: 1px solid #eef2f7;
+    border-radius: 11px;
+    padding: 13px 15px;
+    background: #fff;
+    min-width: 0;
+}
+.cc-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.cc-card-title { font-size: 0.87rem; font-weight: 700; color: #0f172a; }
+.cc-card-sub { font-size: 0.72rem; color: #94a3b8; margin-top: 1px; }
+.cc-sweep-tabs { display: flex; gap: 4px; }
+.cc-sweep-tabs .cc-chip { font-size: 0.7rem; padding: 4px 9px; }
+
+/* Sensitivity bar chart */
+.cc-chart { position: relative; height: 176px; padding-top: 16px; }
+.cc-grid { position: absolute; inset: 16px 0 26px 0; z-index: 0; }
+.cc-gridline { position: absolute; left: 0; right: 0; border-top: 1px dashed #e8edf3; }
+/* The plan floor sits ABOVE the bars: when it is binding the bars are short,
+   and a badge tucked behind them would be unreadable. */
+.cc-floorwrap { position: absolute; inset: 16px 0 26px 0; z-index: 3; pointer-events: none; }
+.cc-floor { position: absolute; left: 0; right: 0; border-top: 1.5px dashed #f59e0b; }
+.cc-floor span {
+    position: absolute; right: 0; top: -17px;
+    font-size: 0.66rem; font-weight: 700; color: #b45309;
+    background: #fffbeb; border: 1px solid #fde68a;
+    padding: 1px 6px; border-radius: 5px; white-space: nowrap;
+}
+.cc-bars { position: relative; height: 100%; display: flex; align-items: flex-end; gap: 8px; }
+.cc-col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; height: 100%; min-width: 0; }
+.cc-col-val { font-size: 0.72rem; font-weight: 700; color: #94a3b8; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.cc-col.active .cc-col-val { color: #0369a1; }
+.cc-col-fill {
+    width: 100%;
+    max-width: 46px;
+    background: #bfe3f7;
+    border-radius: 5px 5px 0 0;
+    transition: height 0.28s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s;
+    min-height: 3px;
+}
+.cc-col.active .cc-col-fill { background: #0284c7; }
+.cc-col:hover .cc-col-fill { background: #7dd3fc; }
+.cc-col.active:hover .cc-col-fill { background: #0369a1; }
+.cc-col-x { font-size: 0.7rem; color: #94a3b8; margin-top: 7px; height: 19px; white-space: nowrap; }
+.cc-col.active .cc-col-x { color: #0f172a; font-weight: 700; }
+
+.cc-cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+
+/* Volume breakdown */
+.cc-vrow { margin-bottom: 9px; }
+.cc-vrow:last-child { margin-bottom: 0; }
+.cc-vtop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 0.74rem; color: #64748b; }
+.cc-vtop b { color: #0f172a; font-size: 0.84rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cc-vbar { height: 6px; border-radius: 999px; background: #f1f5f9; margin-top: 5px; overflow: hidden; }
+.cc-vbar i { display: block; height: 100%; border-radius: 999px; transition: width 0.28s ease; }
+.cc-vbar i.all { background: #0f172a; }
+.cc-vbar i.ans { background: #0284c7; }
+.cc-vbar i.un  { background: #fbbf24; }
+
+/* Donut */
+.cc-donut-wrap { display: flex; align-items: center; gap: 12px; }
+.cc-donut { width: 84px; height: 84px; flex-shrink: 0; }
+.cc-donut circle { transition: stroke-dasharray 0.3s ease; }
+.cc-dlegend { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1; }
+.cc-dlegend div {
+    font-size: 0.75rem; color: #64748b;
+    display: flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+}
+.cc-dlegend b { color: #0f172a; font-weight: 700; font-variant-numeric: tabular-nums; margin-left: auto; }
+.cc-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.cc-dot.talk { background: #0284c7; }
+.cc-dot.ring { background: #fbbf24; }
+
+/* Contract value */
+.cc-cost-big { font-size: 1.32rem; font-weight: 800; color: #0f172a; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.cc-cost-line { font-size: 0.74rem; color: #64748b; margin-top: 3px; }
+.cc-cost-gst { font-size: 0.74rem; color: #94a3b8; margin-top: 7px; padding-top: 7px; border-top: 1px dashed #e8edf3; }
+.cc-cost-gst b { color: #0f172a; font-weight: 700; }
+
+/* Footer */
+.cc-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 13px 22px;
+    border-top: 1px solid #eef2f7;
+    background: #f8fafc;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+.cc-foot-note { font-size: 0.76rem; color: #64748b; }
+.cc-foot-btns { display: flex; gap: 8px; margin-left: auto; }
+.cc-btn { padding: 9px 16px; border-radius: 8px; font-family: inherit; font-size: 0.83rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+.cc-btn.ghost { background: #fff; border-color: #cbd5e1; color: #475569; }
+.cc-btn.ghost:hover { background: #f1f5f9; }
+.cc-btn.primary { background: #0284c7; color: #fff; }
+.cc-btn.primary:hover { background: #0369a1; }
+.cc-btn.primary:disabled { background: #cbd5e1; cursor: not-allowed; }
+
+/* Hover explanations */
+.cc-modal [data-tip] { position: relative; }
+.cc-modal [data-tip]::after {
+    content: attr(data-tip);
+    position: absolute;
+    z-index: 30;
+    width: 250px;
+    background: #0f172a;
+    color: #f8fafc;
+    font-size: 0.73rem;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 8px 10px;
+    border-radius: 7px;
+    box-shadow: 0 10px 24px -8px rgba(15, 23, 42, 0.55);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.14s, transform 0.14s, visibility 0.14s;
+    pointer-events: none;
+}
+.cc-modal [data-tip]:hover::after { opacity: 1; visibility: visible; transform: none; }
+
+/* Rail tips open sideways into the dashboard pane: never clipped, never over
+   the header, and never covering the next input. */
+.cc-rail [data-tip]::after {
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translate(-4px, -50%);
+}
+.cc-rail [data-tip]:hover::after { transform: translate(0, -50%); }
+
+/* Result tips drop below their card. */
+.cc-main [data-tip]::after {
+    top: calc(100% + 7px);
+    left: 0;
+    transform: translateY(-3px);
+}
+.cc-main .cc-kpi:last-child[data-tip]::after { left: auto; right: 0; }
+/* Bottom row opens upward so the tip never runs past the end of the body. */
+.cc-main .cc-cards3 > .cc-card[data-tip]::after { top: auto; bottom: calc(100% + 7px); }
+.cc-main .cc-cards3 > .cc-card:last-child[data-tip]::after { left: auto; right: 0; }
+
+@media (max-width: 900px) {
+    .cc-body { grid-template-columns: 1fr; }
+    .cc-rail { border-right: none; border-bottom: 1px solid #eef2f7; }
+    .cc-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cc-cards3 { grid-template-columns: 1fr; }
+    .cc-rail [data-tip]::after { left: 0; right: 0; top: calc(100% + 7px); transform: none; width: auto; }
+    .cc-rail [data-tip]:hover::after { transform: none; }
+}

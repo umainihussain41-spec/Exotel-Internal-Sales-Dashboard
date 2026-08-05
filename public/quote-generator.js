@@ -84,6 +84,8 @@ const SKUS = [
   { key: 'voice_exotel_campaigns', label: 'Campaigns', sub: 'Single-leg Billing', entity: 'Exotel', icon: I_PHONE, hasTiers: true },
   { key: 'voice_exotel_tfn', label: 'Toll-Free (TFN)', sub: 'Exotel', entity: 'Exotel', icon: I_MOBILE, hasTiers: false },
   { key: 'voice_exotel_stream', label: 'Web Streaming', sub: 'WebSocket / Bot', entity: 'Exotel', icon: I_GLOBE, hasTiers: false },
+  // Sits next to the metered plan it mirrors: same product, flat per-channel price.
+  { key: 'unlimited_stream', label: 'Unlimited Web Streaming', sub: 'Unlimited Minutes · Per Channel', entity: 'Exotel', icon: I_GLOBE, hasTiers: false, isUnlimited: true },
   { key: 'voice_exotel_voicebot', label: 'Voicebot', sub: 'Conversational Bot', entity: 'Exotel', icon: I_BOT, hasTiers: false },
   { key: 'sms_exotel', label: 'SMS Plan', sub: 'Exotel SMS', entity: 'Exotel', icon: I_MSG, hasTiers: false },
   { key: 'whatsapp_exotel', label: 'WhatsApp Plan', sub: 'Exotel WA', entity: 'Exotel', icon: I_WA, hasTiers: false },
@@ -100,6 +102,7 @@ const SKUS = [
   { key: 'voice_veeno_std', label: 'Voice STD', sub: 'Minute Based', entity: 'Veeno', icon: I_PHONE, hasTiers: false },
   { key: 'voice_veeno_user', label: 'Voice User', sub: 'User Based', entity: 'Veeno', icon: I_USERS, hasTiers: false },
   { key: 'sip_veeno', label: 'SIP Lines', sub: 'WebRTC / Browser', entity: 'Veeno', icon: I_MONITOR, hasTiers: true },
+  { key: 'unlimited_sip', label: 'Unlimited SIP Trunking', sub: 'Unlimited Minutes · Per Channel', entity: 'Veeno', icon: I_MONITOR, hasTiers: false, isUnlimited: true },
   { key: 'num_1400', label: '1400 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
   { key: 'num_1600', label: '1600 Series', sub: 'Veeno Number', entity: 'Veeno', icon: I_HASH, hasTiers: false },
 
@@ -119,7 +122,22 @@ const TIER_DEFAULTS = {
   elite:      { validity: 11, rental: 10499, free_users: null, users_stop: null, free_numbers: 10, credits: 39000, single_leg: 52, stop_single: 52 },
 };
 // SKUs that support a custom plan name rename
-const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl', 'voice_intl_stream', 'truecaller_exotel'];
+const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl', 'voice_intl_stream', 'truecaller_exotel', 'unlimited_stream', 'unlimited_sip'];
+
+// ── Unlimited plans ─────────────────────────────────────────────────────────
+// One commercial idea, two products: the client buys concurrency, not minutes.
+// There is no incoming/outgoing/attempt rate and no call-credit balance - the
+// per-channel monthly fee is the whole price, so the subtotal is simply
+// channels × months × channel cost (plus any numbers/users they add on top).
+const UNLIMITED_SKUS = ['unlimited_stream', 'unlimited_sip'];
+function isUnlimitedSku(key) { return UNLIMITED_SKUS.includes(key); }
+// The floor exists because the economics only work at scale: below 30 channels
+// a flat-fee unlimited plan is cheaper than the minutes it replaces.
+const UNLIMITED_MIN_CHANNELS = 30;
+const UNLIMITED_CHANNEL_COST = { unlimited_stream: 4000, unlimited_sip: 2000 };
+function unlimitedProductName(key) {
+  return key === 'unlimited_sip' ? 'SIP Trunking' : 'Web Streaming';
+}
 
 // SKUs priced in USD - they never mix with the INR plans and are excluded from
 // the INR grand total.
@@ -341,6 +359,18 @@ function readVal(item, fields, id) {
   const f = fields.find(x => x.id === id);
   if (!f) return undefined;
   return applyDiscount(item, id, item.values[id] !== undefined ? item.values[id] : f.value);
+}
+
+// ── Waivable charge rows ────────────────────────────────────────────────────
+// Account rental and setup print as "Waived" at zero and as an ordinary amount
+// once a rep prices them. Every proposal scope - live preview, PDF, bundle
+// package, proforma - routes those two rows through here, so a fee that is
+// being charged can never read as waived in one output and as a charge in
+// another. A SKU with no such field reads 0 and still prints "Waived".
+function waivableRow(stdRow, label, amount, fmt, suffix) {
+  return amount === 0
+    ? stdRow(label, null, true)
+    : stdRow(label, fmt(amount) + (suffix || ''));
 }
 
 // ── Dead calculation rows ───────────────────────────────────────────────────
@@ -1241,6 +1271,125 @@ function getSkuTncHtml(item, entity = 'Exotel') {
       </ol>
       <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
         Disclaimer: This document contains confidential, proprietary, and unpublished material belonging exclusively to Exotel Techcom Private Limited. It is shared with the recipient in strict confidence. Unauthorized disclosure, duplication, or use of this document, in whole or in part, is strictly prohibited.
+      </div>
+    `;
+  }
+
+  // ── Unlimited plans (Web Streaming / SIP Trunking) ──────────────────────
+  if (isUnlimitedSku(tncKey)) {
+    const isSipUnl = tncKey === 'unlimited_sip';
+    const product = unlimitedProductName(tncKey);
+    const chCostUnl = getVal('channel_cost') || UNLIMITED_CHANNEL_COST[tncKey];
+    const chQtyUnl = getVal('num_channels') || UNLIMITED_MIN_CHANNELS;
+    const monthsUnl = getVal('num_months') || 12;
+    const rupee = (v) => '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
+    return `
+      <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
+        <li style="margin-bottom:8px;"><strong>${entity} Unlimited ${product} - What "Unlimited" Means</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Domestic incoming and outgoing talk-time on the subscribed channels is unlimited</strong> for the full term of this proposal. There is no per-minute rate, no pulse, and no call-credit balance to top up.</li>
+            <li>Failed or unanswered call attempts are <strong>not charged</strong> on this plan.</li>
+            <li>The entire recurring charge is the per-channel monthly fee: ${rupee(chCostUnl)} per channel per month.</li>
+            <li>At ${chQtyUnl} channels over ${monthsUnl} months, the channel charge is ${chQtyUnl} × ${monthsUnl} × ${rupee(chCostUnl)} = <strong>${rupee(chQtyUnl * monthsUnl * chCostUnl)}</strong>, exclusive of GST.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Channels &amp; Concurrency</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>${isSipUnl
+              ? 'A "channel" is one concurrent call on the SIP trunk. Calls attempted beyond the subscribed channel count are rejected.'
+              : 'A "channel" is one concurrent bi-directional WebSocket media stream. Concurrency beyond the subscribed channels is rejected.'}</li>
+            <li>Minimum subscription on an unlimited plan is <strong>${UNLIMITED_MIN_CHANNELS} channels</strong>.</li>
+            <li>Channels are billed for the full month regardless of usage. Channels added mid-month are billed pro-rata; the subscribed count cannot be reduced within the committed term.</li>
+            <li>No separate PRI line charges apply.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Acceptable Use</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>The unlimited allowance is for the client's own genuine business communication on the subscribed channels.</li>
+            <li>It may not be resold, shared with third parties, or used for call termination, traffic pumping, or artificially generated traffic.</li>
+            <li>All calling remains subject to TRAI regulations, DND/DLT rules and ${entity}'s Acceptable Use Policy.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Not Included in the Unlimited Allowance</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>International (ISD) calling, premium and short-code destinations: charged separately at the applicable rate card.</li>
+            <li>SMS, WhatsApp and RCS messaging: charged separately as per the respective plan.</li>
+            <li>Additional users, additional virtual numbers and Mobile DIDs beyond those included above, at the rates set out in this proposal.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>The plan includes user logins, virtual numbers, call recordings and analytics.</li>
+            <li>Agreement validity: 1 year from the start date.</li>
+            <li>Rates are subject to TRAI regulations, with 30 days' prior notice for any change.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Payments &amp; Invoicing</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>100% prepaid model. The channel fee is billed monthly in advance for the subscribed channels.</li>
+            <li>Payment receipts are issued on the payment date; tax invoices are issued monthly.</li>
+            <li>Minimum recharge for any add-on service: ₹500.</li>
+            <li>Reference: <a href="https://support.exotel.com/support/solutions/articles/3000099511-what-is-the-difference-between-a-tax-invoice-and-a-payment-receipt-where-can-i-download-the-tax-invo" target="_blank" style="color:#0284c7; text-decoration:underline;">Tax Invoice vs. Payment Receipt</a></li>
+          </ul>
+          ${entity === 'Veeno' ? `
+          <div style="margin:6px 0 2px 0;"><strong>Bank Account for Payment:</strong></div>
+          <table style="font-size:0.78rem; border-collapse:collapse; margin-left:4px;">
+            <tr><td style="padding:2px 10px 2px 0; color:#475569;">Account Name</td><td style="font-weight:600;">Veeno Communication Private Limited</td></tr>
+            <tr><td style="padding:2px 10px 2px 0; color:#475569;">Account Number</td><td style="font-weight:600;">0512126571</td></tr>
+            <tr><td style="padding:2px 10px 2px 0; color:#475569;">Bank Name</td><td style="font-weight:600;">Kotak Mahindra Bank Limited</td></tr>
+            <tr><td style="padding:2px 10px 2px 0; color:#475569;">IFSC Code</td><td style="font-weight:600;">KKBK0008066</td></tr>
+            <tr><td style="padding:2px 10px 2px 0; color:#475569;">Branch</td><td style="font-weight:600;">MG Road, Bangalore</td></tr>
+            <tr><td style="padding:2px 10px 2px 0; color:#475569;">Address</td><td style="font-weight:600;">#22, Ground Floor, MG Road, Bangalore - 560001</td></tr>
+          </table>` : ''}
+        </li>
+        <li style="margin-bottom:8px;"><strong>GST &amp; TDS</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>All charges are exclusive of GST. GST @ 18% applies.</li>
+            <li>If GST unregistered, submit a declaration on company letterhead:<br><em>"This is to confirm that we are not eligible for GST and are therefore not registered under the GST Act, 2017. We further confirm that we will not claim Input Tax Credit."</em></li>
+            <li>TDS deduction applicable u/s 194J @2% (if applicable).</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Incoming and Outgoing Numbers</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li><strong>Incoming Calls:</strong> Customers must use their own customer-facing number (Airtel or Jio SIMs preferred). These calls can be forwarded to Exotel's virtual landline numbers available in circles such as Delhi, Gujarat, Mumbai, Maharashtra, Karnataka, Tamil Nadu, Andhra Pradesh, West Bengal, Rajasthan, Madhya Pradesh, and Kerala.</li>
+            <li><strong>Outgoing Calls:</strong> Customers cannot use their own numbers for outbound calls. Outgoing calls will display Exotel's virtual landline numbers from the above circles.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Custom Integrations</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>API Documentation: developer.exotel.com/api</li>
+            ${isSipUnl ? '<li>FAQs - Voice &amp; Phone Calls</li>' : `<li>Reference Articles: Stream and Voicebot Applet, Voicebot FAQs</li>
+            <li>Developer Resources: github.com/exotel/Agent-Stream, github.com/exotel/Agent-Stream-echobot</li>`}
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>KYC Requirements</strong>
+          <div style="margin:4px 0 2px 0;">Upload the following documents via the Exotel Dashboard:</div>
+          <ul style="margin:0; padding-left:18px; list-style-type:circle;">
+            ${isSipUnl ? '<li>To procure SIP lines, the company must be registered in Karnataka, Mumbai, Delhi, West Bengal, Gujarat, or Andhra Pradesh. KYC is mandatory even for trial accounts: after creating the account, open the KYC document section, select your registered city, download the CAF form, complete, sign and seal it, and submit it with the required documents.</li>' : ''}
+            <li>Company PAN card</li>
+            <li>Certificate of Incorporation / Owner's Passport</li>
+            <li>Company address proof (recent post-paid bill, rental agreement, or bank statement)</li>
+            <li>Director's passport-size photo</li>
+            <li>Accepted formats: png, gif, jpeg, pdf</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Virtual Number (VN) Policy</strong>
+          <ul style="margin:2px 0 6px 0; padding-left:18px; list-style-type:circle;">
+            <li>Local landline VNs available in: Delhi/NCR, Mumbai, Maharashtra, Bengaluru, Hyderabad, Kolkata, Chennai, Ahmedabad, Rajasthan, MP, and Kerala.</li>
+            <li>Mobile DIDs are available for selected states; please contact your account manager.</li>
+            <li>VNs remain Exotel's property and cannot be ported or transferred.</li>
+            <li>If discontinued by the provider, an alternate VN will be allotted.</li>
+            <li>A minimum 6-month commitment is required for any number allocated.</li>
+          </ul>
+        </li>
+        <li style="margin-bottom:8px;"><strong>Commercial Validity</strong>
+          <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            <li>Proposal validity: 30 days from the issue date.</li>
+          </ul>
+        </li>
+      </ol>
+      <div style="margin-top:16px; font-size:0.75rem; color:#64748b; font-style:italic;">
+        Disclaimer: This document contains confidential and proprietary information of ${entity === 'Veeno' ? 'Veeno Communication Private Limited' : 'Exotel Techcom Private Limited'}. It is intended solely for the recipient. Any unauthorized sharing, use, or reproduction is strictly prohibited.
       </div>
     `;
   }
@@ -2178,7 +2327,7 @@ function buildIntlStreamRows(item, h) {
   let html = '';
   html += secRow('Plan Details');
   html += stdRow('Credits (USD)', fmtUsdFixed(prepaid));
-  html += stdRow('Setup Charges', null, true);
+  html += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup_usd'), fmtUsdFixed);
   html += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
   html += stdRow('No. of Months', months);
 
@@ -2219,6 +2368,64 @@ function buildIntlStreamRows(item, h) {
       html += indRow('Applies when', `A call transferred from the bot to a live agent in ${sanitize(e.rm)} adds that agent leg for the duration of the transfer.`);
     }
   });
+
+  return html;
+}
+
+// ── Unlimited plan rows (Web Streaming / SIP Trunking) ──────────────────────
+// Row-for-row the Web Streaming commercial, with two differences: the section
+// header names the product, and the call-charge rates read "Unlimited" instead
+// of a paise figure. There is no credits row and no attempt row because those
+// fields do not exist on the plan. Built once and injected into every proposal
+// scope (live preview, PDF, bundle package) so the three never drift.
+function buildUnlimitedRows(item, h) {
+  const { secRow, stdRow, indRow, getSafeNum, getVal, fmtRupee, perUnit } = h;
+  const isSip = item.sku_key === 'unlimited_sip';
+  const numChs = getSafeNum('num_channels') || 0;
+  const numMos = getSafeNum('num_months') || 0;
+  const chCost = getSafeNum('channel_cost') || 0;
+  const UNL = `<strong style="color:#0284c7;">Unlimited</strong>`;
+
+  let html = '';
+  html += secRow('Plan Details');
+  html += stdRow('No. of Months', Math.max(1, parseFloat(getVal('num_months') || 0)));
+  const rental = getSafeNum('rental');
+  html += stdRow('Account Rental', rental === 0 ? null : `${fmtRupee(rental)} ${perUnit('/month')}`, rental === 0);
+  html += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
+  html += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
+
+  html += secRow(isSip ? 'SIP Trunking Channels' : 'Streaming Channels');
+  html += stdRow('No. of Channels', numChs);
+  html += stdRow('Channel Cost', `${fmtRupee(chCost)} ${perUnit('/channel/month')}`);
+  html += indRow('Calculation', `${numChs} channels × ${numMos} months × ${fmtRupee(chCost)} = <strong>${fmtRupee(numChs * numMos * chCost)}</strong>`);
+
+  html += secRow('User Plan');
+  const fu = getVal('free_users');
+  const fuExtra = getSafeNum('extra_users') || 0;
+  const fuDisplay = (fu === null || fu === 'Unlimited')
+    ? 'Unlimited (Included)'
+    : (fuExtra > 0 ? `${fu} + ${fuExtra} Users (Free)` : fu + ' Users (Free)');
+  html += stdRow('Free Users', fuDisplay);
+  html += indRow('Extra User Cost', `${fmtRupee(getSafeNum('extra_user_cost'))} ${perUnit('/user/month')}`);
+
+  html += secRow('Number Plan');
+  html += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
+  html += indRow('Extra Number Cost', `${fmtRupee(getSafeNum('extra_number'))} ${perUnit('/number/month')}`);
+  const paidNums = getSafeNum('num_paid_numbers') || 0;
+  if (paidNums > 0) {
+    html += stdRow('Extra Numbers', `${paidNums} Number(s)`);
+    html += indRow('Calculation', `${paidNums} numbers × ${numMos} months × ${fmtRupee(getSafeNum('extra_number'))} = <strong>${fmtRupee(paidNums * numMos * getSafeNum('extra_number'))}</strong>`);
+  }
+  const didNums = getSafeNum('did_numbers') || 0;
+  if (didNums > 0) {
+    const didCost = getSafeNum('did_cost') || 1500;
+    html += stdRow('Mobile DID Numbers', `${didNums} Number(s)`);
+    html += indRow('Calculation', `${didNums} numbers × ${numMos} months × ${fmtRupee(didCost)} = <strong>${fmtRupee(didNums * numMos * didCost)}</strong>`);
+  }
+
+  html += secRow('Call Charges');
+  html += stdRow('Incoming Calls', UNL);
+  html += stdRow('Outgoing Calls', UNL);
 
   return html;
 }
@@ -2266,6 +2473,53 @@ function depositAmount(item, fields) {
   return parseFloat(item && item.values ? item.values[PREPAID_DEPOSIT_ID] : 0) || 0;
 }
 
+// ── Waivable charges: account rental and setup ──────────────────────────────
+// Both are quotable on every SKU. Most SKUs waive them, but "waived" used to be
+// baked into the field definition (nonEditable + waived), so a rep who needed to
+// charge setup or reinstate a rental had no way to do it. They are ordinary
+// editable amounts now, defaulting to 0. Every proposal scope prints a 0 as
+// "Waived", so an untouched quote reads exactly as it did before, and a value
+// typed in flows through the same subtotal path as any other charge.
+//
+// `stdValue` records the list price the waiver is measured against: it is not
+// charged, it just documents what is being given away.
+function waivableCharge(id, label, stdValue) {
+  return {
+    id,
+    label,
+    value: 0,
+    locked: true,
+    stopType: 'lower',
+    stopVal: 0,
+    waivable: true,
+    stdValue,
+    note: `Waived by default (standard ${stdValue}). Enter an amount to charge it.`,
+  };
+}
+
+// ── Field hydration + legacy quote migration ────────────────────────────────
+// Every restore path fills in defaults for fields a saved quote never stored.
+// Rental and setup used to be hard-waived, non-editable rows, but their list
+// price was hydrated into item.values all the same - so a quote saved back then
+// carries rental = 10499 on a plan that was sold with the rental waived. Now
+// that both are ordinary editable amounts, that stale figure would quietly
+// start billing the moment the quote is reopened. Quotes written since this
+// change carry QUOTE_SCHEMA_VERSION; anything older gets its waivable fields
+// reset to the waiver the client actually signed.
+const QUOTE_SCHEMA_VERSION = 2;
+function hydrateItemFields(item, savedVersion) {
+  if (!item || !item.sku_key) return;
+  if (!item.values) item.values = {};
+  const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
+  const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+  const isLegacy = !(Number(savedVersion) >= QUOTE_SCHEMA_VERSION);
+  fields.forEach(f => {
+    if (f.note?.includes('Add-on')) return;
+    if (isLegacy && f.waivable) { item.values[f.id] = 0; return; }
+    if (item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value;
+  });
+}
+
 // Per-SKU default fields: { id, label, value, locked, stopType, stopVal, note, waived, nonEditable }
 function getSkuFields(skuKey, tier) {
   const fields = getSkuFieldsBase(skuKey, tier);
@@ -2296,7 +2550,7 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: t.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'attach_isd_pdf', label: 'Attach ISD Rate Card PDF', value: 0, type: 'boolean' },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2322,7 +2576,7 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: 11, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: 1000, type: 'rental_toggle', locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'attach_isd_pdf', label: 'Attach ISD Rate Card PDF', value: 0, type: 'boolean' },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2354,8 +2608,8 @@ function getSkuFieldsBase(skuKey, tier) {
     // ── Exotel User-based ───────────────────────────────────────────
     case 'voice_exotel_user':
       return [
-        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('rental', 'Account Rental (₹)', '₹10,499'),
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2372,8 +2626,8 @@ function getSkuFieldsBase(skuKey, tier) {
     // ── Veeno User-based (₹2,000/user, no free users) ───────────────
     case 'voice_veeno_user':
       return [
-        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('rental', 'Account Rental (₹)', '₹10,499'),
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2396,8 +2650,8 @@ function getSkuFieldsBase(skuKey, tier) {
 
     case 'voice_exotel_tfn':
       return [
-        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('rental', 'Account Rental (₹)', '₹10,499'),
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2415,8 +2669,11 @@ function getSkuFieldsBase(skuKey, tier) {
       ];
     case 'voice_exotel_stream':
       return [
-        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        // '/month' in the label is load-bearing: the subtotal multiplies a
+        // rental by the term only when the label says it is monthly, and this
+        // SKU's proposal row prints it as /month.
+        waivableCharge('rental', 'Account Rental (₹/month)', '₹10,499'),
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'No. of Channels', value: 5, locked: true, stopType: 'lower', stopVal: 3 },
@@ -2437,10 +2694,37 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'did_numbers', label: 'No. of Mobile DID Numbers', value: 0, locked: false },
         { id: 'did_cost', label: 'Mobile DID Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
       ];
+    // ── Unlimited plans (Web Streaming / SIP Trunking) ──────────────
+    // Deliberately no credits, incoming, outgoing, attempt or pulse fields:
+    // there is no per-minute billing to configure, and leaving them out is what
+    // keeps them off the proposal.
+    case 'unlimited_stream':
+    case 'unlimited_sip': {
+      const isSipUnl = skuKey === 'unlimited_sip';
+      const chCostUnl = UNLIMITED_CHANNEL_COST[skuKey];
+      return [
+        waivableCharge('rental', 'Account Rental (₹/month)', '₹10,499'),
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
+        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
+        { id: 'num_months', label: 'No. of Months', value: 12, locked: false, stopType: 'lower', stopVal: 6 },
+        // hardMin, not a stop-lock: 30 channels is the floor of the plan, so
+        // there is no manager override - the field simply cannot go below it.
+        { id: 'num_channels', label: 'No. of Channels', value: UNLIMITED_MIN_CHANNELS, locked: false, hardMin: UNLIMITED_MIN_CHANNELS },
+        { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: chCostUnl, locked: true, stopType: 'lower', stopVal: chCostUnl, note: 'Unlimited calling is priced on channels alone' },
+        { id: 'free_users', label: 'Free Users', value: 3, locked: true, stopType: 'upper', stopVal: 5 },
+        { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
+        { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
+        { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
+        { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
+        { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
+        { id: 'did_numbers', label: isSipUnl ? 'Mobile DID Numbers (optional)' : 'No. of Mobile DID Numbers', value: 0, locked: false },
+        { id: 'did_cost', label: isSipUnl ? 'Mobile DID Rate (₹/Mobile DID/month)' : 'Mobile DID Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
+      ];
+    }
     case 'voice_exotel_voicebot':
       return [
-        { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('rental', 'Account Rental (₹/month)', '₹10,499'),
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'Free Channels (Included)', value: 5, locked: true, stopType: 'lower', stopVal: 1 },
@@ -2469,7 +2753,7 @@ function getSkuFieldsBase(skuKey, tier) {
     case 'sms_exotel':
       return [
         { id: 'rental', label: 'Account Rental (₹/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived' },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2483,7 +2767,7 @@ function getSkuFieldsBase(skuKey, tier) {
     case 'whatsapp_exotel':
       return [
         { id: 'rental', label: 'Account Rental (₹/month)', value: 4000, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2505,8 +2789,8 @@ function getSkuFieldsBase(skuKey, tier) {
     case 'rcs_exotel':
       return [
         { id: 'brand_fee', label: 'Brand Registration (₹)', value: 15000, locked: true, stopType: 'lower', stopVal: 10000 },
-        { id: 'rental', label: 'Account Rental (₹/month)', value: 4000, locked: true, nonEditable: true, waived: true },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('rental', 'Account Rental (₹/month)', '₹4,000'),
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2530,7 +2814,7 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         { id: 'validity', label: 'Validity (months)', value: t2.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t2.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t2.free_users ?? 'Unlimited', locked: true, stopType: t2.users_stop ? 'upper' : null, stopVal: t2.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2556,7 +2840,7 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         { id: 'procurement', label: 'Number Procurement (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 2000 },
         { id: 'rental', label: 'Number Rental (₹/month)', value: 850, locked: true, stopType: 'lower', stopVal: 850 },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         // Channels are sold only in blocks of 50 - there is no per-channel rate,
         // and 50 is the floor.
         { id: 'channel_blocks', label: 'Channel Blocks (50 channels each)', value: 1, locked: true, stopType: 'lower', stopVal: 1, note: 'Each block = 50 channels' },
@@ -2578,7 +2862,7 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         { id: 'validity', label: 'Validity (months)', value: t.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
-        { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
+        waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -2602,6 +2886,9 @@ function getSkuFieldsBase(skuKey, tier) {
       const sub = validSubs.includes(tier) ? tier : 'voice';
       return getSkuFields('startup_' + sub, 'dabbler');
     }
+    // Startup rentals and setup stay hard-waived: the whole bundle prints as
+    // complimentary and its subtotal is forced to zero, so an editable charge
+    // here would show on the proposal without ever reaching a total.
     case 'startup_voice':
       return [
         { id: 'validity', label: 'Validity (months)', value: 6, locked: true, nonEditable: true },
@@ -2748,6 +3035,7 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         // Plan Overview
         { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
+        waivableCharge('setup_usd', 'Setup Charges (USD)', '$0'),
         { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
         { id: 'call_rate_mode', label: 'Call Rate Display', value: 0, type: 'call_mode_select' },
         { id: 'fee_type', label: 'Apply Fee to Quote', value: 2, type: 'fee_select' },
@@ -2777,6 +3065,7 @@ function getSkuFieldsBase(skuKey, tier) {
     case 'voice_intl_stream':
       return [
         { id: 'prepaid_usd', label: 'Prepaid Amount (USD)', value: 400, locked: false, stopType: 'lower', stopVal: 200 },
+        waivableCharge('setup_usd', 'Setup Charges (USD)', '$0'),
         { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
         { id: 'call_rate_mode', label: 'Call Rate Display', value: 1, type: 'call_mode_select' },
         { id: 'fee_type', label: 'Apply Fee to Quote', value: 2, type: 'fee_select' },
@@ -4185,7 +4474,7 @@ function renderFieldsGroupedCombined(items) {
     channel_blocks: 'Number Plan', block_cost: 'Number Plan', channel_cost_usd: 'Number Plan',
     number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
-    prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
+    prepaid_usd: 'Plan Overview', setup_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
     pstn_incoming: 'Call Charges', pstn_outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
@@ -4277,6 +4566,7 @@ const _BUNDLE_PRIMARY_RANK = {
   voice_exotel_std: 1, voice_veeno_std: 1,
   voice_exotel_user: 2, voice_veeno_user: 2,
   voice_exotel_campaigns: 3, sip_veeno: 3, voice_exotel_tfn: 3,
+  unlimited_sip: 3, unlimited_stream: 3,
   startup: 4,
   voice_exotel_stream: 5, voice_exotel_voicebot: 5,
   sms_exotel: 6, whatsapp_exotel: 6, rcs_exotel: 6,
@@ -4468,8 +4758,13 @@ function renderSkuForm(skuKey, tier) {
               ? `<span class="sku-entity-tag" style="margin-left:6px;background:#e0f2fe;color:#0369a1;">${sanitize(item.customName)}</span>`
               : (t && sku?.hasTiers ? `<span class="sku-entity-tag ${sku.entity.toLowerCase()}" style="margin-left:6px;">${TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase() + t.slice(1))}</span>` : '')}
           </div>
+          ${skuHasChannelCalc(k) ? `
+          <button type="button" class="cc-open-btn" onclick="window.openChannelCalc('${item.id}')" title="Size the channel count from the client's call volume">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="11" x2="8" y2="11"/><line x1="12" y1="11" x2="12" y2="11"/><line x1="16" y1="11" x2="16" y2="11"/><line x1="8" y1="15" x2="8" y2="15"/><line x1="12" y1="15" x2="12" y2="15"/><line x1="16" y1="15" x2="16" y2="18"/><line x1="8" y1="18" x2="12" y2="18"/></svg>
+            Channel Calculator
+          </button>` : ''}
         </div>
-        
+
         ${fields.some(f => f.note?.includes('Add-on') && f.note !== 'VN Add-on') ? `
         <div style="padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; gap: 16px; font-size: 0.85rem; margin-bottom: 12px; border-radius: 6px; flex-wrap:wrap; align-items:center;">
           <strong>Add-ons:</strong>
@@ -4644,6 +4939,12 @@ function renderSkuForm(skuKey, tier) {
             if (breach) { input.classList.add('stop-lock-violation'); }
             else { input.classList.remove('stop-lock-violation'); }
           }
+          // A hard floor flags while you type but is only snapped back on blur,
+          // so typing "3" on the way to "30" isn't fought mid-keystroke.
+          if (f.hardMin != null) {
+            if (isNaN(numVal) || numVal < f.hardMin) input.classList.add('stop-lock-violation');
+            else input.classList.remove('stop-lock-violation');
+          }
           item.values[f.id] = isNaN(numVal) ? val : numVal;
 
           // Text values opt out of pricing entirely: no stop-lock breach, no
@@ -4686,6 +4987,24 @@ function renderSkuForm(skuKey, tier) {
           if (QG.activeItemId === item.id) syncActiveAliases();
           updatePreview();
         });
+
+        // Hard floor enforcement. Unlike a stop-lock there is no approval path:
+        // the value snaps back to the minimum the moment the field loses focus.
+        if (f.hardMin != null) {
+          input.addEventListener('blur', () => {
+            const n = parseFloat(input.value);
+            if (!isNaN(n) && n >= f.hardMin) return;
+            input.value = f.hardMin;
+            item.values[f.id] = f.hardMin;
+            input.classList.remove('stop-lock-violation');
+            QG._dirty = true;
+            if (typeof showToast === 'function') {
+              showToast(`${cleanLabel(f.label)} cannot go below ${f.hardMin} on this plan.`, 'warning');
+            }
+            if (QG.activeItemId === item.id) syncActiveAliases();
+            updatePreview();
+          });
+        }
       });
 
       // ── Per-field unit-price toggle ─────────────────────────────────
@@ -5424,7 +5743,7 @@ function renderFieldsGrouped(fields, item) {
     channel_blocks: 'Number Plan', block_cost: 'Number Plan', channel_cost_usd: 'Number Plan',
     number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Credits & Validity', extra_credits: 'Credits & Validity', extra_validity: 'Credits & Validity', volume: 'Credits & Validity',
-    prepaid_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
+    prepaid_usd: 'Plan Overview', setup_usd: 'Plan Overview', attach_intl_pdf: 'Plan Overview', attach_isd_pdf: 'Plan Overview', fee_type: 'Plan Overview',
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
     pstn_incoming: 'Call Charges', pstn_outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
@@ -5447,6 +5766,403 @@ function renderFieldsGrouped(fields, item) {
     sectionMap[sec].map(f => renderFieldRow(f, item)).join('')
   ).join('');
 }
+
+// ── Channel Calculator ──────────────────────────────────────────────────────
+// Reps size a trunk by guessing. This turns the client's actual call volume
+// into a channel count using the same linear capacity model the public CPS
+// calculator uses, then writes the answer straight into the plan.
+//
+//   CPS         = daily volume / (calling hours x 3600)
+//   concurrency = (connected x AHT + unanswered x ring time) / (calling hours x 3600)
+//
+// Ringing lines hold a channel too, which is why unanswered calls are in the
+// numerator: on a 25% pickup dialer they are most of the concurrency.
+// Exclusive feature, granted per rep like unit pricing, and only on the two
+// unlimited plans - they are the ones sold on channel count alone.
+const CHANNEL_CALC_SKUS = ['unlimited_stream', 'unlimited_sip'];
+function canUseChannelCalc() { return !!(QG.features && QG.features.channel_calculator); }
+function skuHasChannelCalc(key) { return canUseChannelCalc() && CHANNEL_CALC_SKUS.includes(key); }
+
+const CHANNEL_CALC_DEFAULTS = {
+  basis: 'day', dayVolume: 100000, monthVolume: 2600000, workingDays: 26,
+  pickup: 25, hours: 12, aht: 60, ring: 14, headroom: 20,
+};
+
+// Starting points only - every value stays editable. They exist so a rep with
+// no numbers in hand has a sane shape to argue from, not to be quoted as-is.
+const CHANNEL_CALC_PRESETS = {
+  dialer:  { label: 'Outbound dialer',  pickup: 25, hours: 12, aht: 60,  ring: 14 },
+  inbound: { label: 'Inbound support',  pickup: 95, hours: 9,  aht: 180, ring: 8 },
+  collect: { label: 'Collections',      pickup: 35, hours: 10, aht: 90,  ring: 15 },
+};
+
+function _ccInputs(item) {
+  if (!item._chanCalc) item._chanCalc = { ...CHANNEL_CALC_DEFAULTS };
+  return item._chanCalc;
+}
+
+// The plan floor, if the SKU declares one, so the calculator can never hand
+// back a number the field itself would reject.
+function _ccHardMin(item) {
+  const f = getSkuFields(item.sku_key, item.tier).find(x => x.id === 'num_channels');
+  return f && f.hardMin != null ? f.hardMin : null;
+}
+
+function computeChannelCalc(c, hardMin) {
+  const n = (v) => { const x = parseFloat(v); return isNaN(x) ? 0 : x; };
+  const workingDays = Math.max(1, n(c.workingDays) || 1);
+  const daily = c.basis === 'month' ? n(c.monthVolume) / workingDays : n(c.dayVolume);
+  const hours = Math.max(0, n(c.hours));
+  const pickup = Math.min(100, Math.max(0, n(c.pickup)));
+  const aht = Math.max(0, n(c.aht));
+  const ring = Math.max(0, n(c.ring));
+  const headroom = Math.max(0, n(c.headroom));
+
+  const seconds = hours * 3600;
+  const connected = daily * (pickup / 100);
+  const unanswered = Math.max(0, daily - connected);
+  const talkLoad = connected * aht;
+  const ringLoad = unanswered * ring;
+
+  const cps = seconds > 0 ? daily / seconds : 0;
+  const concurrency = seconds > 0 ? (talkLoad + ringLoad) / seconds : 0;
+  const withHeadroom = concurrency * (1 + headroom / 100);
+  let channels = concurrency > 0 ? Math.max(1, Math.ceil(withHeadroom)) : 0;
+  let clamped = false;
+  if (hardMin != null && channels < hardMin) { channels = hardMin; clamped = true; }
+
+  const load = talkLoad + ringLoad;
+  return {
+    daily, connected, unanswered, cps, cpm: cps * 60, concurrency,
+    channels, clamped,
+    talkShare: load > 0 ? (talkLoad / load) * 100 : 0,
+    ringShare: load > 0 ? (ringLoad / load) * 100 : 0,
+  };
+}
+
+const _ccNum = (v, dp = 0) => new Intl.NumberFormat('en-IN', { minimumFractionDigits: dp, maximumFractionDigits: dp }).format(v || 0);
+const _ccRupee = (v) => '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(Math.round(v || 0));
+
+// The sensitivity chart sweeps one driver while everything else is held. It
+// exists to answer "why didn't my number move?" - when the plan floor is
+// binding, the bars sit under the floor line and the reason is visible.
+const CHANNEL_CALC_SWEEPS = {
+  pickup: { field: 'pickup', name: 'pickup rate',   unit: '%', points: [10, 25, 40, 55, 70, 85, 100] },
+  aht:    { field: 'aht',    name: 'call duration', unit: 's', points: [30, 60, 90, 120, 180, 240, 300] },
+  hours:  { field: 'hours',  name: 'calling hours', unit: 'h', points: [6, 8, 9, 10, 12, 16, 24] },
+};
+
+// Plan CPM allowance, read off the plan's own CPM line ("200 Calls/Min ...").
+function _ccPlanCpm(item) {
+  const fields = getSkuFields(item.sku_key, item.tier);
+  const m = String(readVal(item, fields, 'channels') ?? '').match(/([\d,]+)\s*Calls\s*\/\s*Min/i);
+  return m ? parseFloat(m[1].replace(/,/g, '')) : null;
+}
+
+function _ccDonut(talkPct) {
+  const r = 38, C = 2 * Math.PI * r;
+  const talk = C * (Math.max(0, Math.min(100, talkPct)) / 100);
+  return `<svg class="cc-donut" viewBox="0 0 100 100">
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="#fbbf24" stroke-width="15"/>
+    <circle cx="50" cy="50" r="${r}" fill="none" stroke="#0284c7" stroke-width="15"
+            stroke-dasharray="${talk.toFixed(2)} ${(C - talk).toFixed(2)}" transform="rotate(-90 50 50)"/>
+  </svg>`;
+}
+
+window.openChannelCalc = function (itemId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  if (!skuHasChannelCalc(item.sku_key)) return;   // entitlement enforced on open too
+  const c = _ccInputs(item);
+  if (!c.sweep) c.sweep = 'pickup';
+  document.getElementById('cc-overlay')?.remove();
+
+  const tip = (t) => `data-tip="${sanitize(t)}"`;
+  const field = (id, label, unit, hint) => `
+    <label class="cc-field" ${tip(hint)}>
+      <span class="cc-label">${label}<span class="cc-q">?</span></span>
+      <span class="cc-input-wrap">
+        <input type="text" inputmode="decimal" id="cc-${id}" data-cc="${id}" value="${sanitize(String(c[id] ?? ''))}" autocomplete="off" spellcheck="false">
+        <span class="cc-unit">${unit}</span>
+      </span>
+    </label>`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'cc-overlay';
+  overlay.className = 'cc-overlay';
+  overlay.innerHTML = `
+    <div class="cc-modal" role="dialog" aria-label="Channel Calculator">
+      <div class="cc-head">
+        <div class="cc-head-left">
+          <span class="cc-head-icon">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="11" x2="8" y2="11"/><line x1="12" y1="11" x2="12" y2="11"/><line x1="16" y1="11" x2="16" y2="18"/><line x1="8" y1="15" x2="8" y2="15"/><line x1="12" y1="15" x2="12" y2="15"/><line x1="8" y1="18" x2="12" y2="18"/></svg>
+          </span>
+          <div>
+            <div class="cc-title">Channel Calculator</div>
+            <div class="cc-sub">Size the trunk from the client's real call volume. Hover any <b>?</b> for what it means.</div>
+          </div>
+        </div>
+        <button class="cc-x" onclick="window.closeChannelCalc()" title="Close">&times;</button>
+      </div>
+
+      <div class="cc-body">
+        <aside class="cc-rail">
+          <div class="cc-rail-head">Inputs</div>
+          <div class="cc-presets">
+            ${Object.entries(CHANNEL_CALC_PRESETS).map(([k, p]) =>
+              `<button type="button" class="cc-chip" data-preset="${k}" ${tip(`Fills in ${p.pickup}% pickup, ${p.aht}s talk, ${p.ring}s ring, ${p.hours}h/day. A starting shape only - edit every field to the client's actuals.`)}>${p.label}</button>`
+            ).join('')}
+          </div>
+
+          <div class="cc-basis" ${tip('Enter whatever number the client actually has. Monthly volume is divided by working days to get the daily figure the model needs.')}>
+            <button type="button" class="cc-seg${c.basis === 'day' ? ' active' : ''}" data-basis="day">Per day</button>
+            <button type="button" class="cc-seg${c.basis === 'month' ? ' active' : ''}" data-basis="month">Per month</button>
+          </div>
+
+          <div id="cc-vol-day" style="${c.basis === 'day' ? '' : 'display:none'}">
+            ${field('dayVolume', 'Call volume', 'calls / day', 'Every call the client attempts in a day, answered and unanswered together. This is dial attempts, not connects.')}
+          </div>
+          <div id="cc-vol-month" style="${c.basis === 'month' ? '' : 'display:none'}">
+            ${field('monthVolume', 'Call volume', 'calls / month', 'Every call the client attempts in a month, answered and unanswered together.')}
+            ${field('workingDays', 'Working days', 'days / month', 'How many days a month they actually dial. Monthly volume is divided by this. Use 26 for a six-day week, 22 for five.')}
+          </div>
+
+          ${field('pickup', 'Pickup rate', '%', 'Share of attempted calls that get answered. The rest still ring, and a ringing line holds a channel too, so at 25% pickup the unanswered calls drive most of the requirement.')}
+          ${field('hours', 'Calling hours', 'hours / day', 'The window the volume is spread across. The same volume squeezed into 8 hours needs far more channels than one spread over 16.')}
+          ${field('aht', 'Avg call duration', 'seconds', 'Average talk time on an answered call (AHT). Each answered call holds a channel for this long.')}
+          ${field('ring', 'Avg ring time', 'seconds', 'How long an unanswered call rings before it is dropped. The channel is held for the whole ring, so this matters a lot at low pickup rates.')}
+          ${field('headroom', 'Peak headroom', '%', 'Spare capacity above the average load. Traffic is never flat - the busy hour runs above the daily average, and without headroom those peak calls get rejected. 20% is a reasonable starting buffer.')}
+        </aside>
+
+        <main class="cc-main">
+          <div class="cc-kpis">
+            <div class="cc-kpi primary" ${tip('The number that goes into the quote: average concurrency plus your peak headroom, rounded up, and never below the plan minimum.')}>
+              <div class="cc-kpi-lbl">Channels to quote</div>
+              <div class="cc-kpi-num" id="cc-channels">0</div>
+              <div class="cc-kpi-cap" id="cc-cap-channels"></div>
+            </div>
+            <div class="cc-kpi" ${tip('Calls Per Second: the rate at which new calls are initiated. If CPS exceeds the account limit, calls get throttled. Predictive dialers should sit slightly below their licensed rate to leave room for retries. CPS is a platform limit, not a channel count.')}>
+              <div class="cc-kpi-lbl">CPS</div>
+              <div class="cc-kpi-num" id="cc-cps">0</div>
+              <div class="cc-kpi-cap">calls per second</div>
+            </div>
+            <div class="cc-kpi" ${tip('Calls Per Minute: CPS x 60, in the unit the plan states its allowance in. Compare it against the CPM line on the plan.')}>
+              <div class="cc-kpi-lbl">CPM</div>
+              <div class="cc-kpi-num" id="cc-cpm">0</div>
+              <div class="cc-kpi-cap" id="cc-cap-cpm"></div>
+            </div>
+          </div>
+
+          <div id="cc-warn"></div>
+
+          <div class="cc-card">
+            <div class="cc-card-head">
+              <div>
+                <div class="cc-card-title">Channels needed if <span id="cc-sweep-name">pickup rate</span> changes</div>
+                <div class="cc-card-sub">Every other input held at what is on the left. Your current setting is the solid bar.</div>
+              </div>
+              <div class="cc-sweep-tabs">
+                ${Object.entries(CHANNEL_CALC_SWEEPS).map(([k, s]) =>
+                  `<button type="button" class="cc-chip cc-sweep${c.sweep === k ? ' active' : ''}" data-sweep="${k}">${s.name.replace('calling ', '')}</button>`
+                ).join('')}
+              </div>
+            </div>
+            <div class="cc-chart" id="cc-chart"></div>
+          </div>
+
+          <div class="cc-cards3">
+            <div class="cc-card" ${tip('Where the day\'s dialling ends up. Answered calls hold a channel for the talk time; unanswered ones hold it for the ring time.')}>
+              <div class="cc-card-title" style="margin-bottom:11px;">Call volume</div>
+              <div id="cc-vol-rows"></div>
+            </div>
+            <div class="cc-card" ${tip('What is actually occupying the channels. A large ring share means the client is paying for lines that are only ringing - better lists or a shorter ring timeout cut the channel count directly.')}>
+              <div class="cc-card-title" style="margin-bottom:11px;">What holds the channels</div>
+              <div class="cc-donut-wrap">
+                <div id="cc-donut"></div>
+                <div class="cc-dlegend">
+                  <div><span class="cc-dot talk"></span>Talk time <b id="cc-talk-pct">0%</b></div>
+                  <div><span class="cc-dot ring"></span>Ring time <b id="cc-ring-pct">0%</b></div>
+                </div>
+              </div>
+            </div>
+            <div class="cc-card" ${tip('What these channels are worth on this plan, at the channel rate and term currently set on the quote.')}>
+              <div class="cc-card-title" style="margin-bottom:11px;">Contract value</div>
+              <div id="cc-cost"></div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <div class="cc-foot">
+        <div class="cc-foot-note" id="cc-foot-note"></div>
+        <div class="cc-foot-btns">
+          <button type="button" class="cc-btn ghost" onclick="window.closeChannelCalc()">Cancel</button>
+          <button type="button" class="cc-btn primary" id="cc-apply">Apply</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  const html = (id, v) => { const el = document.getElementById(id); if (el) el.innerHTML = v; };
+
+  const recalc = () => {
+    const hardMin = _ccHardMin(item);
+    const r = computeChannelCalc(c, hardMin);
+    const raw = computeChannelCalc(c, null);   // before the plan floor
+
+    // ── KPI strip ──
+    // Two decimals on CPS and CPM, matching how the public CPS calculators
+    // report them, so the figures reconcile without rounding drift.
+    set('cc-channels', _ccNum(r.channels));
+    set('cc-cps', _ccNum(r.cps, 2));
+    set('cc-cpm', _ccNum(r.cpm, 2));
+
+    const capChannels = document.getElementById('cc-cap-channels');
+    if (capChannels) {
+      // When the floor is binding, say so right under the number - otherwise
+      // the inputs appear to do nothing.
+      capChannels.textContent = r.concurrency <= 0
+        ? 'enter a call volume'
+        : (r.clamped
+            ? `${_ccNum(raw.channels)} needed · plan minimum is ${hardMin}`
+            : `includes ${_ccNum(c.headroom)}% peak headroom`);
+    }
+
+    const planCpm = _ccPlanCpm(item);
+    const capCpm = document.getElementById('cc-cap-cpm');
+    if (capCpm) {
+      capCpm.textContent = planCpm ? `of ${_ccNum(planCpm)} allowed on the plan` : 'calls per minute';
+      capCpm.classList.toggle('warn', !!planCpm && r.cpm > planCpm);
+    }
+
+    // The working itself is deliberately not shown: reps kept reconciling the
+    // intermediate concurrency figure against external CPS calculators, which
+    // report it before headroom and rounding. Only the three numbers that go on
+    // the quote are surfaced. The one input that can silently break the model
+    // still warns.
+    const pickupRaw = parseFloat(c.pickup);
+    html('cc-warn', pickupRaw > 100
+      ? `<div class="cc-warn-note">Pickup rate is capped at 100%: more calls cannot be answered than were dialled. A rate above 100% would make unanswered calls negative and under-size the trunk.</div>`
+      : '');
+
+    // ── Sensitivity chart ──
+    const sweep = CHANNEL_CALC_SWEEPS[c.sweep] || CHANNEL_CALC_SWEEPS.pickup;
+    set('cc-sweep-name', sweep.name);
+    const current = parseFloat(c[sweep.field]);
+    const series = sweep.points.map(p => ({
+      x: p,
+      y: computeChannelCalc({ ...c, [sweep.field]: p }, null).channels,
+    }));
+    // Mark the point nearest the rep's actual setting rather than requiring an
+    // exact match on the sweep grid.
+    let activeIdx = 0;
+    series.forEach((s, i) => {
+      if (Math.abs(s.x - current) < Math.abs(series[activeIdx].x - current)) activeIdx = i;
+    });
+    const peak = Math.max(1, ...series.map(s => s.y), hardMin || 0);
+    html('cc-chart', `
+      <div class="cc-grid">
+        ${[0.25, 0.5, 0.75, 1].map(f => `<div class="cc-gridline" style="bottom:${f * 100}%"></div>`).join('')}
+      </div>
+      ${hardMin ? `<div class="cc-floorwrap"><div class="cc-floor" style="bottom:${(hardMin / peak) * 100}%"><span>plan minimum ${hardMin}</span></div></div>` : ''}
+      <div class="cc-bars">
+        ${series.map((s, i) => `
+          <div class="cc-col${i === activeIdx ? ' active' : ''}">
+            <div class="cc-col-val">${_ccNum(s.y)}</div>
+            <div class="cc-col-fill" style="height:${Math.max(2, (s.y / peak) * 100)}%"></div>
+            <div class="cc-col-x">${s.x}${sweep.unit}</div>
+          </div>`).join('')}
+      </div>`);
+
+    // ── Volume breakdown ──
+    const maxV = Math.max(1, r.daily);
+    html('cc-vol-rows', `
+      ${[['Attempted', r.daily, 'all'], ['Answered', r.connected, 'ans'], ['Unanswered', r.unanswered, 'un']].map(([lbl, v, cls]) => `
+        <div class="cc-vrow">
+          <div class="cc-vtop"><span>${lbl}</span><b>${_ccNum(v)}</b></div>
+          <div class="cc-vbar"><i class="${cls}" style="width:${(v / maxV) * 100}%"></i></div>
+        </div>`).join('')}`);
+
+    // ── Donut ──
+    html('cc-donut', _ccDonut(r.talkShare));
+    set('cc-talk-pct', _ccNum(r.talkShare) + '%');
+    set('cc-ring-pct', _ccNum(r.ringShare) + '%');
+
+    // ── Contract value ──
+    const fields = getSkuFields(item.sku_key, item.tier);
+    const chCost = readNum(item, fields, 'channel_cost');
+    const months = parseFloat(item.values['num_months'] ?? item.values['validity'] ?? 0) || 0;
+    const total = r.channels * chCost * months;
+    html('cc-cost', (r.channels > 0 && chCost > 0 && months > 0)
+      ? `<div class="cc-cost-big">${_ccRupee(total)}</div>
+         <div class="cc-cost-line">${_ccNum(r.channels)} channels × ${months} months × ${_ccRupee(chCost)}</div>
+         <div class="cc-cost-gst">+18% GST = <b>${_ccRupee(total * 1.18)}</b></div>`
+      : `<div class="cc-cost-line">Set a channel rate and term on the plan to see the value.</div>`);
+
+    // ── Footer + apply ──
+    set('cc-foot-note', r.channels > 0 ? 'Applies to No. of Channels on this plan.' : '');
+    const applyBtn = document.getElementById('cc-apply');
+    if (applyBtn) {
+      applyBtn.textContent = r.channels > 0 ? `Apply ${_ccNum(r.channels)} channels` : 'Apply';
+      applyBtn.disabled = !(r.channels > 0);
+      applyBtn.onclick = () => {
+        item.values['num_channels'] = r.channels;
+        QG._dirty = true;
+        window.closeChannelCalc();
+        renderSkuForm(QG.currentSku, QG.currentTier);
+        if (QG.activeItemId === item.id) syncActiveAliases();
+        updatePreview();
+        if (typeof showToast === 'function') showToast(`Set to ${r.channels} channels.`, 'success');
+      };
+    }
+  };
+
+  overlay.querySelectorAll('input[data-cc]').forEach(inp => {
+    inp.addEventListener('input', () => { c[inp.dataset.cc] = inp.value; recalc(); });
+  });
+  overlay.querySelectorAll('.cc-seg').forEach(btn => {
+    btn.addEventListener('click', () => {
+      c.basis = btn.dataset.basis;
+      overlay.querySelectorAll('.cc-seg').forEach(b => b.classList.toggle('active', b === btn));
+      document.getElementById('cc-vol-day').style.display = c.basis === 'day' ? '' : 'none';
+      document.getElementById('cc-vol-month').style.display = c.basis === 'month' ? '' : 'none';
+      recalc();
+    });
+  });
+  overlay.querySelectorAll('.cc-sweep').forEach(btn => {
+    btn.addEventListener('click', () => {
+      c.sweep = btn.dataset.sweep;
+      overlay.querySelectorAll('.cc-sweep').forEach(b => b.classList.toggle('active', b === btn));
+      recalc();
+    });
+  });
+  overlay.querySelectorAll('.cc-chip[data-preset]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const p = CHANNEL_CALC_PRESETS[btn.dataset.preset];
+      if (!p) return;
+      Object.assign(c, { pickup: p.pickup, hours: p.hours, aht: p.aht, ring: p.ring });
+      ['pickup', 'hours', 'aht', 'ring'].forEach(id => {
+        const el = document.getElementById('cc-' + id);
+        if (el) el.value = c[id];
+      });
+      overlay.querySelectorAll('.cc-chip[data-preset]').forEach(b => b.classList.toggle('active', b === btn));
+      recalc();
+    });
+  });
+
+  overlay.addEventListener('mousedown', (e) => { if (e.target === overlay) window.closeChannelCalc(); });
+  document.addEventListener('keydown', _ccEsc);
+  recalc();
+  setTimeout(() => document.getElementById(c.basis === 'month' ? 'cc-monthVolume' : 'cc-dayVolume')?.focus(), 40);
+};
+
+function _ccEsc(e) { if (e.key === 'Escape') window.closeChannelCalc(); }
+window.closeChannelCalc = function () {
+  document.getElementById('cc-overlay')?.remove();
+  document.removeEventListener('keydown', _ccEsc);
+};
 
 // ── Approval Modal ─────────────────────────────────────────
 function showApprovalModal(field, val) {
@@ -5644,7 +6360,11 @@ function _renderBundleItemsHTML(bundleItems) {
       if (target.includes('wacredits')) return 'credits';
       if (target.includes('rcscredits')) return 'credits';
       if (target.includes('accountrental') || target.includes('numberrental') || (target.includes('rental') && !target.includes('calculation'))) return 'rental';
-      if (target.includes('setupcharges') || target.includes('setup')) return 'setup';
+      // USD SKUs carry the same row under setup_usd, so resolve against whichever
+      // of the two this SKU actually has.
+      if (target.includes('setupcharges') || target.includes('setup')) {
+        return fields.some(f => f.id === 'setup_usd') ? 'setup_usd' : 'setup';
+      }
       if (target.includes('validity') || target.includes('nummonths') || target.includes('noofmonths')) return 'validity';
       if (target.includes('freeuser') || target.includes('noofuser') || target.includes('numusers') || target.includes('chargeduser') || target.includes('noofagents')) return 'num_users';
       if (target.includes('extrausercost') || target.includes('usercharge')) return 'user_charge';
@@ -5732,7 +6452,7 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Validity', extraValidityE > 0 ? `${baseValidityE} + ${extraValidityE} months` : getVal('validity') + ' Months');
       const rentalStd = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -5814,14 +6534,14 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Validity', extraValidityV > 0 ? `${validity} + ${extraValidityV} months` : validity + ' Months');
       const rVal = getSafeNum('rental');
       if (rVal === 0) {
-        tableHTML += stdRow('Account Rental', W);
+        tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
       } else if (rentalOneTime) {
         tableHTML += stdRow('Account Rental', fmtRupee(rVal));
       } else {
         tableHTML += stdRow('Account Rental', `${fmtRupee(rVal)} ${perUnit('/month')}`);
         tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
       }
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -5902,7 +6622,7 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Validity', sipValidityDisplay);
       const rentalSip = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalSip === 0 ? null : fmtRupee(rentalSip), rentalSip === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -5957,8 +6677,8 @@ function _renderBundleItemsHTML(bundleItems) {
       const DID_COST = getSafeNum('did_cost') || 1500;
 
       tableHTML += secRow('Plan Details');
-      tableHTML += stdRow('Account Rental', W);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -6000,8 +6720,8 @@ function _renderBundleItemsHTML(bundleItems) {
       const totalNumCost = numNums * numMonths2 * numCost;
 
       tableHTML += secRow('Plan Details');
-      tableHTML += stdRow('Account Rental', W);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       tableHTML += stdRow('No. of Months', numMonths2);
 
@@ -6034,6 +6754,9 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
 
+    } else if (isUnlimitedSku(effectiveSk)) {
+      tableHTML += buildUnlimitedRows(item, { secRow, stdRow, indRow, getSafeNum, getVal, fmtRupee, perUnit });
+
     } else if (effectiveSk === 'voice_exotel_stream' || effectiveSk === 'voice_exotel_voicebot') {
       const isVoicebot = effectiveSk === 'voice_exotel_voicebot';
       const numChs = getSafeNum('num_channels') || 0;
@@ -6046,7 +6769,7 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('No. of Months', Math.max(1, parseFloat(getVal('num_months') || 0)));
       const rentalStream = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
@@ -6134,7 +6857,7 @@ function _renderBundleItemsHTML(bundleItems) {
       // when the rep actually sets it to 0.
       const campRental = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', campRental === 0 ? null : fmtRupee(campRental), campRental === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       const fuCamp = getVal('free_users');
       const fuCampExtra = getSafeNum('extra_users') || 0;
@@ -6163,7 +6886,7 @@ function _renderBundleItemsHTML(bundleItems) {
       const rentalVal = getSafeNum('rental');
       const isRentalWaived = rentalVal === 0;
       tableHTML += stdRow('Account Rental', isRentalWaived ? null : (fmtRupee(rentalVal) + '/month'), isRentalWaived);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', getVal('num_months'));
 
       tableHTML += secRow('User Plan');
@@ -6193,7 +6916,7 @@ function _renderBundleItemsHTML(bundleItems) {
       const waRentalVal = getSafeNum('rental');
       const isWaRentalWaived = waRentalVal === 0;
       tableHTML += stdRow('Account Rental', isWaRentalWaived ? null : (`${fmtRupee(waRentalVal)} per month`), isWaRentalWaived);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', getVal('num_months'));
 
       tableHTML += secRow('User Plan');
@@ -6232,8 +6955,8 @@ function _renderBundleItemsHTML(bundleItems) {
     } else if (effectiveSk === 'rcs_exotel') {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Brand Registration Fee', fmtRupee(getSafeNum('brand_fee')));
-      tableHTML += stdRow('Account Rental', W);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee, perUnit('/month'));
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', getVal('num_months'));
 
       tableHTML += secRow('User Plan');
@@ -6276,7 +6999,7 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += stdRow('Number Procurement', fmtRupee(procurement));
       tableHTML += stdRow('Number Rental', `${fmtRupee(numRental)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per month</span>`);
       tableHTML += indRow('Rental Calculation', `${numMosN} months × ${fmtRupee(numRental)} = <strong>${fmtRupee(totalRental)}</strong>`);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', numMosN);
 
       tableHTML += secRow('Channels');
@@ -6314,12 +7037,17 @@ function _renderBundleItemsHTML(bundleItems) {
       // ── International Web Streaming (USD pricing) ───────────────
       tableHTML += buildIntlStreamRows(item, { secRow, stdRow, indRow, getSafeNum, getVal, FREE });
       const prepaidS = getSafeNum('prepaid_usd') || 400;
+      // Setup is waived by default (0). When a rep prices it, it bills on top of
+      // the prepaid amount and the fee/GST is charged on the two together.
+      const setupS = parseFloat(getSafeNum('setup_usd')) || 0;
+      const baseS = prepaidS + setupS;
       const feeTypeS = getSafeNum('fee_type');
-      const convFeeS = feeTypeS === 1 ? Math.round(prepaidS * 0.03 * 100) / 100 : 0;
-      const gstFeeS  = feeTypeS === 2 ? Math.round(prepaidS * 0.18 * 100) / 100 : 0;
-      const totalWithFeeS = Math.round((prepaidS + convFeeS + gstFeeS) * 100) / 100;
+      const convFeeS = feeTypeS === 1 ? Math.round(baseS * 0.03 * 100) / 100 : 0;
+      const gstFeeS  = feeTypeS === 2 ? Math.round(baseS * 0.18 * 100) / 100 : 0;
+      const totalWithFeeS = Math.round((baseS + convFeeS + gstFeeS) * 100) / 100;
       item._intlSubtotalCardB = `<div style="margin-top:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
-        <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${prepaidS.toFixed(2)}</strong></div>
+        ${setupS > 0 ? `<div style="font-size:0.8rem; color:#64748b;">Setup Charges: $${setupS.toFixed(2)}</div>` : ''}
+        <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${baseS.toFixed(2)}</strong></div>
         ${feeTypeS === 1 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Convenience Fee (3%): $${convFeeS.toFixed(2)}</div>` : ''}
         ${feeTypeS === 2 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstFeeS.toFixed(2)}</div>` : ''}
         ${feeTypeS > 0 ? `<div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total: $${totalWithFeeS.toFixed(2)}</div>` : ''}
@@ -6365,7 +7093,7 @@ function _renderBundleItemsHTML(bundleItems) {
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup_usd'), fmtUsdFixed);
 
       const unlimitedUsers = getSafeNum('unlimited_users') === 1;
       const callMode = getSafeNum('call_rate_mode') || 0; // 0 = VoIP + PSTN, 1 = PSTN only, 2 = VoIP only
@@ -6429,16 +7157,21 @@ function _renderBundleItemsHTML(bundleItems) {
       }
 
       // Convenience fee / GST subtotal card
+      // Setup is waived by default (0). When a rep prices it, it bills on top of
+      // the prepaid amount and the fee/GST is charged on the two together.
+      const setupB = parseFloat(getSafeNum('setup_usd')) || 0;
+      const baseB = prepaid + setupB;
       const feeTypeB = getSafeNum('fee_type'); // 0=none, 1=3% conv fee, 2=18% GST
-      const convFeeB = feeTypeB === 1 ? Math.round(prepaid * 0.03 * 100) / 100 : 0;
-      const gstFeeB  = feeTypeB === 2 ? Math.round(prepaid * 0.18 * 100) / 100 : 0;
+      const convFeeB = feeTypeB === 1 ? Math.round(baseB * 0.03 * 100) / 100 : 0;
+      const gstFeeB  = feeTypeB === 2 ? Math.round(baseB * 0.18 * 100) / 100 : 0;
       const totalFeeB = convFeeB + gstFeeB;
-      const totalWithFeeB = Math.round((prepaid + totalFeeB) * 100) / 100;
+      const totalWithFeeB = Math.round((baseB + totalFeeB) * 100) / 100;
       tableHTML += `<tr><td colspan="2" style="padding:0;"></td></tr>`; // spacer
 
       // Build the subtotal card inline (appended as a section below the table)
       const intlSubtotalCardB = `<div style="margin-top:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
-        <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${prepaid.toFixed(2)}</strong></div>
+        ${setupB > 0 ? `<div style="font-size:0.8rem; color:#64748b;">Setup Charges: $${setupB.toFixed(2)}</div>` : ''}
+        <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${baseB.toFixed(2)}</strong></div>
         ${feeTypeB === 1 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Convenience Fee (3%): $${convFeeB.toFixed(2)}</div>` : ''}
         ${feeTypeB === 2 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstFeeB.toFixed(2)}</div>` : ''}
         ${feeTypeB > 0 ? `<div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total: $${totalWithFeeB.toFixed(2)}</div>` : ''}
@@ -6478,7 +7211,9 @@ function _renderBundleItemsHTML(bundleItems) {
         if (f.note === 'WA Add-on'  && !showWa)  return;
         if (f.note === 'CT Add-on'  && !showCt)  return;
         const val = item.values[f.id] ?? f.value;
-        tableHTML += stdRow(cleanLabel(f.label), f.waived ? null : val, f.waived === true);
+        // A waivable charge left at 0 reads as waived, same as a hard-waived row.
+        const isWaivedRow = f.waived === true || (f.waivable && (parseFloat(val) || 0) === 0);
+        tableHTML += stdRow(cleanLabel(f.label), isWaivedRow ? null : val, isWaivedRow);
       });
     }
 
@@ -6693,7 +7428,7 @@ function _computeBundleRows(items) {
     channel_blocks: 'Channel Plan', block_cost: 'Channel Plan', channel_cost_usd: 'Channel Plan',
     number_charge_usd: 'Number Plan', intl_entries: 'Number Plan', intl_number_qty: 'Number Plan',
     credits: 'Call Credits & Charges', extra_credits: 'Call Credits & Charges', extra_validity: 'Call Credits & Charges', volume: 'Call Credits & Charges',
-    prepaid_usd: 'Plan Details', attach_intl_pdf: 'Plan Details', attach_isd_pdf: 'Plan Details', fee_type: 'Plan Details',
+    prepaid_usd: 'Plan Details', setup_usd: 'Plan Details', attach_intl_pdf: 'Plan Details', attach_isd_pdf: 'Plan Details', fee_type: 'Plan Details',
     single_leg: 'Call Credits & Charges', incoming: 'Call Credits & Charges', outgoing: 'Call Credits & Charges',
     pstn_incoming: 'Call Credits & Charges', pstn_outgoing: 'Call Credits & Charges',
     attempt: 'Call Credits & Charges', call_rate: 'Call Credits & Charges', sms_cost: 'Messaging & Services',
@@ -6779,6 +7514,8 @@ function _computeBundleRows(items) {
         else displayVal = fmtR(numVal);
       } else if (f.id === 'setup') {
         displayVal = numVal === 0 ? '✓ Waived' : fmtR(numVal);
+      } else if (f.id === 'setup_usd') {
+        displayVal = numVal === 0 ? '✓ Waived' : '$' + numVal.toFixed(2);
       } else if (f.id === 'free_users') {
         const fuExtra = getSafeNum('extra_users');
         displayVal = (rawVal === null || rawVal === 'Unlimited') ? 'Unlimited (Included)' : (fuExtra > 0 ? (rawVal + ' + ' + fuExtra + ' Users (Free)') : (rawVal + ' Users (Free)'));
@@ -7155,7 +7892,7 @@ function updatePreview() {
 
   // Dynamic entity override for streaming/voicebot SKUs if they have Mobile DID numbers
   let effectiveEntity = firstSku.entity;
-  const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot'].includes(validItems[0].sku_key);
+  const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot', 'unlimited_stream'].includes(validItems[0].sku_key);
   if (isStreamSku) {
     const item = validItems[0];
     const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
@@ -7251,7 +7988,7 @@ function updatePreview() {
         const r = getSN('rental'), v = parseFloat(getVal('validity')) || 0;
         return `${fmtR(r)}/month × ${v} months = ${fmtR(r * v)}`;
       }));
-      uRows += cmpRow('Setup Charges', colData.map(() => W_CMP));
+      uRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W_CMP : fmtR(s); }));
       uRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       uRows += cmpRow('User Plan', [], true);
       uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
@@ -7303,8 +8040,8 @@ function updatePreview() {
     } else {
       // ── Exotel User / Veeno User side-by-side comparison ──────
       uRows += cmpRow('Plan Details', [], true);
-      uRows += cmpRow('Account Rental', colData.map(() => W_CMP));
-      uRows += cmpRow('Setup Charges', colData.map(() => W_CMP));
+      uRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W_CMP : fmtR(r); }));
+      uRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W_CMP : fmtR(s); }));
       uRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       uRows += cmpRow('User Plan', [], true);
       uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
@@ -7468,8 +8205,8 @@ function updatePreview() {
         const extra = parseFloat(item.values['extra_validity'] ?? 0);
         return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
       }));
-      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
-      tableRows += cmpRow('Setup Charges', colData.map(() => W));
+      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
+      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
       tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('Plan', [], true);
       tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
@@ -7515,8 +8252,8 @@ function updatePreview() {
         const extra = parseFloat(item.values['extra_validity'] ?? 0);
         return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
       }));
-      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
-      tableRows += cmpRow('Setup Charges', colData.map(() => W));
+      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
+      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
       tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('User Plan', [], true);
       tableRows += cmpRow('No. of Users', colData.map(({ getVal, item }) => { const nu = parseInt(getVal('num_users')) || 0; const eu = parseInt(item.values['extra_users'] ?? 0); return eu > 0 ? `${eu} Free, ${nu} Charged` : nu; }));
@@ -7539,8 +8276,8 @@ function updatePreview() {
         const extra = parseFloat(item.values['extra_validity'] ?? 0);
         return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
       }));
-      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => fmtR(getSN('rental'))));
-      tableRows += cmpRow('Setup Charges', colData.map(() => W));
+      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
+      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
       tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('User Plan', [], true);
       tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
@@ -7568,7 +8305,7 @@ function updatePreview() {
         const r = getSN('rental');
         return r === 0 ? W : fmtR(r) + perUnit('/month');
       }));
-      tableRows += cmpRow('Setup Charges', colData.map(() => W));
+      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
 
       tableRows += cmpRow(isVBotCmp ? 'Voicebot Channels' : 'Streaming Channels', [], true);
       if (isVBotCmp) {
@@ -7903,7 +8640,7 @@ function updatePreview() {
       tableHTML += stdRow('Validity', extraValidityE > 0 ? `${baseValidityE} + ${extraValidityE} months` : getVal('validity') + ' Months');
       const rentalStd = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -7985,14 +8722,14 @@ function updatePreview() {
       tableHTML += stdRow('Validity', extraValidityV > 0 ? `${validity} + ${extraValidityV} months` : validity + ' Months');
       const rVal = getSafeNum('rental');
       if (rVal === 0) {
-        tableHTML += stdRow('Account Rental', W);
+        tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
       } else if (rentalOneTime) {
         tableHTML += stdRow('Account Rental', fmtRupee(rVal));
       } else {
         tableHTML += stdRow('Account Rental', `${fmtRupee(rVal)} ${perUnit('/month')}`);
         tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
       }
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -8073,7 +8810,7 @@ function updatePreview() {
       tableHTML += stdRow('Validity', sipValidityDisplay);
       const rentalSip = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalSip === 0 ? null : fmtRupee(rentalSip), rentalSip === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -8128,8 +8865,8 @@ function updatePreview() {
       const DID_COST = getSafeNum('did_cost') || 1500;
 
       tableHTML += secRow('Plan Details');
-      tableHTML += stdRow('Account Rental', W);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
@@ -8172,8 +8909,8 @@ function updatePreview() {
       const totalNumCost = numNums * numMonths2 * numCost;
 
       tableHTML += secRow('Plan Details');
-      tableHTML += stdRow('Account Rental', W);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       tableHTML += stdRow('No. of Months', numMonths2);
 
@@ -8206,6 +8943,9 @@ function updatePreview() {
       tableHTML += stdRow('Call Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Incoming Calls', fmtPaise(getSafeNum('incoming')));
 
+    } else if (isUnlimitedSku(effectiveSk)) {
+      tableHTML += buildUnlimitedRows(item, { secRow, stdRow, indRow, getSafeNum, getVal, fmtRupee, perUnit });
+
     } else if (effectiveSk === 'voice_exotel_stream' || effectiveSk === 'voice_exotel_voicebot') {
       const isVoicebot = effectiveSk === 'voice_exotel_voicebot';
       const numChs = getSafeNum('num_channels') || 0;
@@ -8218,7 +8958,7 @@ function updatePreview() {
       tableHTML += stdRow('No. of Months', Math.max(1, parseFloat(getVal('num_months') || 0)));
       const rentalStream = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
@@ -8306,7 +9046,7 @@ function updatePreview() {
       // when the rep actually sets it to 0.
       const campRental = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', campRental === 0 ? null : fmtRupee(campRental), campRental === 0);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       const fuCamp = getVal('free_users');
       const fuCampExtra = getSafeNum('extra_users') || 0;
@@ -8335,7 +9075,7 @@ function updatePreview() {
       const rentalVal = getSafeNum('rental');
       const isRentalWaived = rentalVal === 0;
       tableHTML += stdRow('Account Rental', isRentalWaived ? null : (fmtRupee(rentalVal) + '/month'), isRentalWaived);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', getVal('num_months'));
 
       tableHTML += secRow('User Plan');
@@ -8365,7 +9105,7 @@ function updatePreview() {
       const waRentalVal = getSafeNum('rental');
       const isWaRentalWaived = waRentalVal === 0;
       tableHTML += stdRow('Account Rental', isWaRentalWaived ? null : (`${fmtRupee(waRentalVal)} per month`), isWaRentalWaived);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', getVal('num_months'));
 
       tableHTML += secRow('User Plan');
@@ -8404,8 +9144,8 @@ function updatePreview() {
     } else if (effectiveSk === 'rcs_exotel') {
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Brand Registration Fee', fmtRupee(getSafeNum('brand_fee')));
-      tableHTML += stdRow('Account Rental', W);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee, perUnit('/month'));
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', getVal('num_months'));
 
       tableHTML += secRow('User Plan');
@@ -8448,7 +9188,7 @@ function updatePreview() {
       tableHTML += stdRow('Number Procurement', fmtRupee(procurement));
       tableHTML += stdRow('Number Rental', `${fmtRupee(numRental)}&nbsp;<span style="color:#94a3b8;font-size:0.8em;">per month</span>`);
       tableHTML += indRow('Rental Calculation', `${numMosN} months × ${fmtRupee(numRental)} = <strong>${fmtRupee(totalRental)}</strong>`);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
       tableHTML += stdRow('No. of Months', numMosN);
 
       tableHTML += secRow('Channels');
@@ -8526,7 +9266,7 @@ function updatePreview() {
 
       tableHTML += secRow('Plan Details');
       tableHTML += stdRow('Credits (USD)', `${fmtUsdFixed(prepaid)}`);
-      tableHTML += stdRow('Setup Charges', null, true);
+      tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup_usd'), fmtUsdFixed);
 
       const unlimitedUsersI = getSafeNum('unlimited_users') === 1;
       const callModeI = getSafeNum('call_rate_mode') || 0; // 0 = VoIP + PSTN, 1 = PSTN only, 2 = VoIP only
@@ -8620,7 +9360,9 @@ function updatePreview() {
         if (f.note === 'WA Add-on'  && !showWa)  return;
         if (f.note === 'CT Add-on'  && !showCt)  return;
         const val = item.values[f.id] ?? f.value;
-        tableHTML += stdRow(cleanLabel(f.label), f.waived ? null : val, f.waived === true);
+        // A waivable charge left at 0 reads as waived, same as a hard-waived row.
+        const isWaivedRow = f.waived === true || (f.waivable && (parseFloat(val) || 0) === 0);
+        tableHTML += stdRow(cleanLabel(f.label), isWaivedRow ? null : val, isWaivedRow);
       });
     }
 
@@ -8640,11 +9382,15 @@ function updatePreview() {
 
       grandSubtotal += 0; // USD SKU excluded from INR grand total
 
+      // Setup is waived by default (0). When a rep prices it, it bills on top of
+      // the prepaid amount and the fee/GST is charged on the two together.
+      const setupV = parseFloat(getSafeNum('setup_usd')) || 0;
+      const baseV = prepaidV + setupV;
       const feeTypeV = getSafeNum('fee_type'); // 0=none, 1=3% conv fee, 2=18% GST
-      const convFeeV = feeTypeV === 1 ? Math.round(prepaidV * 0.03 * 100) / 100 : 0;
-      const gstFeeV  = feeTypeV === 2 ? Math.round(prepaidV * 0.18 * 100) / 100 : 0;
+      const convFeeV = feeTypeV === 1 ? Math.round(baseV * 0.03 * 100) / 100 : 0;
+      const gstFeeV  = feeTypeV === 2 ? Math.round(baseV * 0.18 * 100) / 100 : 0;
       const totalFeeV = convFeeV + gstFeeV;
-      const totalWithFeeV = Math.round((prepaidV + totalFeeV) * 100) / 100;
+      const totalWithFeeV = Math.round((baseV + totalFeeV) * 100) / 100;
 
       const tierLabel = sku.hasTiers && item.tier
         ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
@@ -8661,7 +9407,8 @@ function updatePreview() {
           ${tableHTML}
         </table>
         <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
-          <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${prepaidV.toFixed(2)}</strong></div>
+          ${setupV > 0 ? `<div style="font-size:0.8rem; color:#64748b;">Setup Charges: $${setupV.toFixed(2)}</div>` : ''}
+          <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${baseV.toFixed(2)}</strong></div>
           ${feeTypeV === 1 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">Convenience Fee (3%): $${convFeeV.toFixed(2)}</div>` : ''}
           ${feeTypeV === 2 ? `<div style="font-size:0.8rem; color:#64748b; margin-top:2px;">GST (18%): $${gstFeeV.toFixed(2)}</div>` : ''}
           ${feeTypeV > 0 ? `<div style="font-size:0.95rem; font-weight:700; color:#0284c7; margin-top:4px; padding-top:4px; border-top:1px solid #e2e8f0;">Total: $${totalWithFeeV.toFixed(2)}</div>` : ''}
@@ -9104,7 +9851,7 @@ async function generateQuote() {
   const firstSku = { ...firstSkuObj };
 
   let effectiveEntity = firstSku?.entity;
-  const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot'].includes(validItems[0]?.sku_key);
+  const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot', 'unlimited_stream'].includes(validItems[0]?.sku_key);
   if (isStreamSku) {
     const item = validItems[0];
     const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
@@ -9175,6 +9922,9 @@ async function generateQuote() {
     : firstSku;
 
   const quoteData = {
+    // Tells a later restore that rental/setup in this payload are deliberate
+    // amounts, not the hydrated list price of a row that was hard-waived.
+    schema_version: QUOTE_SCHEMA_VERSION,
     sku_items: validItems,
     entity: (bundleFirstSku || firstSku)?.entity,
     compareMode: QG.compareMode,
@@ -9223,6 +9973,7 @@ async function generateQuote() {
       try {
         const emergencyDraftKey = 'draft_session_emergency_' + (QG.quoteNumber || Date.now());
         const emergencyData = {
+          schema_version: QUOTE_SCHEMA_VERSION,
           sku_items: QG.skuItems,
           company:   document.getElementById('q-client-company')?.value?.trim() || '',
           contact:   document.getElementById('q-client-contact')?.value?.trim() || '',
@@ -9291,7 +10042,7 @@ async function saveDraft(e, silent = false) {
   const firstSku = { ...firstSkuObj };
 
   let effectiveEntity = firstSku.entity;
-  const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot'].includes(validItems[0].sku_key);
+  const isStreamSku = ['voice_exotel_stream', 'startup_stream', 'voice_exotel_voicebot', 'unlimited_stream'].includes(validItems[0].sku_key);
   if (isStreamSku) {
     const item = validItems[0];
     const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
@@ -9304,6 +10055,7 @@ async function saveDraft(e, silent = false) {
   firstSku.entity = effectiveEntity;
 
   const draftData = {
+    schema_version: QUOTE_SCHEMA_VERSION,
     sku_items: validItems,
     sku_key: QG.currentSku,
     tier: QG.currentTier,
@@ -9698,12 +10450,7 @@ window.printHistoricalQuote = async function (id) {
       QG.activeItemId = activeData.activeItemId;
       QG.lockedEntity = activeData.lockedEntity;
       syncActiveAliases();
-      [...QG.bundleA.skuItems, ...QG.bundleB.skuItems].forEach(item => {
-        if (!item.sku_key) return;
-        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
-        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        fields.forEach(f => { if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value; });
-      });
+      [...QG.bundleA.skuItems, ...QG.bundleB.skuItems].forEach(item => hydrateItemFields(item, data.schema_version));
     } else if (data.bundleMergeMode && data.sku_items?.length > 0) {
       QG.bundleCompareMode = false;
       QG.bundleMergeMode = true;
@@ -9716,11 +10463,8 @@ window.printHistoricalQuote = async function (id) {
       QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       syncActiveAliases();
       QG.skuItems.forEach(item => {
-        if (!item.sku_key) return;
         if (item.excluded === undefined) item.excluded = false;
-        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
-        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        fields.forEach(f => { if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value; });
+        hydrateItemFields(item, data.schema_version);
       });
     } else if (data.sku_items && data.sku_items.length > 0) {
       QG.bundleCompareMode = false;
@@ -9730,12 +10474,7 @@ window.printHistoricalQuote = async function (id) {
       QG.activeItemId = data.sku_items[0].id;
       QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       syncActiveAliases();
-      QG.skuItems.forEach(item => {
-        if (!item.sku_key) return;
-        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
-        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        fields.forEach(f => { if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) item.values[f.id] = f.value; });
-      });
+      QG.skuItems.forEach(item => hydrateItemFields(item, data.schema_version));
     } else {
       QG.bundleCompareMode = false;
       QG.compareMode = false;
@@ -9744,6 +10483,7 @@ window.printHistoricalQuote = async function (id) {
       QG.skuValues = data.fields || {};
       QG.skuItems = [{ id: 'item_0', sku_key: QG.currentSku, tier: QG.currentTier, values: QG.skuValues, stopLockOverrides: [] }];
       QG.activeItemId = 'item_0';
+      hydrateItemFields(QG.skuItems[0], data.schema_version);
     }
 
     // ── Set client + metadata fields ──────────────────────────────
@@ -10176,13 +10916,15 @@ window.confirmGenerateProforma = async function () {
           const rental = getSN('rental');
           const rentalOneTimeSN = item.values['rental_onetime'] === 1;
           if (rental === 0) {
-            lines.push(`Account Rental: Waived`);
+            const rentalSN = getSN('rental');
+          lines.push(`Account Rental: ${rentalSN === 0 ? 'Waived' : fmtRupee(rentalSN)}`);
           } else if (rentalOneTimeSN) {
             lines.push(`Account Rental: ${fmtRupee(rental)}`);
           } else {
             lines.push(`Account Rental: ${fmtRupee(rental)}/month`);
           }
-          lines.push(`Setup Charges: Waived`);
+          const setupSN = getSN('setup');
+          lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
           lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const numUsers = getSN('num_users') || 0;
@@ -10236,7 +10978,8 @@ window.confirmGenerateProforma = async function () {
           
           const rental = getSN('rental');
           lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
-          lines.push(`Setup Charges: Waived`);
+          const setupSN = getSN('setup');
+          lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
           lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const fu2 = getV('free_users');
@@ -10272,8 +11015,10 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Attempt Charges: ${attempt === 0 ? 'Free' : fmtPaise(attempt) + ' / failed call'}`);
         } else if (effectiveSk === 'voice_exotel_user' || effectiveSk === 'voice_veeno_user') {
           const isVeeno = effectiveSk === 'voice_veeno_user';
-          lines.push(`Account Rental: Waived`);
-          lines.push(`Setup Charges: Waived`);
+          const rentalSN = getSN('rental');
+          lines.push(`Account Rental: ${rentalSN === 0 ? 'Waived' : fmtRupee(rentalSN)}`);
+          const setupSN = getSN('setup');
+          lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
           lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const numUsers = getSN('num_users') || 0;
@@ -10308,8 +11053,10 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Outgoing Call Charges: Waived`);
           if (item.values['call_transfer'] !== undefined) lines.push(`Call Transfer Add-on: ₹${item.values['call_transfer']}/month`);
         } else if (effectiveSk === 'voice_exotel_tfn') {
-          lines.push(`Account Rental: Waived`);
-          lines.push(`Setup Charges: Waived`);
+          const rentalSN = getSN('rental');
+          lines.push(`Account Rental: ${rentalSN === 0 ? 'Waived' : fmtRupee(rentalSN)}`);
+          const setupSN = getSN('setup');
+          lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
           lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           lines.push(`No. of Months: ${getSN('num_months')}`);
           
@@ -10339,6 +11086,38 @@ window.confirmGenerateProforma = async function () {
           
           lines.push(`Call Credits Included: ${fmtRupee(getSN('credits'))}`);
           lines.push(`Incoming Calls: ${fmtPaise(getSN('incoming'))}`);
+        } else if (isUnlimitedSku(effectiveSk)) {
+          const unlMos = getSN('num_months') || 0;
+          const unlChs = getSN('num_channels') || 0;
+          const unlChCost = getSN('channel_cost') || 0;
+
+          lines.push(`No. of Months: ${unlMos}`);
+          const unlRental = getSN('rental');
+          lines.push(`Account Rental: ${unlRental === 0 ? 'Waived' : fmtRupee(unlRental) + '/month'}`);
+          const setupSN = getSN('setup');
+          lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
+          lines.push(`No. of Channels: ${unlChs}`);
+          lines.push(`Channel Cost: ${fmtRupee(unlChCost)}/channel/month`);
+
+          const fuUnl = getV('free_users');
+          const fuUnlExtra = getSN('extra_users') || 0;
+          const fuUnlDisplay = (fuUnl === null || fuUnl === 'Unlimited') ? 'Unlimited (Included)' : (fuUnlExtra > 0 ? `${fuUnl} + ${fuUnlExtra} Users (Free)` : fuUnl + ' Users (Free)');
+          lines.push(`Free Users: ${fuUnlDisplay}`);
+          lines.push(`Extra User Cost: ${fmtRupee(getSN('extra_user_cost'))}/user/month`);
+
+          lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
+          lines.push(`Extra Number Cost: ${fmtRupee(getSN('extra_number'))}/number/month`);
+          const unlPaidNums = getSN('num_paid_numbers') || 0;
+          if (unlPaidNums > 0) {
+            lines.push(`Extra Numbers: ${unlPaidNums} Number(s) (Total cost: ${fmtRupee(unlPaidNums * unlMos * getSN('extra_number'))} for ${unlMos} months)`);
+          }
+          const unlDidNums = getSN('did_numbers') || 0;
+          if (unlDidNums > 0) {
+            lines.push(`Mobile DID Numbers: ${unlDidNums} DID(s) @ ${fmtRupee(getSN('did_cost') || 1500)}/number/month`);
+          }
+
+          lines.push(`Incoming Calls: Unlimited`);
+          lines.push(`Outgoing Calls: Unlimited`);
         } else if (effectiveSk === 'voice_exotel_stream' || effectiveSk === 'voice_exotel_voicebot') {
           const isVoicebot = effectiveSk === 'voice_exotel_voicebot';
           const numChs = getSN('num_channels') || 0;
@@ -10348,7 +11127,8 @@ window.confirmGenerateProforma = async function () {
           lines.push(`No. of Months: ${numMos}`);
           const rental = getSN('rental');
           lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
-          lines.push(`Setup Charges: Waived`);
+          const setupSN = getSN('setup');
+          lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
           
           if (isVoicebot) {
             const paidChs = Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0)));
@@ -10406,7 +11186,8 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Validity: ${campVal} Months`);
           const rental = getSN('rental');
           lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental)}`);
-          lines.push(`Setup Charges: Waived`);
+          const setupSN = getSN('setup');
+          lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
           lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
 
           const fuStr = getV('free_users');
@@ -10429,6 +11210,8 @@ window.confirmGenerateProforma = async function () {
         } else if (effectiveSk === 'voice_intl') {
           const prepaid = getSN('prepaid_usd') || 400;
           lines.push(`Credits Included: $${prepaid}`);
+          const setupUsd = parseFloat(getSN('setup_usd')) || 0;
+          lines.push(`Setup Charges: ${setupUsd === 0 ? 'Waived' : '$' + setupUsd.toFixed(2)}`);
           const unlimitedUsers = getSN('unlimited_users') === 1;
           const numUsers = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
           if (unlimitedUsers) {
@@ -10966,16 +11749,7 @@ window.viewQuote = async function (id) {
       syncActiveAliases();
 
       // Hydrate field defaults for all items in both bundles
-      [...QG.bundleA.skuItems, ...QG.bundleB.skuItems].forEach(item => {
-        if (!item.sku_key) return;
-        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
-        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        fields.forEach(f => {
-          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
-            item.values[f.id] = f.value;
-          }
-        });
-      });
+      [...QG.bundleA.skuItems, ...QG.bundleB.skuItems].forEach(item => hydrateItemFields(item, data.schema_version));
 
       // Show bundle tab switcher
       const tabSwitcher = document.getElementById('bundle-tab-switcher');
@@ -11018,15 +11792,8 @@ window.viewQuote = async function (id) {
 
       // Hydrate missing field defaults + ensure excluded flag exists
       QG.skuItems.forEach(item => {
-        if (!item.sku_key) return;
         if (item.excluded === undefined) item.excluded = false;
-        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
-        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        fields.forEach(f => {
-          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
-            item.values[f.id] = f.value;
-          }
-        });
+        hydrateItemFields(item, data.schema_version);
       });
 
       // Hide multi-sku toggle label, show manager
@@ -11054,18 +11821,7 @@ window.viewQuote = async function (id) {
       syncActiveAliases();
 
       // Hydrate missing field defaults
-      QG.skuItems.forEach(item => {
-        if (!item.sku_key) return;
-        const resolvedKey = item.sku_key === 'startup'
-          ? ('startup_' + (item.tier || 'voice'))
-          : item.sku_key;
-        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        fields.forEach(f => {
-          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
-            item.values[f.id] = f.value;
-          }
-        });
-      });
+      QG.skuItems.forEach(item => hydrateItemFields(item, data.schema_version));
 
       renderSkuItemManager();
       renderSkuSelector();
@@ -11183,16 +11939,7 @@ window.resumeDraft = async function (id) {
       QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       syncActiveAliases();
       // Hydrate missing field defaults (same fix as viewQuote)
-      QG.skuItems.forEach(item => {
-        if (!item.sku_key) return;
-        const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
-        const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-        fields.forEach(f => {
-          if (!f.note?.includes('Add-on') && item.values[f.id] === undefined && f.value !== undefined) {
-            item.values[f.id] = f.value;
-          }
-        });
-      });
+      QG.skuItems.forEach(item => hydrateItemFields(item, data.schema_version));
       renderSkuItemManager();
       renderSkuSelector();
       if (QG.currentSku) {
