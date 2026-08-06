@@ -400,6 +400,137 @@ function stripDeadCalcRows(tableHTML) {
   return host.innerHTML;
 }
 
+// ── Hidden proposal lines ───────────────────────────────────────────────────
+// Any single line of a SKU's commercial table can be taken out of the proposal.
+// The line stops printing - preview and PDF alike - while the plan behind it is
+// untouched, so the config panel still governs the subtotal. Waiving and hiding
+// are deliberately separate acts: waive a fee to make it free, hide a line to
+// stop the client reading about it at all.
+//
+// A line can be taken out from either side, and the two need different keys.
+// From the config panel a field is hidden by its *matched* label, the same
+// normalisation the rename system uses to tie "Setup Charges (₹)" on the form
+// to "Setup Charges" on the proposal - one click there takes the line out
+// wherever the plan prints it. From the proposal a row is hidden by section +
+// canonical label, which is finer: several rows resolve to the same field, and
+// a bare "Calculation" sub-row appears under more than one section.
+function hiddenRowKey(section, label) { return String(section || '') + '|' + cleanLabel(label); }
+function hiddenFieldKey(label) { return '~' + rowLabelMatchKey(label); }
+// The key currently hiding this row, or null. Callers pass it back to restore.
+function hiddenRowMatch(item, section, label) {
+  const hid = item && item.hiddenRows;
+  if (!hid) return null;
+  const bySection = hiddenRowKey(section, label);
+  if (hid[bySection]) return bySection;
+  const byField = hiddenFieldKey(label);
+  return hid[byField] ? byField : null;
+}
+function isFieldHidden(item, label) {
+  return !!(item && item.hiddenRows && item.hiddenRows[hiddenFieldKey(label)]);
+}
+// Some fields never print a line of their own: toggles that steer the rest of
+// the form, gifted top-ups the line above folds in ("3 + 2 Users (Free)"), a
+// rate the proposal derives rather than states, and widgets that render their
+// own table. Offering to hide one would mark it hidden and change nothing.
+const NON_PRINTING_FIELD_TYPES = new Set([
+  'boolean', 'pulse', 'model_toggle', 'tc_plan_select', 'fee_select',
+  'call_mode_select', 'call_type_select', 'country_select', 'intl_numbers_table',
+]);
+const NON_PRINTING_FIELD_IDS = new Set([
+  'attach_isd_pdf', 'user_model_exotel', 'remove_std_numbers',
+  'extra_users', 'extra_validity', 'extra_credits', 'single_leg',
+]);
+function fieldPrintsOwnLine(f, item) {
+  // Truecaller prints a bespoke fixed-price card rather than a component table,
+  // so none of its fields has a line to take out.
+  if (item && item.sku_key === 'truecaller_exotel') return false;
+  return !NON_PRINTING_FIELD_TYPES.has(f.type) && !NON_PRINTING_FIELD_IDS.has(f.id);
+}
+// Keys carry spaces and punctuation, so they travel through the inline handler
+// percent-encoded - including the apostrophe, which would otherwise close the
+// JS string literal the attribute wraps them in.
+function rowKeyAttr(key) { return encodeURIComponent(key).replace(/'/g, '%27'); }
+
+// A section whose every line was hidden would otherwise print as a bare header.
+function stripEmptySections(tableHTML) {
+  const parts = String(tableHTML).split('</tbody>');
+  const kept = parts.filter(p => {
+    const isSection = /^\s*<tbody\b/.test(p) && /<tr class="section-header-row">/.test(p);
+    const hasRows = /<tr(?! class="section-header-row")/.test(p);
+    return !(isSection && !hasRows);
+  });
+  return kept.join('</tbody>');
+}
+
+const ROW_HIDE_ICON = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.4 1.4 L8.6 8.6 M8.6 1.4 L1.4 8.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
+
+window.hideProposalRow = function (itemId, encKey) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.hiddenRows) item.hiddenRows = {};
+  item.hiddenRows[decodeURIComponent(encKey)] = true;
+  updatePreview();
+};
+
+// The chip carries whichever key matched, so this restores a line hidden from
+// the config panel just as well as one hidden from the proposal itself.
+window.showProposalRow = function (itemId, encKey) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item || !item.hiddenRows) return;
+  delete item.hiddenRows[decodeURIComponent(encKey)];
+  QG._dirty = true;
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+
+window.showAllProposalRows = function (itemId) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  item.hiddenRows = {};
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+
+// ── The same act from the config panel ──────────────────────────────────────
+// The field stays on the form and keeps feeding the subtotal: hiding governs
+// what the client reads, waiving governs what they pay. Only the proposal line
+// goes away.
+window.hideSkuField = function (itemId, encLabel) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item) return;
+  if (!item.hiddenRows) item.hiddenRows = {};
+  item.hiddenRows[hiddenFieldKey(decodeURIComponent(encLabel))] = true;
+  QG._dirty = true;
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+
+window.showSkuField = function (itemId, encLabel) {
+  const item = QG.skuItems.find(i => i.id === itemId);
+  if (!item || !item.hiddenRows) return;
+  delete item.hiddenRows[hiddenFieldKey(decodeURIComponent(encLabel))];
+  QG._dirty = true;
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+
+// The strip sits under the card's table and is the only way back: it names each
+// line that was taken out, so nothing can be hidden and then forgotten.
+function hiddenLinesStrip(item, hiddenLines) {
+  if (!hiddenLines.length) return '';
+  const seen = new Set();
+  const uniq = hiddenLines.filter(h => (seen.has(h.key) ? false : seen.add(h.key)));
+  const chips = uniq.map(h => `
+    <button type="button" class="q-hidden-chip" title="Put this line back"
+      onclick="window.showProposalRow('${item.id}','${rowKeyAttr(h.key)}')">${sanitize(h.label)}<span class="q-hidden-chip-plus">+</span></button>`).join('');
+  return `
+    <div class="q-hidden-strip">
+      <span class="q-hidden-strip-lead">${uniq.length} line${uniq.length > 1 ? 's' : ''} hidden</span>
+      <span class="q-hidden-chips">${chips}</span>
+      ${uniq.length > 1 ? `<button type="button" class="q-hidden-restore-all" onclick="window.showAllProposalRows('${item.id}')">Restore all</button>` : ''}
+    </div>`;
+}
+
 // ── Per-row label overrides ─────────────────────────────────────────────────
 // Bundle Package mode let reps rename any line in the merged table. The same
 // affordance now works on a plain single-SKU quote: renames are stored against
@@ -2326,7 +2457,6 @@ function buildIntlStreamRows(item, h) {
   html += secRow('Plan Details');
   html += stdRow('Credits (USD)', fmtUsdFixed(prepaid));
   html += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup_usd'), fmtUsdFixed);
-  html += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
   html += stdRow('No. of Months', months);
 
   html += secRow('Streaming Channels');
@@ -2548,7 +2678,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'attach_isd_pdf', label: 'Attach ISD Rate Card PDF', value: 0, type: 'boolean' },
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
@@ -2574,7 +2703,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'rental', label: 'Account Rental (₹)', value: 1000, type: 'rental_toggle', locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         { id: 'attach_isd_pdf', label: 'Attach ISD Rate Card PDF', value: 0, type: 'boolean' },
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         {
@@ -2607,7 +2735,6 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         waivableCharge('rental', 'Account Rental (₹)', '₹10,499'),
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
@@ -2625,7 +2752,6 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         waivableCharge('rental', 'Account Rental (₹)', '₹10,499'),
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_users', label: 'No. of Users', value: 5, locked: false, stopType: 'lower', stopVal: 5 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'num_months', label: 'No. of Months', value: 3, locked: false, stopType: 'lower', stopVal: 3 },
@@ -2649,7 +2775,6 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         waivableCharge('rental', 'Account Rental (₹)', '₹10,499'),
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
@@ -2671,7 +2796,6 @@ function getSkuFieldsBase(skuKey, tier) {
         // SKU's proposal row prints it as /month.
         waivableCharge('rental', 'Account Rental (₹/month)', '₹10,499'),
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'No. of Channels', value: 5, locked: true, stopType: 'lower', stopVal: 3 },
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
@@ -2721,7 +2845,6 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         waivableCharge('rental', 'Account Rental (₹/month)', '₹10,499'),
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'Free Channels (Included)', value: 5, locked: true, stopType: 'lower', stopVal: 1 },
         { id: 'num_paid_channels', label: 'No. of Paid Channels', value: 0, locked: false, note: 'Additional channels charged at the rate below' },
@@ -2811,7 +2934,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: t2.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t2.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t2.free_users ?? 'Unlimited', locked: true, stopType: t2.users_stop ? 'upper' : null, stopVal: t2.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'free_numbers', label: 'Free Numbers', value: t2.free_numbers, locked: false },
@@ -2859,7 +2981,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: t.validity, locked: false, stopType: 'lower', stopVal: 1 },
         { id: 'rental', label: 'Account Rental (₹)', value: t.rental, locked: true, stopType: 'lower', stopVal: 0, note: 'Can be waived (set to 0)' },
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: t.free_users ?? 'Unlimited', locked: true, stopType: t.users_stop ? 'upper' : null, stopVal: t.users_stop },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 100 },
@@ -2890,7 +3011,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: 6, locked: true, nonEditable: true },
         { id: 'rental', label: 'Account Rental (₹)', value: 4999, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
@@ -2910,7 +3030,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: 6, locked: true, nonEditable: true },
         { id: 'rental', label: 'Account Rental (\u20b9)', value: 0, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (\u20b9)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted \u2013 no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (\u20b9/user/month)', value: 199, locked: false },
@@ -2929,7 +3048,6 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'No. of Channels', value: 5, locked: true, stopType: 'lower', stopVal: 3 },
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1200 },
@@ -2953,7 +3071,6 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         { id: 'rental', label: 'Account Rental (₹)', value: 10499, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
         { id: 'num_numbers', label: 'No. of TFN Numbers', value: 1, locked: false },
@@ -3013,7 +3130,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'validity', label: 'Validity (months)', value: 1, locked: false },
         { id: 'rental', label: 'Account Rental (₹)', value: 4999, locked: true, nonEditable: true, waived: true },
         { id: 'setup', label: 'Setup Charges (₹)', value: 2000, locked: true, nonEditable: true, waived: true },
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'free_users', label: 'Free Users', value: 3, locked: false },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
         { id: 'extra_user_cost', label: 'Extra User Cost (₹/user/month)', value: 199, locked: false },
@@ -3065,7 +3181,6 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'attach_intl_pdf', label: 'Attach Intl. Rate Card PDF', value: 0, type: 'boolean' },
         { id: 'call_rate_mode', label: 'Call Rate Display', value: 1, type: 'call_mode_select' },
         { id: 'fee_type', label: 'Apply Fee to Quote', value: 2, type: 'fee_select' },
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 6, locked: false, stopType: 'lower', stopVal: 3 },
         { id: 'num_channels', label: 'No. of Streaming Channels', value: 5, locked: true, stopType: 'lower', stopVal: 1 },
         { id: 'channel_cost_usd', label: 'Channel Cost (USD/channel/month)', value: INTL_STREAM_CHANNEL_USD, locked: true, stopType: 'lower', stopVal: INTL_STREAM_CHANNEL_USD },
@@ -4051,6 +4166,10 @@ function selectSku(key, userInitiated = false) {
   item.sku_key = key;
   item.values = {};
   item.stopLockOverrides = [];
+  // Lines hidden on the previous plan do not carry over: the keys are section
+  // and label, so a shared name like "Plan Details|Setup Charges" would silently
+  // take the same line out of a plan the rep never touched.
+  item.hiddenRows = {};
   QG._dirty = true;
 
   // Set entity lock on first selection
@@ -4474,7 +4593,7 @@ function visibleFields(fields, item) {
 function renderFieldsGroupedCombined(items) {
   const SECTION_MAP = {
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
-    channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
+    brand_fee: 'Plan Overview', procurement: 'Plan Overview',
     num_months: 'Plan Overview',
     tc_plan: 'Plan Overview', tc_impressions: 'Plan Overview', tc_extra_impression: 'Plan Overview',
     tc_numbers: 'Number Plan', tc_call_rate: 'Call Charges',
@@ -5484,10 +5603,21 @@ function renderFieldRow(f, item, opts = {}) {
           </div>
         `;
       } else {
+        // The line can also be taken out of the proposal from here. The field
+        // stays put and keeps pricing the plan - only the printed line goes -
+        // so the control sits quiet until the row is hovered, and a line that
+        // is already out says so plainly rather than vanishing off the form.
+        const encLbl = rowKeyAttr(f.label);
+        const hidden = isFieldHidden(item, f.label);
+        const action = !fieldPrintsOwnLine(f, item) ? ''
+          : hidden
+          ? `<button class="q-field-unhide" onclick="window.showSkuField('${item.id}','${encLbl}')" title="Print this line on the proposal again">hidden<span class="q-field-unhide-undo">&#8630;</span></button>`
+          : `<button class="q-field-hide" onclick="window.hideSkuField('${item.id}','${encLbl}')" title="Hide this line from the proposal" aria-label="Hide ${sanitize(displayLabel)} from the proposal">${ROW_HIDE_ICON}</button>`;
         lblHtml = `
           <div style="display:flex; align-items:center; gap:6px; width:100%;">
-            <span class="bundle-rename-target" ondblclick="window.startRowRename('${item.id}','${f.id}')" title="Double-click to rename this line">${sanitize(isRenamed ? f.label.split(defaultLabel).join(displayLabel) : f.label)}</span>
+            <span class="bundle-rename-target${hidden ? ' q-label-hidden' : ''}" ondblclick="window.startRowRename('${item.id}','${f.id}')" title="Double-click to rename this line">${sanitize(isRenamed ? f.label.split(defaultLabel).join(displayLabel) : f.label)}</span>
             ${isRenamed ? `<button class="q-row-reset-btn" onclick="window.resetRowRename('${item.id}','${f.id}')" title="Restore the original name">&#8630;</button>` : ''}
+            ${action}
           </div>
         `;
       }
@@ -5743,7 +5873,7 @@ function renderFieldsGrouped(fields, item) {
   const SECTION_MAP = {
     [PREPAID_DEPOSIT_ID]: 'Prepaid Deposit',
     validity: 'Plan Overview', rental: 'Plan Overview', setup: 'Plan Overview',
-    channels: 'Plan Overview', brand_fee: 'Plan Overview', procurement: 'Plan Overview',
+    brand_fee: 'Plan Overview', procurement: 'Plan Overview',
     num_months: 'Plan Overview',
     tc_plan: 'Plan Overview', tc_impressions: 'Plan Overview', tc_extra_impression: 'Plan Overview',
     tc_numbers: 'Number Plan', tc_call_rate: 'Call Charges',
@@ -5866,11 +5996,12 @@ const CHANNEL_CALC_SWEEPS = {
   hours:  { field: 'hours',  name: 'calling hours', unit: 'h', points: [6, 8, 9, 10, 12, 16, 24] },
 };
 
-// Plan CPM allowance, read off the plan's own CPM line ("200 Calls/Min ...").
-function _ccPlanCpm(item) {
-  const fields = getSkuFields(item.sku_key, item.tier);
-  const m = String(readVal(item, fields, 'channels') ?? '').match(/([\d,]+)\s*Calls\s*\/\s*Min/i);
-  return m ? parseFloat(m[1].replace(/,/g, '')) : null;
+// Platform CPM allowance. The proposal no longer prints a CPM line on any SKU,
+// but the allowance itself is unchanged, so the calculator still measures the
+// modelled traffic against it.
+const PLATFORM_CPM_ALLOWANCE = 200;
+function _ccPlanCpm() {
+  return PLATFORM_CPM_ALLOWANCE;
 }
 
 function _ccDonut(talkPct) {
@@ -5960,7 +6091,7 @@ window.openChannelCalc = function (itemId) {
               <div class="cc-kpi-num" id="cc-cps">0</div>
               <div class="cc-kpi-cap">calls per second</div>
             </div>
-            <div class="cc-kpi" ${tip('Calls Per Minute: CPS x 60, in the unit the plan states its allowance in. Compare it against the CPM line on the plan.')}>
+            <div class="cc-kpi" ${tip('Calls Per Minute: CPS x 60. The platform allows 200 calls/min; anything beyond that is chargeable, so watch this against the allowance below.')}>
               <div class="cc-kpi-lbl">CPM</div>
               <div class="cc-kpi-num" id="cc-cpm">0</div>
               <div class="cc-kpi-cap" id="cc-cap-cpm"></div>
@@ -6044,7 +6175,7 @@ window.openChannelCalc = function (itemId) {
             : `includes ${_ccNum(c.headroom)}% peak headroom`);
     }
 
-    const planCpm = _ccPlanCpm(item);
+    const planCpm = _ccPlanCpm();
     const capCpm = document.getElementById('cc-cap-cpm');
     if (capCpm) {
       capCpm.textContent = planCpm ? `of ${_ccNum(planCpm)} allowed on the plan` : 'calls per minute';
@@ -6467,7 +6598,6 @@ function _renderBundleItemsHTML(bundleItems) {
       const rentalStd = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const fu = getVal('free_users');
@@ -6556,7 +6686,6 @@ function _renderBundleItemsHTML(bundleItems) {
         tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
       }
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const vStdExtraUsers = getSafeNum('extra_users') || 0;
@@ -6637,7 +6766,6 @@ function _renderBundleItemsHTML(bundleItems) {
       const rentalSip = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalSip === 0 ? null : fmtRupee(rentalSip), rentalSip === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const fu2 = getVal('free_users');
@@ -6693,7 +6821,6 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += secRow('Plan Details');
       tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const userExtraFree = getSafeNum('extra_users') || 0;
@@ -6736,7 +6863,6 @@ function _renderBundleItemsHTML(bundleItems) {
       tableHTML += secRow('Plan Details');
       tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       tableHTML += stdRow('No. of Months', numMonths2);
 
       tableHTML += secRow('User Plan');
@@ -6784,7 +6910,6 @@ function _renderBundleItemsHTML(bundleItems) {
       const rentalStream = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
       if (isVoicebot) {
@@ -6872,7 +6997,6 @@ function _renderBundleItemsHTML(bundleItems) {
       const campRental = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', campRental === 0 ? null : fmtRupee(campRental), campRental === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       const fuCamp = getVal('free_users');
       const fuCampExtra = getSafeNum('extra_users') || 0;
       const fuCampDisplay = (fuCamp === null || fuCamp === 'Unlimited') ? 'Unlimited (Included)' : (fuCampExtra > 0 ? `${fuCamp} + ${fuCampExtra} Users (Free)` : fuCamp + ' Users (Free)');
@@ -7494,8 +7618,7 @@ function _computeBundleRows(items) {
       if (SKIP_FIELD_IDS.has(f.id)) return;
       if (f.type === 'boolean') return;
       if (f.type === 'pulse') return;
-      if (f.nonEditable && f.type !== 'rental_toggle' && !BUNDLE_KEEP_NONEDITABLE.has(f.id)) return; // skip non-editable like CPM raw field
-      if (f.id === 'channels') return; // shown in Plan Details as text
+      if (f.nonEditable && f.type !== 'rental_toggle' && !BUNDLE_KEEP_NONEDITABLE.has(f.id)) return; // skip raw non-editable display fields
 
       const rawVal = item.values[f.id] !== undefined ? item.values[f.id] : f.value;
       const numVal = parseFloat(rawVal);
@@ -8003,7 +8126,6 @@ function updatePreview() {
         return `${fmtR(r)}/month × ${v} months = ${fmtR(r * v)}`;
       }));
       uRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W_CMP : fmtR(s); }));
-      uRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       uRows += cmpRow('User Plan', [], true);
       uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
       uRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + '/user/month'));
@@ -8056,7 +8178,6 @@ function updatePreview() {
       uRows += cmpRow('Plan Details', [], true);
       uRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W_CMP : fmtR(r); }));
       uRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W_CMP : fmtR(s); }));
-      uRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       uRows += cmpRow('User Plan', [], true);
       uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
       uRows += cmpRow('No. of Months', colData.map(({ getVal }) => getVal('num_months') + ' Months'));
@@ -8221,7 +8342,6 @@ function updatePreview() {
       }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
       tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
-      tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('Plan', [], true);
       tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
       tableRows += cmpRow('Extra User Cost', colData.map(({ getSN }) => fmtR(getSN('extra_user_cost')) + perUnit('/user/month')), false, true);
@@ -8268,7 +8388,6 @@ function updatePreview() {
       }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
       tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
-      tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('User Plan', [], true);
       tableRows += cmpRow('No. of Users', colData.map(({ getVal, item }) => { const nu = parseInt(getVal('num_users')) || 0; const eu = parseInt(item.values['extra_users'] ?? 0); return eu > 0 ? `${eu} Free, ${nu} Charged` : nu; }));
       tableRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + perUnit('/user/month')));
@@ -8292,7 +8411,6 @@ function updatePreview() {
       }));
       tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
       tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
-      tableRows += cmpRow('CPM', colData.map(() => '200 Calls/Min (Additional Chargeable)'));
       tableRows += cmpRow('User Plan', [], true);
       tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
       tableRows += cmpRow('Extra User Cost', colData.map(() => fmtR(199) + perUnit('/user/month')), false, true);
@@ -8608,20 +8726,42 @@ function updatePreview() {
     const FREE = `<span class="waived-text">${TICK} Free</span>`;
     let isFirstSec = true;
     const hasHTML = (s) => typeof s === 'string' && /<[a-zA-Z]/.test(s);
+
+    // Lines this rep took out of the card, collected as the rows render so the
+    // strip under the table can offer them back by name. `parentHidden` carries
+    // a hidden row's fate down to the sub-rows that only explain it.
+    const hiddenLines = [];
+    let currentSection = 'Plan Details';
+    let parentHidden = false;
+    const hideBtn = (rawLbl) => `<button type="button" class="q-row-hide" title="Hide this line from the proposal"
+      aria-label="Hide ${sanitize(rowLabel(item, rawLbl))}"
+      onclick="window.hideProposalRow('${item.id}','${rowKeyAttr(hiddenRowKey(currentSection, rawLbl))}')">${ROW_HIDE_ICON}</button>`;
+    const takeOut = (rawLbl, key) => {
+      hiddenLines.push({ key, label: rowLabel(item, rawLbl) });
+    };
+
     const secRow = (lbl) => {
+      currentSection = lbl;
+      parentHidden = false;
       const res = (isFirstSec ? '' : '</tbody>') + `<tbody style="page-break-inside: avoid; break-inside: avoid;"><tr class="section-header-row"><td colspan="2">${lbl}</td></tr>`;
       isFirstSec = false;
       return res;
     };
     const stdRow = (rawLbl, val, isWaived) => {
       const lbl = rowLabel(item, rawLbl);
+      const hk = hiddenRowMatch(item, currentSection, rawLbl);
+      if (hk) { parentHidden = true; takeOut(rawLbl, hk); return ''; }
+      parentHidden = false;
       const disp = isWaived ? W : hasHTML(val) ? val : sanitize(String(val ?? '-'));
-      return `<tr><td class="sku-row-name">${sanitize(lbl)}</td><td>${disp}</td></tr>`;
+      return `<tr class="q-hideable"><td class="sku-row-name">${sanitize(lbl)}</td><td class="q-val">${disp}${hideBtn(rawLbl)}</td></tr>`;
     };
     const indRow = (rawLbl, val) => {
       const lbl = rowLabel(item, rawLbl);
+      if (parentHidden) return '';   // the line this working explains is gone
+      const hk = hiddenRowMatch(item, currentSection, rawLbl);
+      if (hk) { takeOut(rawLbl, hk); return ''; }
       const disp = hasHTML(val) ? val : sanitize(String(val ?? '-'));
-      return `<tr class="sub-row"><td>${sanitize(lbl)}</td><td>${disp}</td></tr>`;
+      return `<tr class="sub-row q-hideable"><td>${sanitize(lbl)}</td><td class="q-val">${disp}${hideBtn(rawLbl)}</td></tr>`;
     };
 
     let tableHTML = '';
@@ -8655,7 +8795,6 @@ function updatePreview() {
       const rentalStd = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStd === 0 ? null : fmtRupee(rentalStd), rentalStd === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const fu = getVal('free_users');
@@ -8744,7 +8883,6 @@ function updatePreview() {
         tableHTML += indRow('Calculation', `${fmtRupee(rVal)}/month × ${validity} months = <strong>${fmtRupee(rVal * validity)}</strong>`);
       }
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const vStdExtraUsers = getSafeNum('extra_users') || 0;
@@ -8825,7 +8963,6 @@ function updatePreview() {
       const rentalSip = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalSip === 0 ? null : fmtRupee(rentalSip), rentalSip === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const fu2 = getVal('free_users');
@@ -8881,7 +9018,6 @@ function updatePreview() {
       tableHTML += secRow('Plan Details');
       tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow('User Plan');
       const userExtraFree = getSafeNum('extra_users') || 0;
@@ -8925,7 +9061,6 @@ function updatePreview() {
       tableHTML += secRow('Plan Details');
       tableHTML += waivableRow(stdRow, 'Account Rental', getSafeNum('rental'), fmtRupee);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       tableHTML += stdRow('No. of Months', numMonths2);
 
       tableHTML += secRow('User Plan');
@@ -8973,7 +9108,6 @@ function updatePreview() {
       const rentalStream = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', rentalStream === 0 ? null : `${fmtRupee(rentalStream)} ${perUnit('/month')}`, rentalStream === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
       tableHTML += secRow(isVoicebot ? 'Voicebot Channels' : 'Streaming Channels');
       if (isVoicebot) {
@@ -9061,7 +9195,6 @@ function updatePreview() {
       const campRental = getSafeNum('rental');
       tableHTML += stdRow('Account Rental', campRental === 0 ? null : fmtRupee(campRental), campRental === 0);
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-      tableHTML += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
       const fuCamp = getVal('free_users');
       const fuCampExtra = getSafeNum('extra_users') || 0;
       const fuCampDisplay = (fuCamp === null || fuCamp === 'Unlimited') ? 'Unlimited (Included)' : (fuCampExtra > 0 ? `${fuCamp} + ${fuCampExtra} Users (Free)` : fuCamp + ' Users (Free)');
@@ -9389,6 +9522,8 @@ function updatePreview() {
       tableHTML += '</tbody>';
     }
     if (itemHasUnitOnly(item)) tableHTML = stripDeadCalcRows(tableHTML);
+    if (hiddenLines.length) tableHTML = stripEmptySections(tableHTML);
+    const hiddenStrip = hiddenLinesStrip(item, hiddenLines);
 
     // ── International SKUs: USD subtotal (not added to INR grand total) ─────
     if (isUsdSku(sk)) {
@@ -9420,6 +9555,7 @@ function updatePreview() {
           <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
           ${tableHTML}
         </table>
+        ${hiddenStrip}
         <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
           ${setupV > 0 ? `<div style="font-size:0.8rem; color:#64748b;">Setup Charges: $${setupV.toFixed(2)}</div>` : ''}
           <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${baseV.toFixed(2)}</strong></div>
@@ -9501,6 +9637,7 @@ function updatePreview() {
         <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
         ${tableHTML}
       </table>
+      ${hiddenStrip}
       ${subtotal > 0 ? (QG.compareMode ? `
       <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
         <div style="font-size:0.8rem; color:#64748b;">Subtotal: ${fmtRupee(subtotal)}</div>
@@ -9673,6 +9810,12 @@ window.printQuote = async function () {
      .q-disc-old { text-decoration: line-through !important; text-decoration-thickness: 1.5px !important; color: #94a3b8 !important; margin-right: 5px !important; font-weight: 500 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
      .q-disc-new { color: #047857 !important; font-weight: 700 !important; white-space: nowrap !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
      .q-disc-btn, .q-disc-pill { display: none !important; }
+
+     /* ── Editing affordances the client must never see ─────────────
+        The PDF is rendered with screen media emulation, so the stylesheet's
+        own @media print rules never fire here and each one has to be repeated. */
+     .q-row-hide, .q-hidden-strip, .subsku-toggle-btn, .bundle-x-btn { display: none !important; }
+     .quote-sku-table td.q-val { padding-right: 8px !important; }
 
      /* ── Totals ────────────────────────────────────────────────── */
      .quote-totals { margin-top: 8px !important; padding-top: 8px !important; }
@@ -10881,7 +11024,6 @@ window.confirmGenerateProforma = async function () {
           
           const setup = getSN('setup');
           lines.push(`Setup Charges: ${setup === 0 ? 'Waived' : fmtRupee(setup)}`);
-          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const fu = getV('free_users');
           const fuExtra = getSN('extra_users') || 0;
@@ -10939,7 +11081,6 @@ window.confirmGenerateProforma = async function () {
           }
           const setupSN = getSN('setup');
           lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
-          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const numUsers = getSN('num_users') || 0;
           const uCharge = getSN('user_charge') || 1000;
@@ -10994,7 +11135,6 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental) + '/month'}`);
           const setupSN = getSN('setup');
           lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
-          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const fu2 = getV('free_users');
           const fu2Extra = getSN('extra_users') || 0;
@@ -11033,7 +11173,6 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Account Rental: ${rentalSN === 0 ? 'Waived' : fmtRupee(rentalSN)}`);
           const setupSN = getSN('setup');
           lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
-          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           
           const numUsers = getSN('num_users') || 0;
           const numMonths = getSN('num_months') || 0;
@@ -11071,7 +11210,6 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Account Rental: ${rentalSN === 0 ? 'Waived' : fmtRupee(rentalSN)}`);
           const setupSN = getSN('setup');
           lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
-          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
           lines.push(`No. of Months: ${getSN('num_months')}`);
           
           const fuTfn = getV('free_users');
@@ -11202,7 +11340,6 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Account Rental: ${rental === 0 ? 'Waived' : fmtRupee(rental)}`);
           const setupSN = getSN('setup');
           lines.push(`Setup Charges: ${setupSN === 0 ? 'Waived' : fmtRupee(setupSN)}`);
-          lines.push(`CPM: 200 Calls/Min (Additional Chargeable)`);
 
           const fuStr = getV('free_users');
           const fuStrExtra = getSN('extra_users') || 0;
@@ -11268,7 +11405,7 @@ window.confirmGenerateProforma = async function () {
           }
 
           if (item.sku_key.includes('stream') || item.sku_key.includes('campaigns')) {
-            const ch = parseFloat(item.values['num_channels'] || item.values['channels'] || 0);
+            const ch = parseFloat(item.values['num_channels'] || 0);
             const chCost = getSN('channel_cost');
             if (ch > 0 && chCost > 0) {
               lines.push(`Channels: ${ch} Channel(s) @ ${fmtRupee(chCost)}/channel/month`);

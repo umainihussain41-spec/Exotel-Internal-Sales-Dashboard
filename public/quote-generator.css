@@ -1110,6 +1110,216 @@
     font-size: 0.75rem;
 }
 
+/* ── Taking a single line out of a SKU's table ───────────────────────────────
+   The control is invisible until its own row is hovered, so a full commercial
+   table still reads as a document instead of a column of delete buttons. The
+   gutter is reserved on every row, so nothing shifts as it fades in. */
+.quote-sku-table td.q-val {
+    position: relative;
+    padding-right: 28px;
+}
+
+.q-row-hide {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+
+.quote-sku-table tr.q-hideable:hover .q-row-hide {
+    opacity: 0.7;
+}
+
+.q-row-hide:hover {
+    opacity: 1;
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.q-row-hide:focus-visible {
+    opacity: 1;
+    outline: 2px solid #0284c7;
+    outline-offset: 1px;
+}
+
+/* Touch has no hover to reveal with, so the control sits permanently faint. */
+@media (hover: none) {
+    .q-row-hide { opacity: 0.4; }
+}
+
+/* ── The same control on the config panel ────────────────────────────────────
+   One faint ✕ per field would read as a delete column, so it waits for the
+   row. A field already taken out swaps it for a standing "hidden" tag: the
+   value still prices the plan, so the row must not simply look disabled. */
+.q-field-hide {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.14s ease, background 0.14s ease, color 0.14s ease;
+}
+
+.q-field-row:hover .q-field-hide {
+    opacity: 0.65;
+}
+
+.q-field-hide:hover {
+    opacity: 1;
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.q-field-hide:focus-visible {
+    opacity: 1;
+    outline: 2px solid #0284c7;
+    outline-offset: 1px;
+}
+
+@media (hover: none) {
+    .q-field-hide { opacity: 0.4; }
+}
+
+.q-label-hidden {
+    text-decoration: line-through;
+    text-decoration-color: #cbd5e1;
+    color: #94a3b8;
+}
+
+.q-field-unhide {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 6px;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: #f8fafc;
+    color: #94a3b8;
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.14s, background 0.14s, color 0.14s;
+}
+
+.q-field-unhide:hover {
+    border-color: #7dd3fc;
+    background: #f0f9ff;
+    color: #0369a1;
+}
+
+.q-field-unhide-undo {
+    font-size: 0.8rem;
+    line-height: 1;
+    text-transform: none;
+}
+
+/* Nothing is hidden silently: every line taken out is named here, one click
+   from coming back. */
+.q-hidden-strip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    margin: 8px 2px 0;
+    padding: 7px 10px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 7px;
+    font-size: 0.72rem;
+    color: #64748b;
+}
+
+.q-hidden-strip-lead {
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    font-size: 0.66rem;
+    color: #94a3b8;
+}
+
+.q-hidden-chips {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.q-hidden-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: #fff;
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.14s, background 0.14s, color 0.14s;
+}
+
+.q-hidden-chip:hover {
+    border-color: #7dd3fc;
+    background: #f0f9ff;
+    color: #0369a1;
+}
+
+.q-hidden-chip-plus {
+    font-size: 0.9rem;
+    line-height: 1;
+    color: #94a3b8;
+}
+
+.q-hidden-chip:hover .q-hidden-chip-plus {
+    color: #0284c7;
+}
+
+.q-hidden-restore-all {
+    margin-left: auto;
+    padding: 2px 6px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: #0284c7;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.q-hidden-restore-all:hover {
+    background: #e0f2fe;
+}
+
+@media print {
+    .q-row-hide,
+    .q-hidden-strip { display: none !important; }
+    .quote-sku-table td.q-val { padding-right: 8px; }
+}
+
 /* SKU Grid in Preview */
 .quote-skus-grid {
     display: grid;
