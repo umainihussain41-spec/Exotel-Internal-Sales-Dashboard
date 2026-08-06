@@ -1298,7 +1298,6 @@ function getSkuTncHtml(item, entity = 'Exotel') {
             <li>${isSipUnl
               ? 'A "channel" is one concurrent call on the SIP trunk. Calls attempted beyond the subscribed channel count are rejected.'
               : 'A "channel" is one concurrent bi-directional WebSocket media stream. Concurrency beyond the subscribed channels is rejected.'}</li>
-            <li>Minimum subscription on an unlimited plan is <strong>${UNLIMITED_MIN_CHANNELS} channels</strong>.</li>
             <li>Channels are billed for the full month regardless of usage. Channels added mid-month are billed pro-rata; the subscribed count cannot be reduced within the committed term.</li>
             <li>No separate PRI line charges apply.</li>
           </ul>
@@ -2391,7 +2390,6 @@ function buildUnlimitedRows(item, h) {
   const rental = getSafeNum('rental');
   html += stdRow('Account Rental', rental === 0 ? null : `${fmtRupee(rental)} ${perUnit('/month')}`, rental === 0);
   html += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
-  html += stdRow('CPM', '200 Calls/Min (Additional Chargeable)');
 
   html += secRow(isSip ? 'SIP Trunking Channels' : 'Streaming Channels');
   html += stdRow('No. of Channels', numChs);
@@ -2704,7 +2702,6 @@ function getSkuFieldsBase(skuKey, tier) {
       return [
         waivableCharge('rental', 'Account Rental (₹/month)', '₹10,499'),
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
-        { id: 'channels', label: 'CPM', value: '200 Calls/Min (Additional Chargeable)', locked: true, nonEditable: true },
         { id: 'num_months', label: 'No. of Months', value: 12, locked: false, stopType: 'lower', stopVal: 6 },
         // hardMin, not a stop-lock: 30 channels is the floor of the plan, so
         // there is no manager override - the field simply cannot go below it.
@@ -3734,6 +3731,14 @@ window.toggleBundleMergeMode = function (enabled) {
 function canUseUnitPricing() {
   return !!(QG.features && QG.features.unit_pricing);
 }
+
+// ── Exclusive feature: the unlimited plans ─────────────────────────────────
+// A single grant covering both unlimited SKUs and the channel calculator that
+// sizes them. Without it the cards never render and the keys are not
+// selectable, so an ungranted rep cannot reach the plans by any route.
+function canUseUnlimitedPlans() {
+  return !!(QG.features && QG.features.unlimited_plans);
+}
 function loadFeatureFlags() {
   return fetch('/api/features/me')
     .then(r => r.ok ? r.json() : { features: {} })
@@ -3895,6 +3900,9 @@ function renderSkuSelector() {
     filtered = SKUS.filter(s => !s.hidden);
   }
 
+  // The unlimited plans are an exclusive - no grant, no card.
+  if (!canUseUnlimitedPlans()) filtered = filtered.filter(s => !s.isUnlimited);
+
   const compareCapable = ['voice_exotel_std', 'voice_exotel_user', 'voice_veeno_std', 'voice_veeno_user', 'sip_veeno'];
   const CMP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 4 7 4"/><polyline points="7 20 17 20"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><polyline points="11 8 7 12 11 16"/><polyline points="13 8 17 12 13 16"/></svg>`;
 
@@ -3990,6 +3998,13 @@ window.enableCompareFor = function(key) {
 function selectSku(key, userInitiated = false) {
   const sku = SKUS.find(s => s.key === key);
   if (!sku) return;
+
+  // The unlimited plans are an exclusive - the card is hidden without the
+  // grant, so this only fires on a restored quote or a stale call.
+  if (isUnlimitedSku(key) && !canUseUnlimitedPlans()) {
+    if (userInitiated) showAlert('The unlimited plans are an exclusive feature. Ask the developer for access.', { type: 'warning', title: 'Not Available' });
+    return;
+  }
 
   // Truecaller: play the signature reveal animation on a real user click
   if (userInitiated && key === 'truecaller_exotel') {
@@ -5776,11 +5791,11 @@ function renderFieldsGrouped(fields, item) {
 //
 // Ringing lines hold a channel too, which is why unanswered calls are in the
 // numerator: on a 25% pickup dialer they are most of the concurrency.
-// Exclusive feature, granted per rep like unit pricing, and only on the two
-// unlimited plans - they are the ones sold on channel count alone.
-const CHANNEL_CALC_SKUS = ['unlimited_stream', 'unlimited_sip'];
-function canUseChannelCalc() { return !!(QG.features && QG.features.channel_calculator); }
-function skuHasChannelCalc(key) { return canUseChannelCalc() && CHANNEL_CALC_SKUS.includes(key); }
+// The calculator is not its own grant: it rides on the unlimited_plans
+// exclusive, because the two unlimited plans are the only ones sold on channel
+// count alone. One switch opens the SKUs and the calculator together.
+const CHANNEL_CALC_SKUS = UNLIMITED_SKUS;
+function skuHasChannelCalc(key) { return canUseUnlimitedPlans() && CHANNEL_CALC_SKUS.includes(key); }
 
 const CHANNEL_CALC_DEFAULTS = {
   basis: 'day', dayVolume: 100000, monthVolume: 2600000, workingDays: 26,
@@ -12508,7 +12523,9 @@ function setupAIVoice() {
           reader.onloadend = async () => {
              const base64data = reader.result.split(',')[1];
              
-             const availableSkus = SKUS.map(s => ({ key: s.key, name: s.label }));
+             const availableSkus = SKUS
+                .filter(s => !s.isUnlimited || canUseUnlimitedPlans())
+                .map(s => ({ key: s.key, name: s.label }));
              
              const res = await fetch('/api/ai-quote-parse', {
                 method: 'POST',
@@ -12597,8 +12614,10 @@ function applyAIParsedQuote(data) {
     // We now have the exact skuKey from Gemini!
     let skuKey = aiSku.skuKey || 'voice_exotel_std'; // default fallback
     
-    // Ensure the key exists in our system, if not fallback
-    if (!SKUS.find(s => s.key === skuKey)) {
+    // Ensure the key exists in our system, if not fallback. The unlimited plans
+    // are an exclusive, so an ungranted rep falls back too even if the model
+    // reached for one.
+    if (!SKUS.find(s => s.key === skuKey) || (isUnlimitedSku(skuKey) && !canUseUnlimitedPlans())) {
         skuKey = 'voice_exotel_std';
     }
 
@@ -12828,6 +12847,9 @@ function setupQuoteGenerator() {
 
   // Exclusive features (Rate Card) - the SKU grid hides what you can't use.
   loadFeatureFlags().then(() => {
+    // The grid is drawn before the entitlement lands, so redraw it - that is
+    // what adds the unlimited cards for a granted rep.
+    renderSkuSelector();
     // The unit-price buttons live in the SKU form, so re-render it once the
     // entitlement lands.
     if (QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);

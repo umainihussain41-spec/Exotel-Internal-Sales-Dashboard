@@ -1760,7 +1760,7 @@ function setupAdminPanel() {
 }
 
 // ── Exclusive feature access control ─────────────────────────────────────────
-const FEATURE_LABELS = { unit_pricing: 'Unit Pricing', channel_calculator: 'Channel Calculator' };
+const FEATURE_LABELS = { unit_pricing: 'Unit Pricing', unlimited_plans: 'Unlimited Plans' };
 
 async function fetchFeatureGrants() {
     const listEl = document.getElementById('feature-grants-list');
