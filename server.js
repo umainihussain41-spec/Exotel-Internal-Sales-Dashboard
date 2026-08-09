@@ -130,10 +130,10 @@ db.exec(`
 // ─── Exclusive Features ──────────────────────────────────────────────────────
 // Off by default and handed out per user by the lead developer - deliberately
 // not by admins, so the grant list stays small and deliberate.
-// 'unlimited_plans' is a single switch: it opens the two unlimited SKUs and the
-// channel calculator that sizes them, which is why the older, narrower
-// 'channel_calculator' grant is folded into it rather than kept alongside.
-const EXCLUSIVE_FEATURES = ['unit_pricing', 'unlimited_plans'];
+// The unlimited plans (and the channel calculator that sizes them) used to sit
+// here as 'unlimited_plans'. They are open to every rep now, so the grant is
+// gone and its old rows are swept below.
+const EXCLUSIVE_FEATURES = ['unit_pricing'];
 
 // The table is created at boot, but a database file carried over from an older
 // deploy (Railway's volume, or a local logs.db copied from elsewhere) can reach
@@ -148,22 +148,22 @@ function ensureFeatureGrantsTable() {
         created_at  TEXT NOT NULL,
         UNIQUE(feature, user_email)
     )`);
-    migrateChannelCalcGrants();
+    sweepRetiredGrants();
 }
 
-// Anyone who already held the old channel-calculator grant keeps it, now as the
-// wider unlimited_plans switch - nobody has to be re-granted by hand. Runs once
-// per process; the UPDATE OR IGNORE leaves a duplicate row behind when a user
-// held both, so the stale rows are swept after.
-let _grantsMigrated = false;
-function migrateChannelCalcGrants() {
-    if (_grantsMigrated) return;
-    _grantsMigrated = true;
+// The unlimited plans and the channel calculator are open to everyone now, so
+// grants naming them (or the older 'channel_calculator' switch they were folded
+// into) buy nothing. Dropping the rows keeps the developer's "Who has access"
+// list honest instead of listing a feature nobody needs granting. Runs once per
+// process.
+let _grantsSwept = false;
+function sweepRetiredGrants() {
+    if (_grantsSwept) return;
+    _grantsSwept = true;
     try {
-        db.prepare(`UPDATE OR IGNORE feature_grants SET feature = 'unlimited_plans' WHERE feature = 'channel_calculator'`).run();
-        db.prepare(`DELETE FROM feature_grants WHERE feature = 'channel_calculator'`).run();
+        db.prepare(`DELETE FROM feature_grants WHERE feature IN ('channel_calculator', 'unlimited_plans')`).run();
     } catch (e) {
-        console.error('feature grant migration failed:', e.message);
+        console.error('retired feature grant sweep failed:', e.message);
     }
 }
 ensureFeatureGrantsTable();
@@ -1735,12 +1735,7 @@ Do NOT set compareMode=true for two different products.
         };
 
         // Lean per-call prompt - heavy domain context lives in systemInstruction above.
-        // The unlimited plans are an exclusive, so they leave the choice list for
-        // anyone without the grant no matter what the client sent up.
-        const allowedSkus = userFeatures(email).unlimited_plans
-            ? availableSkus
-            : availableSkus.filter(s => !['unlimited_stream', 'unlimited_sip'].includes(s.key));
-        const skuKeyList = allowedSkus.map(s => `${s.key} (${s.name})`).join(', ');
+        const skuKeyList = availableSkus.map(s => `${s.key} (${s.name})`).join(', ');
         const promptText = `Parse the attached audio clip and extract the quote details into JSON.\nValid SKU keys (use ONLY these): ${skuKeyList}`;
 
         let result = null;
