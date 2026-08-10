@@ -1350,7 +1350,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         <li style="margin-bottom:8px;"><strong>Pricing &amp; Rental</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Rental charges cover: User logins, TFN number(s), Call recordings, Analytics.</li>
-            <li>CPM plan: First 200 minutes/day are included; usage beyond 200 mins/day is additionally chargeable. No separate PRI line costs are charged.</li>
+            <li>No separate PRI line costs are charged.</li>
           </ul>
         </li>
         <li style="margin-bottom:8px;"><strong>Billing &amp; Payments</strong>
@@ -2160,7 +2160,6 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Channels</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>CPM plan: First 200 minutes/day are included; usage beyond 200 mins/day is additionally chargeable.</li>
             <li>No separate PRI line charges.</li>
           </ul>
         </li>
