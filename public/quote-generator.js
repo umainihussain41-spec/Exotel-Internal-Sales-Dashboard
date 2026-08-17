@@ -2664,7 +2664,7 @@ function getSkuFieldsBase(skuKey, tier) {
   const t = TIER_DEFAULTS[tier] || TIER_DEFAULTS.dabbler;
   const sms_field = { id: 'sms_cost', label: 'SMS Cost (p/msg)', value: 21, locked: true, stopType: 'lower', stopVal: 17, note: 'SMS Add-on' };
   const wa_fields = [
-    { id: 'wa_utility', label: 'WhatsApp Utility (p/msg)', value: 11, locked: true, stopType: null, nonEditable: true, note: 'WA Add-on' },
+    { id: 'wa_utility', label: 'WhatsApp Utility (p/msg)', value: 11.5, locked: true, stopType: null, nonEditable: true, note: 'WA Add-on' },
     { id: 'wa_promo', label: 'WhatsApp Promo (p/msg)', value: 86, locked: true, stopType: null, nonEditable: true, note: 'WA Add-on' },
     { id: 'wa_api', label: 'WhatsApp API Charge (p/msg, both Utility & Promo)', value: 6, locked: true, stopType: 'lower', stopVal: 4, note: 'WA Add-on' },
   ];
@@ -2896,7 +2896,7 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'did_numbers', label: 'Own Number (BYON) (optional)', value: 0, locked: false },
         { id: 'did_cost', label: 'Own Number (BYON) Rate (₹/number/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'credits', label: 'WA Credits (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 5000 },
-        { id: 'wa_utility', label: 'Utility Msg (p/msg)', value: 11, locked: true, nonEditable: true },
+        { id: 'wa_utility', label: 'Utility Msg (p/msg)', value: 11.5, locked: true, nonEditable: true },
         { id: 'wa_promo', label: 'Promotional Msg (p/msg)', value: 86, locked: true, nonEditable: true },
         // API charge applies to BOTH utility and promo messages
         {
@@ -3105,7 +3105,7 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
         { id: 'credits', label: 'WA Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
-        { id: 'wa_utility', label: 'WhatsApp Utility (p/msg)', value: 11, locked: true, nonEditable: true },
+        { id: 'wa_utility', label: 'WhatsApp Utility (p/msg)', value: 11.5, locked: true, nonEditable: true },
         { id: 'wa_promo', label: 'WhatsApp Promo (p/msg)', value: 86, locked: true, nonEditable: true },
         { id: 'wa_api', label: 'WhatsApp API Charge (p/msg)', value: 6, locked: false },
       ];
