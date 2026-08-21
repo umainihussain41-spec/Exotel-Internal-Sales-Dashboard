@@ -3985,6 +3985,7 @@ function canUseUnitPricing() {
 // way of putting more than one thing on a quote. The two answer the same need
 // and would fight over the same job, so nobody sees both.
 function canUseSubSkus() {
+  if (QG.bundleMergeMode) return false;
   return !!(QG.features && QG.features.sub_skus);
 }
 
@@ -4074,10 +4075,11 @@ function renderSkuSelector() {
     filtered = SKUS.filter(s => !s.hidden);
   }
   // Sub-SKUs replace Bundle Package for the reps who have them: one way to put
-  // a line on a proposal is enough, and the two would fight over the same job.
-  // A quote already saved in Bundle Package mode still opens either way - only
-  // the way in is hidden, never the engine that renders it.
-  if (canUseSubSkus() && !QG.bundleMergeMode) filtered = filtered.filter(s => !s.isBundleMerge);
+  // a line on a proposal is enough. A quote already saved in Bundle Package
+  // mode still opens either way - only the way in is hidden, never the engine
+  // that renders it, and canUseSubSkus() stands down while that mode is on so
+  // the card is there to toggle back out of.
+  if (canUseSubSkus()) filtered = filtered.filter(s => !s.isBundleMerge);
 
   const compareCapable = ['voice_exotel_std', 'voice_exotel_user', 'voice_veeno_std', 'voice_veeno_user', 'sip_veeno'];
   const CMP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 4 7 4"/><polyline points="7 20 17 20"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><polyline points="11 8 7 12 11 16"/><polyline points="13 8 17 12 13 16"/></svg>`;
@@ -12516,10 +12518,14 @@ function setupQuoteGenerator() {
   const dateEl = document.getElementById('q-date');
   if (dateEl) dateEl.textContent = today();
 
-  // Exclusive features (Rate Card) - the unit-price buttons live in the SKU
-  // form, so re-render it once the entitlement lands.
+  // Exclusive features decide which affordances a rep gets: the unit-price
+  // buttons and the sub-SKU editor in the SKU form, the sub-SKU controls on the
+  // proposal, and whether Bundle Package is on offer at all. The flags land
+  // after the first paint, so every surface that asks is redrawn once they do.
   loadFeatureFlags().then(() => {
+    renderSkuSelector();
     if (QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
+    updatePreview();
   });
 
   // Admin tabs
