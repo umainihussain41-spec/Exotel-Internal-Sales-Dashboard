@@ -426,7 +426,20 @@ function hiddenRowMatch(item, section, label) {
   return hid[byField] ? byField : null;
 }
 function isFieldHidden(item, label) {
-  return !!(item && item.hiddenRows && item.hiddenRows[hiddenFieldKey(label)]);
+  return !!(item && item.hiddenRows && hiddenKeysFor(item, label).length);
+}
+// Every key currently hiding this field's line, in either form. Quotes saved
+// while the proposal side wrote section keys still resolve here, so no line can
+// be out with nothing on the form saying so.
+function hiddenKeysFor(item, label) {
+  const hid = (item && item.hiddenRows) || {};
+  const want = rowLabelMatchKey(label);
+  return Object.keys(hid).filter(k => {
+    if (!hid[k]) return false;
+    if (k.charAt(0) === '~') return k === hiddenFieldKey(label);
+    const bar = k.indexOf('|');
+    return bar >= 0 && rowLabelMatchKey(k.slice(bar + 1)) === want;
+  });
 }
 // Some fields never print a line of their own: toggles that steer the rest of
 // the form, gifted top-ups the line above folds in ("3 + 2 Users (Free)"), a
@@ -464,33 +477,6 @@ function stripEmptySections(tableHTML) {
 
 const ROW_HIDE_ICON = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.4 1.4 L8.6 8.6 M8.6 1.4 L1.4 8.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
 
-window.hideProposalRow = function (itemId, encKey) {
-  const item = QG.skuItems.find(i => i.id === itemId);
-  if (!item) return;
-  if (!item.hiddenRows) item.hiddenRows = {};
-  item.hiddenRows[decodeURIComponent(encKey)] = true;
-  updatePreview();
-};
-
-// The chip carries whichever key matched, so this restores a line hidden from
-// the config panel just as well as one hidden from the proposal itself.
-window.showProposalRow = function (itemId, encKey) {
-  const item = QG.skuItems.find(i => i.id === itemId);
-  if (!item || !item.hiddenRows) return;
-  delete item.hiddenRows[decodeURIComponent(encKey)];
-  QG._dirty = true;
-  renderSkuForm(QG.currentSku, QG.currentTier);
-  updatePreview();
-};
-
-window.showAllProposalRows = function (itemId) {
-  const item = QG.skuItems.find(i => i.id === itemId);
-  if (!item) return;
-  item.hiddenRows = {};
-  renderSkuForm(QG.currentSku, QG.currentTier);
-  updatePreview();
-};
-
 // ── The same act from the config panel ──────────────────────────────────────
 // The field stays on the form and keeps feeding the subtotal: hiding governs
 // what the client reads, waiving governs what they pay. Only the proposal line
@@ -508,28 +494,11 @@ window.hideSkuField = function (itemId, encLabel) {
 window.showSkuField = function (itemId, encLabel) {
   const item = QG.skuItems.find(i => i.id === itemId);
   if (!item || !item.hiddenRows) return;
-  delete item.hiddenRows[hiddenFieldKey(decodeURIComponent(encLabel))];
+  hiddenKeysFor(item, decodeURIComponent(encLabel)).forEach(k => { delete item.hiddenRows[k]; });
   QG._dirty = true;
   renderSkuForm(QG.currentSku, QG.currentTier);
   updatePreview();
 };
-
-// The strip sits under the card's table and is the only way back: it names each
-// line that was taken out, so nothing can be hidden and then forgotten.
-function hiddenLinesStrip(item, hiddenLines) {
-  if (!hiddenLines.length) return '';
-  const seen = new Set();
-  const uniq = hiddenLines.filter(h => (seen.has(h.key) ? false : seen.add(h.key)));
-  const chips = uniq.map(h => `
-    <button type="button" class="q-hidden-chip" title="Put this line back"
-      onclick="window.showProposalRow('${item.id}','${rowKeyAttr(h.key)}')">${sanitize(h.label)}<span class="q-hidden-chip-plus">+</span></button>`).join('');
-  return `
-    <div class="q-hidden-strip">
-      <span class="q-hidden-strip-lead">${uniq.length} line${uniq.length > 1 ? 's' : ''} hidden</span>
-      <span class="q-hidden-chips">${chips}</span>
-      ${uniq.length > 1 ? `<button type="button" class="q-hidden-restore-all" onclick="window.showAllProposalRows('${item.id}')">Restore all</button>` : ''}
-    </div>`;
-}
 
 // ── Per-row label overrides ─────────────────────────────────────────────────
 // Bundle Package mode let reps rename any line in the merged table. The same
@@ -6760,20 +6729,24 @@ function _renderBundleItemsHTML(bundleItems) {
       const vMonthsS = sipBaseValidity;
       const effVMonthsS = vMonthsS + sipExtraValidity;
 
+      // Both rates are editable on the form and both feed the subtotal, so the
+      // printed lines have to read the rep's figure, not the list price.
+      const extNumCostS = getSafeNum('extra_number') || 499;
       if (!removStdSip) {
         tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
-        tableHTML += indRow('Extra Number Cost', `${fmtRupee(499)} ${perUnit('/number/month')}`);
+        tableHTML += indRow('Extra Number Cost', `${fmtRupee(extNumCostS)} ${perUnit('/number/month')}`);
         const paidNumsS = getSafeNum('num_paid_numbers') || 0;
         if (paidNumsS > 0) {
           tableHTML += stdRow('Extra Numbers', `${paidNumsS} Number(s)`);
-          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${effVMonthsS} months × ${fmtRupee(499)} = <strong>${fmtRupee(paidNumsS * effVMonthsS * 499)}</strong>`);
+          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${effVMonthsS} months × ${fmtRupee(extNumCostS)} = <strong>${fmtRupee(paidNumsS * effVMonthsS * extNumCostS)}</strong>`);
         }
       }
       const didNums2 = getSafeNum('did_numbers') || 0;
       if (didNums2 > 0) {
+        const didCostS = getSafeNum('did_cost') || 1500;
         tableHTML += stdRow('Mobile DID Numbers', `${didNums2} ${didNoun(item)}`);
-        tableHTML += indRow(didRateLabel(item), `${fmtRupee(1500)} ${perUnit(didPerUnit(item))}`);
-        tableHTML += indRow('Calculation', `${didNums2} ${didNoun(item)} × ${vMonthsS} months × ${fmtRupee(1500)} = <strong>${fmtRupee(didNums2 * vMonthsS * 1500)}</strong>`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(didCostS)} ${perUnit(didPerUnit(item))}`);
+        tableHTML += indRow('Calculation', `${didNums2} ${didNoun(item)} × ${vMonthsS} months × ${fmtRupee(didCostS)} = <strong>${fmtRupee(didNums2 * vMonthsS * didCostS)}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Charges');
@@ -8397,7 +8370,7 @@ function updatePreview() {
       tableRows += cmpRow('Extra User Cost', colData.map(() => fmtR(199) + perUnit('/user/month')), false, true);
       tableRows += cmpRow('Numbers', [], true);
       tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
-      tableRows += cmpRow('Extra Number Cost', colData.map(() => fmtR(499) + perUnit('/number/month')), false, true);
+      tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number') || 499) + perUnit('/number/month')), false, true);
       tableRows += cmpRow('Call Credits & Charges', [], true);
       tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
         const base = getSN('credits');
@@ -8708,18 +8681,24 @@ function updatePreview() {
     let isFirstSec = true;
     const hasHTML = (s) => typeof s === 'string' && /<[a-zA-Z]/.test(s);
 
-    // Lines this rep took out of the card, collected as the rows render so the
-    // strip under the table can offer them back by name. `parentHidden` carries
-    // a hidden row's fate down to the sub-rows that only explain it.
-    const hiddenLines = [];
+    // A line taken out from a row is hidden by the same key the config panel
+    // uses, so the panel is the single place that says what is out and puts it
+    // back - the preview stays a clean read of the proposal. A row the panel
+    // carries no control for (a bare "Calculation" working) gets no control
+    // here either: it would go out with nothing offering it back.
+    // `parentHidden` carries a hidden row's fate down to the sub-rows that
+    // only explain it.
+    let anyHidden = false;
     let currentSection = 'Plan Details';
     let parentHidden = false;
-    const hideBtn = (rawLbl) => `<button type="button" class="q-row-hide" title="Hide this line from the proposal"
+    const restorableLabels = new Set(
+      fields.filter(f => fieldPrintsOwnLine(f, item)).map(f => rowLabelMatchKey(f.label))
+    );
+    const hideBtn = (rawLbl) => restorableLabels.has(rowLabelMatchKey(rawLbl))
+      ? `<button type="button" class="q-row-hide" title="Hide this line from the proposal"
       aria-label="Hide ${sanitize(rowLabel(item, rawLbl))}"
-      onclick="window.hideProposalRow('${item.id}','${rowKeyAttr(hiddenRowKey(currentSection, rawLbl))}')">${ROW_HIDE_ICON}</button>`;
-    const takeOut = (rawLbl, key) => {
-      hiddenLines.push({ key, label: rowLabel(item, rawLbl) });
-    };
+      onclick="window.hideSkuField('${item.id}','${rowKeyAttr(rawLbl)}')">${ROW_HIDE_ICON}</button>`
+      : '';
 
     const secRow = (lbl) => {
       currentSection = lbl;
@@ -8730,8 +8709,7 @@ function updatePreview() {
     };
     const stdRow = (rawLbl, val, isWaived) => {
       const lbl = rowLabel(item, rawLbl);
-      const hk = hiddenRowMatch(item, currentSection, rawLbl);
-      if (hk) { parentHidden = true; takeOut(rawLbl, hk); return ''; }
+      if (hiddenRowMatch(item, currentSection, rawLbl)) { parentHidden = true; anyHidden = true; return ''; }
       parentHidden = false;
       const disp = isWaived ? W : hasHTML(val) ? val : sanitize(String(val ?? '-'));
       return `<tr class="q-hideable"><td class="sku-row-name">${sanitize(lbl)}</td><td class="q-val">${disp}${hideBtn(rawLbl)}</td></tr>`;
@@ -8739,8 +8717,7 @@ function updatePreview() {
     const indRow = (rawLbl, val) => {
       const lbl = rowLabel(item, rawLbl);
       if (parentHidden) return '';   // the line this working explains is gone
-      const hk = hiddenRowMatch(item, currentSection, rawLbl);
-      if (hk) { takeOut(rawLbl, hk); return ''; }
+      if (hiddenRowMatch(item, currentSection, rawLbl)) { anyHidden = true; return ''; }
       const disp = hasHTML(val) ? val : sanitize(String(val ?? '-'));
       return `<tr class="sub-row q-hideable"><td>${sanitize(lbl)}</td><td class="q-val">${disp}${hideBtn(rawLbl)}</td></tr>`;
     };
@@ -8957,20 +8934,24 @@ function updatePreview() {
       const vMonthsS = sipBaseValidity;
       const effVMonthsS = vMonthsS + sipExtraValidity;
 
+      // Both rates are editable on the form and both feed the subtotal, so the
+      // printed lines have to read the rep's figure, not the list price.
+      const extNumCostS = getSafeNum('extra_number') || 499;
       if (!removStdSip) {
         tableHTML += stdRow('Free Numbers', getVal('free_numbers') + ' Number(s) (Free)');
-        tableHTML += indRow('Extra Number Cost', `${fmtRupee(499)} ${perUnit('/number/month')}`);
+        tableHTML += indRow('Extra Number Cost', `${fmtRupee(extNumCostS)} ${perUnit('/number/month')}`);
         const paidNumsS = getSafeNum('num_paid_numbers') || 0;
         if (paidNumsS > 0) {
           tableHTML += stdRow('Extra Numbers', `${paidNumsS} Number(s)`);
-          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${effVMonthsS} months × ${fmtRupee(499)} = <strong>${fmtRupee(paidNumsS * effVMonthsS * 499)}</strong>`);
+          tableHTML += indRow('Calculation', `${paidNumsS} numbers × ${effVMonthsS} months × ${fmtRupee(extNumCostS)} = <strong>${fmtRupee(paidNumsS * effVMonthsS * extNumCostS)}</strong>`);
         }
       }
       const didNums2 = getSafeNum('did_numbers') || 0;
       if (didNums2 > 0) {
+        const didCostS = getSafeNum('did_cost') || 1500;
         tableHTML += stdRow('Mobile DID Numbers', `${didNums2} ${didNoun(item)}`);
-        tableHTML += indRow(didRateLabel(item), `${fmtRupee(1500)} ${perUnit(didPerUnit(item))}`);
-        tableHTML += indRow('Calculation', `${didNums2} ${didNoun(item)} × ${vMonthsS} months × ${fmtRupee(1500)} = <strong>${fmtRupee(didNums2 * vMonthsS * 1500)}</strong>`);
+        tableHTML += indRow(didRateLabel(item), `${fmtRupee(didCostS)} ${perUnit(didPerUnit(item))}`);
+        tableHTML += indRow('Calculation', `${didNums2} ${didNoun(item)} × ${vMonthsS} months × ${fmtRupee(didCostS)} = <strong>${fmtRupee(didNums2 * vMonthsS * didCostS)}</strong>`);
       }
 
       tableHTML += secRow('Call Credits & Charges');
@@ -9503,8 +9484,7 @@ function updatePreview() {
       tableHTML += '</tbody>';
     }
     if (itemHasUnitOnly(item)) tableHTML = stripDeadCalcRows(tableHTML);
-    if (hiddenLines.length) tableHTML = stripEmptySections(tableHTML);
-    const hiddenStrip = hiddenLinesStrip(item, hiddenLines);
+    if (anyHidden) tableHTML = stripEmptySections(tableHTML);
 
     // ── International SKUs: USD subtotal (not added to INR grand total) ─────
     if (isUsdSku(sk)) {
@@ -9536,7 +9516,6 @@ function updatePreview() {
           <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
           ${tableHTML}
         </table>
-        ${hiddenStrip}
         <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
           ${setupV > 0 ? `<div style="font-size:0.8rem; color:#64748b;">Setup Charges: $${setupV.toFixed(2)}</div>` : ''}
           <div style="font-size:0.8rem; color:#64748b;">Subtotal: <strong>$${baseV.toFixed(2)}</strong></div>
@@ -9618,7 +9597,6 @@ function updatePreview() {
         <thead><tr><th style="width: 45%;">Component</th><th>Details</th></tr></thead>
         ${tableHTML}
       </table>
-      ${hiddenStrip}
       ${subtotal > 0 ? (QG.compareMode ? `
       <div style="margin-top:12px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e0f2fe; text-align:right;">
         <div style="font-size:0.8rem; color:#64748b;">Subtotal: ${fmtRupee(subtotal)}</div>
@@ -9795,7 +9773,7 @@ window.printQuote = async function () {
      /* ── Editing affordances the client must never see ─────────────
         The PDF is rendered with screen media emulation, so the stylesheet's
         own @media print rules never fire here and each one has to be repeated. */
-     .q-row-hide, .q-hidden-strip, .subsku-toggle-btn, .bundle-x-btn { display: none !important; }
+     .q-row-hide, .subsku-toggle-btn, .bundle-x-btn { display: none !important; }
      .quote-sku-table td.q-val { padding-right: 8px !important; }
 
      /* ── Totals ────────────────────────────────────────────────── */
@@ -11124,20 +11102,21 @@ window.confirmGenerateProforma = async function () {
           lines.push(`Extra User Cost: ${fmtRupee(199)}/user/month`);
           
           const removStd = getSN('remove_std_numbers') || 0;
+          const extNumCostS = getSN('extra_number') || 499;
           if (!removStd) {
             lines.push(`Free Numbers: ${getV('free_numbers')} Number(s) (Free)`);
-            lines.push(`Extra Number Cost: ${fmtRupee(499)}/number/month`);
+            lines.push(`Extra Number Cost: ${fmtRupee(extNumCostS)}/number/month`);
             
             const paidNums = getSN('num_paid_numbers') || 0;
             if (paidNums > 0) {
               const effVal = validity + extraValidity;
-              lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effVal * 499)} for ${effVal} months)`);
+              lines.push(`Extra Numbers: ${paidNums} Number(s) (Total cost: ${fmtRupee(paidNums * effVal * extNumCostS)} for ${effVal} months)`);
             }
           }
           
           const didNums = getSN('did_numbers') || 0;
           if (didNums > 0) {
-            lines.push(`Mobile DID Numbers: ${didNums} DID(s) @ ${fmtRupee(1500)}/DID/month`);
+            lines.push(`Mobile DID Numbers: ${didNums} DID(s) @ ${fmtRupee(getSN('did_cost') || 1500)}/DID/month`);
           }
           
           const baseCredits = getSN('credits');
