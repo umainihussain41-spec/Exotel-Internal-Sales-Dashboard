@@ -1404,12 +1404,85 @@ window.switchLogTab = function(tab) {
 
 window.switchAdminLogTab = function(tab) {
     _currentAdminLogTab = tab;
-    document.querySelectorAll('#altab-activity, #altab-quotes, #altab-online').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('#altab-activity, #altab-quotes, #altab-online, #altab-subskus').forEach(b => b.classList.remove('active'));
     document.getElementById(`altab-${tab}`)?.classList.add('active');
     document.getElementById('admin-log-activity-panel').classList.toggle('hidden', tab !== 'activity');
     document.getElementById('admin-log-quotes-panel').classList.toggle('hidden', tab !== 'quotes');
     document.getElementById('admin-log-online-panel').classList.toggle('hidden', tab !== 'online');
+    document.getElementById('admin-log-subskus-panel')?.classList.toggle('hidden', tab !== 'subskus');
     if (tab === 'online') loadOnlineUsers();
+    if (tab === 'subskus') loadSubSkuLibrary();
+};
+
+// ── Sub-SKU library (admin only) ─────────────────────────────────────────────
+// One row per distinct line a rep wrote by hand, credited to whoever wrote it
+// first. Reps never see this: showing them the list would turn a one-off into a
+// menu, and the value of the list is that each entry was somebody's own idea.
+window.loadSubSkuLibrary = async function() {
+    const list = document.getElementById('admin-subskus-list');
+    if (!list) return;
+    list.innerHTML = `<div style="text-align:center;padding:32px;color:#94a3b8;font-size:0.9rem;">Loading…</div>`;
+
+    try {
+        const res = await fetch('/api/admin/sub-skus');
+        if (!res.ok) {
+            list.innerHTML = `<div style="text-align:center;padding:32px;color:#ef4444;font-size:0.88rem;">Access denied.</div>`;
+            return;
+        }
+        const rows = await res.json();
+        if (!rows.length) {
+            list.innerHTML = `<div style="text-align:center;padding:40px;color:#94a3b8;font-size:0.9rem;line-height:1.6;">
+                Nothing yet.<br>A line appears here the first time a rep writes one on a quote they generate.</div>`;
+            return;
+        }
+
+        const PRESET_LABELS = {
+            one_time: 'One-time fee', recurring: 'Monthly recurring', qty_rate: 'Quantity × rate',
+            rate: 'Rate only', duration: 'Validity', text: 'Free text', waived: 'Waived',
+        };
+        const when = (iso) => {
+            if (!iso) return '';
+            const d = new Date(iso);
+            return isNaN(d) ? '' : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+        };
+
+        list.innerHTML = rows.map(r => {
+            let sample = {};
+            try { sample = JSON.parse(r.sample || '{}'); } catch (_) {}
+            const money = (v) => (v === null || v === undefined || v === '' || Number(v) === 0)
+                ? null
+                : '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(v));
+            const firstAmount = money(r.shape === 'qty_rate' ? sample.rate : sample.amount);
+
+            const tags = [];
+            tags.push(PRESET_LABELS[r.preset] || r.preset);
+            if (r.per_month) tags.push('× months');
+            if (r.per_unit) tags.push('× ' + r.per_unit);
+            tags.push(r.billed ? 'billed' : 'not billed');
+
+            return `
+            <div style="display:flex; align-items:flex-start; gap:14px; padding:13px 16px; background:#fff; border:1px solid #e2e8f0; border-radius:9px;">
+              <div style="flex-shrink:0; min-width:44px; text-align:center;">
+                <div style="font-size:1.15rem; font-weight:800; color:#7c3aed; line-height:1;">${r.times_used}</div>
+                <div style="font-size:0.62rem; font-weight:700; color:#a78bfa; text-transform:uppercase; letter-spacing:0.04em; margin-top:2px;">used</div>
+              </div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:0.9rem; color:#0f172a;">${sanitizeHTML(r.label)}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:6px;">
+                  ${tags.map(t => `<span style="font-size:0.68rem;font-weight:600;color:#475569;background:#f1f5f9;border-radius:20px;padding:2px 8px;">${sanitizeHTML(t)}</span>`).join('')}
+                  ${r.unit ? `<span style="font-size:0.68rem;font-weight:600;color:#0369a1;background:#e0f2fe;border-radius:20px;padding:2px 8px;">per ${sanitizeHTML(r.unit)}</span>` : ''}
+                  ${firstAmount ? `<span style="font-size:0.68rem;font-weight:600;color:#15803d;background:#dcfce7;border-radius:20px;padding:2px 8px;">first written at ${sanitizeHTML(firstAmount)}</span>` : ''}
+                </div>
+                <div style="font-size:0.74rem; color:#94a3b8; margin-top:7px;">
+                  First by <strong style="color:#64748b;">${sanitizeHTML(r.first_by)}</strong>${when(r.first_at) ? ' on ' + when(r.first_at) : ''}
+                  ${r.times_used > 1 && r.last_by ? ` · last ${sanitizeHTML(r.last_by)}${when(r.last_at) ? ' on ' + when(r.last_at) : ''}` : ''}
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        list.innerHTML = `<div style="text-align:center;padding:32px;color:#ef4444;font-size:0.88rem;">Failed to load the sub-SKU library.</div>`;
+    }
 };
 
 // ── Online Users panel ────────────────────────────────────────────────────────
@@ -1760,7 +1833,7 @@ function setupAdminPanel() {
 }
 
 // ── Exclusive feature access control ─────────────────────────────────────────
-const FEATURE_LABELS = { unit_pricing: 'Unit Pricing' };
+const FEATURE_LABELS = { unit_pricing: 'Unit Pricing', sub_skus: 'Sub-SKUs' };
 
 async function fetchFeatureGrants() {
     const listEl = document.getElementById('feature-grants-list');

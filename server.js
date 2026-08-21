@@ -116,6 +116,26 @@ db.exec(`
         created_at  TEXT NOT NULL
     );
 
+    -- Sub-SKUs reps have written on their quotes. One row per distinct line,
+    -- crediting whoever wrote it first: the point is to see what the SKU sheet
+    -- keeps failing to cover, not to keep a copy of every quote's lines.
+    CREATE TABLE IF NOT EXISTS sub_sku_library (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        signature   TEXT NOT NULL UNIQUE,
+        label       TEXT NOT NULL,
+        preset      TEXT NOT NULL,
+        shape       TEXT NOT NULL,
+        per_month   INTEGER NOT NULL DEFAULT 0,
+        per_unit    TEXT,
+        billed      INTEGER NOT NULL DEFAULT 0,
+        unit        TEXT,
+        sample      TEXT,
+        first_by    TEXT NOT NULL,
+        first_at    TEXT NOT NULL,
+        last_by     TEXT,
+        last_at     TEXT,
+        times_used  INTEGER NOT NULL DEFAULT 1
+    );
     -- Exclusive quote-generator features an admin can hand to specific reps.
     CREATE TABLE IF NOT EXISTS feature_grants (
         id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,7 +153,7 @@ db.exec(`
 // The unlimited plans (and the channel calculator that sizes them) used to sit
 // here as 'unlimited_plans'. They are open to every rep now, so the grant is
 // gone and its old rows are swept below.
-const EXCLUSIVE_FEATURES = ['unit_pricing'];
+const EXCLUSIVE_FEATURES = ['unit_pricing', 'sub_skus'];
 
 // The table is created at boot, but a database file carried over from an older
 // deploy (Railway's volume, or a local logs.db copied from elsewhere) can reach
@@ -921,6 +941,113 @@ app.post('/api/admin/sku-requests/:id/resolve', ensureAuthenticated, ensureAdmin
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Failed to resolve SKU request' });
+    }
+});
+
+// ─── Sub-SKU library ─────────────────────────────────────────────────────────
+// A rep writing a line of their own on a quote is telling us the SKU sheet is
+// missing something. Reps get no library and no reuse - a sub-SKU is written
+// for the quote it appears on and goes with it - but each distinct one is
+// recorded here once, credited to whoever wrote it first, so an admin can see
+// what keeps being asked for and decide whether it should become a real field.
+//
+// "Distinct" deliberately ignores the money: an onboarding fee at 25,000 and
+// one at 30,000 are the same idea, and collapsing them is what makes the list
+// a signal rather than a transcript. The first amount is kept as a sample.
+//
+// The table is created at boot, but a database file carried over from an older
+// deploy can reach a query first, so it is also created on demand.
+function ensureSubSkuLibraryTable() {
+    db.exec(`CREATE TABLE IF NOT EXISTS sub_sku_library (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        signature   TEXT NOT NULL UNIQUE,
+        label       TEXT NOT NULL,
+        preset      TEXT NOT NULL,
+        shape       TEXT NOT NULL,
+        per_month   INTEGER NOT NULL DEFAULT 0,
+        per_unit    TEXT,
+        billed      INTEGER NOT NULL DEFAULT 0,
+        unit        TEXT,
+        sample      TEXT,
+        first_by    TEXT NOT NULL,
+        first_at    TEXT NOT NULL,
+        last_by     TEXT,
+        last_at     TEXT,
+        times_used  INTEGER NOT NULL DEFAULT 1
+    )`);
+}
+ensureSubSkuLibraryTable();
+
+// Computed here rather than trusted from the browser, so two reps who describe
+// the same line the same way always collide on the same row.
+function subSkuSignature(line) {
+    const label = String(line.label || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    const unit = String(line.unit || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+    return [
+        label,
+        String(line.shape || ''),
+        line.perMonth ? 'm' : '-',
+        String(line.perUnit || '-'),
+        line.billed ? 'b' : '-',
+        unit,
+    ].join('|');
+}
+
+// POST /api/sub-skus/log   { lines: [...] }
+// Called when a quote is generated. Unnamed lines are skipped: a half-typed
+// row is not yet anybody's idea.
+app.post('/api/sub-skus/log', ensureAuthenticated, (req, res) => {
+    const email = req.user?.emails?.[0]?.value || 'unknown';
+    const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+    const now = new Date().toISOString();
+    let created = 0, bumped = 0;
+    try {
+        ensureSubSkuLibraryTable();
+        const findOne = db.prepare(`SELECT id FROM sub_sku_library WHERE signature = ?`);
+        const insert = db.prepare(`INSERT INTO sub_sku_library
+            (signature, label, preset, shape, per_month, per_unit, billed, unit, sample, first_by, first_at, last_by, last_at, times_used)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+            ON CONFLICT(signature) DO UPDATE SET
+                times_used = times_used + 1,
+                last_by = excluded.last_by,
+                last_at = excluded.last_at`);
+        const seen = new Set();
+        for (const line of lines) {
+            const label = String(line?.label || '').trim();
+            if (!label) continue;
+            const sig = subSkuSignature({ ...line, label });
+            if (seen.has(sig)) continue;   // one quote naming it twice is still one idea
+            seen.add(sig);
+            const existed = findOne.get(sig);
+            insert.run(
+                sig, label,
+                String(line.preset || 'one_time'), String(line.shape || 'amount'),
+                line.perMonth ? 1 : 0, line.perUnit ? String(line.perUnit) : null,
+                line.billed ? 1 : 0, line.unit ? String(line.unit) : null,
+                JSON.stringify({
+                    amount: line.amount, qty: line.qty, rate: line.rate,
+                    months: line.months, text: line.text, rateSuffix: line.rateSuffix,
+                }),
+                email, now, email, now
+            );
+            if (existed) bumped++; else created++;
+        }
+        if (created) addLog('SUB_SKU_NEW', 'SUCCESS', created + ' new sub-SKU line(s) recorded from a quote', email);
+        res.json({ created, bumped });
+    } catch (e) {
+        console.error('sub-sku log failed:', e.message);
+        res.status(500).json({ error: 'Failed to record sub-SKUs' });
+    }
+});
+
+// GET /api/admin/sub-skus - the library itself. Admins only: a rep seeing the
+// list would turn a one-off into a menu, which is the opposite of the point.
+app.get('/api/admin/sub-skus', ensureAuthenticated, ensureAdmin, (req, res) => {
+    try {
+        ensureSubSkuLibraryTable();
+        res.json(db.prepare(`SELECT * FROM sub_sku_library ORDER BY times_used DESC, first_at DESC`).all());
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read the sub-SKU library' });
     }
 });
 
