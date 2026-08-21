@@ -1237,86 +1237,8 @@
     text-transform: none;
 }
 
-/* Nothing is hidden silently: every line taken out is named here, one click
-   from coming back. */
-.q-hidden-strip {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 7px;
-    margin: 8px 2px 0;
-    padding: 7px 10px;
-    background: #f8fafc;
-    border: 1px dashed #cbd5e1;
-    border-radius: 7px;
-    font-size: 0.72rem;
-    color: #64748b;
-}
-
-.q-hidden-strip-lead {
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    font-size: 0.66rem;
-    color: #94a3b8;
-}
-
-.q-hidden-chips {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 5px;
-}
-
-.q-hidden-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 2px 8px;
-    border: 1px solid #e2e8f0;
-    border-radius: 20px;
-    background: #fff;
-    color: #475569;
-    font-size: 0.7rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: border-color 0.14s, background 0.14s, color 0.14s;
-}
-
-.q-hidden-chip:hover {
-    border-color: #7dd3fc;
-    background: #f0f9ff;
-    color: #0369a1;
-}
-
-.q-hidden-chip-plus {
-    font-size: 0.9rem;
-    line-height: 1;
-    color: #94a3b8;
-}
-
-.q-hidden-chip:hover .q-hidden-chip-plus {
-    color: #0284c7;
-}
-
-.q-hidden-restore-all {
-    margin-left: auto;
-    padding: 2px 6px;
-    border: none;
-    border-radius: 4px;
-    background: none;
-    color: #0284c7;
-    font-size: 0.7rem;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.q-hidden-restore-all:hover {
-    background: #e0f2fe;
-}
-
 @media print {
-    .q-row-hide,
-    .q-hidden-strip { display: none !important; }
+    .q-row-hide { display: none !important; }
     .quote-sku-table td.q-val { padding-right: 8px; }
 }
 
