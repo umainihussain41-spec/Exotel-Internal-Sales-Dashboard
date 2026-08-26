@@ -360,11 +360,10 @@ function discWrap(v, fmt) {
 const SUB_SKU_PRESETS = {
   one_time:  { label: 'One-time fee',      hint: 'A flat charge, billed once',            shape: 'amount',   perMonth: false, billed: true  },
   recurring: { label: 'Monthly recurring', hint: 'A charge that repeats every month',     shape: 'amount',   perMonth: true,  billed: true  },
-  qty_rate:  { label: 'Quantity x rate',   hint: 'A count at a price each',               shape: 'qty_rate', perMonth: true,  billed: true  },
-  rate:      { label: 'Rate only',         hint: 'A per-something price, not totalled',   shape: 'rate',     perMonth: false, billed: false },
+  qty_rate:  { label: 'Quantity x rate',   hint: 'A count at a paise rate each',          shape: 'qty_rate', perMonth: true,  billed: true  },
+  rate:      { label: 'Rate only',         hint: 'A per-something rate in paise',         shape: 'rate',     perMonth: false, billed: false },
   duration:  { label: 'Validity',          hint: 'A period, in months',                   shape: 'duration', perMonth: false, billed: false },
   text:      { label: 'Free text',         hint: 'Words rather than a number',            shape: 'text',     perMonth: false, billed: false },
-  waived:    { label: 'Waived',            hint: 'Prints as a tick, costs nothing',       shape: 'waived',   perMonth: false, billed: false },
 };
 // The per-unit multipliers a line can hang off, read from the plan itself so a
 // "per user" line follows the head-count the rep typed rather than a copy of it.
@@ -376,7 +375,19 @@ const SUB_SKU_UNITS = {
 };
 
 function customLines(item) {
-  return Array.isArray(item && item.customLines) ? item.customLines : [];
+  const lines = Array.isArray(item && item.customLines) ? item.customLines : [];
+  // The Waived preset predates a zero amount reading as Waived by itself, so it
+  // said twice what one field now says once. A line saved under it IS a one-time
+  // fee at zero, and is rewritten to one here - the single door every reader of
+  // these lines comes through - so an old quote keeps printing Waived and the
+  // rep can put a price on the line without first changing what kind it is.
+  lines.forEach(l => {
+    if (l && l.shape === 'waived') {
+      l.shape = 'amount'; l.preset = 'one_time';
+      l.amount = 0; l.perMonth = false; l.billed = true;
+    }
+  });
+  return lines;
 }
 // A blank line of the given preset, ready for the rep to fill in.
 function makeCustomLine(preset, section) {
@@ -406,7 +417,11 @@ function customLineUnitCount(item, line) {
 // carries no money - which is exactly when no calculation row should print.
 function customLineTerms(item, line, months) {
   if (!line.billed) return null;
-  const price = Number(line.shape === 'qty_rate' ? line.rate : line.amount) || 0;
+  // A rate is typed in paise and an amount in rupees, so the quantity line's
+  // rate comes down to rupees before anything multiplies by it.
+  const price = line.shape === 'qty_rate'
+    ? (Number(line.rate) || 0) / 100
+    : (Number(line.amount) || 0);
   if (!price) return null;
   const terms = [];
   if (line.shape === 'qty_rate') terms.push({ n: Number(line.qty) || 0, label: line.unit || 'units' });
@@ -421,6 +436,12 @@ function customLineAmount(item, line, months) {
 }
 function customLinesSubtotal(item, months) {
   return customLines(item).reduce((sum, l) => sum + customLineAmount(item, l, months), 0);
+}
+// The month count a sub-SKU multiplies over. The layout pass worked this out
+// for itself; the comparison tables need the same answer, so it lives here.
+function customLineMonths(item) {
+  const m = parseFloat(item && item.values ? (item.values['num_months'] ?? item.values['validity'] ?? 1) : 1);
+  return isNaN(m) ? 1 : m;
 }
 
 // ── Canonical field readers ─────────────────────────────────────────────────
@@ -560,6 +581,15 @@ function stripEmptySections(tableHTML) {
   });
   return kept.join('</tbody>');
 }
+
+// A tick has to be drawn, not typed. The PDF is rendered by headless Chromium
+// in a container that carries no symbol font, so a literal tick character comes
+// out blank there while the browser preview shows it perfectly well - which is
+// why the mark survived on some SKUs and vanished on others. Every Waived/Free
+// mark on the proposal goes through these, so all of them draw the same tick.
+const WAIVED_TICK_SVG = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+const WAIVED_HTML = '<span class="waived-text">' + WAIVED_TICK_SVG + ' Waived</span>';
+const FREE_HTML = '<span class="waived-text">' + WAIVED_TICK_SVG + ' Free</span>';
 
 const ROW_HIDE_ICON = '<svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true"><path d="M1.4 1.4 L8.6 8.6 M8.6 1.4 L1.4 8.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>';
 
@@ -1826,7 +1856,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
               <em>Platform/API fee charges:</em> 4 x API Fee (as messages were successfully sent via our platform)
             </li>
             <li><strong>Scenario 3:</strong> A business sent 4 marketing messages, out of which 3 got delivered.<br>
-              <em>WhatsApp Rate charges:</em> 3 x 0.7846 (since only 3 messages were delivered)<br>
+              <em>WhatsApp Rate charges:</em> 3 x 0.8631 (since only 3 messages were delivered)<br>
               <em>Platform/API fee charges:</em> 4 x API Fee (as messages were successfully sent via our platform)
             </li>
           </ul>
@@ -2721,8 +2751,9 @@ function getSkuFieldsBase(skuKey, tier) {
   const sms_field = { id: 'sms_cost', label: 'SMS Cost (p/msg)', value: 21, locked: true, stopType: 'lower', stopVal: 17, note: 'SMS Add-on' };
   const wa_fields = [
     { id: 'wa_utility', label: 'WhatsApp Utility (p/msg)', value: 11.5, locked: true, stopType: null, nonEditable: true, note: 'WA Add-on' },
-    { id: 'wa_promo', label: 'WhatsApp Promo (p/msg)', value: 86, locked: true, stopType: null, nonEditable: true, note: 'WA Add-on' },
-    { id: 'wa_api', label: 'WhatsApp API Charge (p/msg, both Utility & Promo)', value: 6, locked: true, stopType: 'lower', stopVal: 4, note: 'WA Add-on' },
+    { id: 'wa_promo', label: 'WhatsApp Marketing (p/msg)', value: 86.31, locked: true, stopType: null, nonEditable: true, note: 'WA Add-on' },
+    { id: 'wa_auth', label: 'WhatsApp Authentication (p/msg)', value: 11.5, locked: true, stopType: null, nonEditable: true, note: 'WA Add-on' },
+    { id: 'wa_api', label: 'WhatsApp API Charge (p/msg, all message types)', value: 6, locked: true, stopType: 'lower', stopVal: 4, note: 'WA Add-on' },
   ];
 
   switch (skuKey) {
@@ -2953,11 +2984,12 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'did_cost', label: 'Own Number (BYON) Rate (₹/number/month)', value: 1500, locked: false, stopType: 'lower', stopVal: 1000 },
         { id: 'credits', label: 'WA Credits (₹)', value: 10000, locked: true, stopType: 'lower', stopVal: 5000 },
         { id: 'wa_utility', label: 'Utility Msg (p/msg)', value: 11.5, locked: true, nonEditable: true },
-        { id: 'wa_promo', label: 'Promotional Msg (p/msg)', value: 86, locked: true, nonEditable: true },
-        // API charge applies to BOTH utility and promo messages
+        { id: 'wa_promo', label: 'Marketing Msg (p/msg)', value: 86.31, locked: true, nonEditable: true },
+        { id: 'wa_auth', label: 'Authentication Msg - OTP (p/msg)', value: 11.5, locked: true, nonEditable: true },
+        // API charge applies to ALL message categories
         {
           id: 'wa_api', label: 'API Charge (p/msg, applies to ALL messages)', value: 6, locked: true, stopType: 'lower', stopVal: 4,
-          note: 'Applies to both Utility and Promotional messages'
+          note: 'Applies to Utility, Marketing and Authentication messages'
         },
       ];
     case 'rcs_exotel':
@@ -3162,7 +3194,8 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false },
         { id: 'credits', label: 'WA Credits (₹)', value: 6000, locked: false, stopType: 'upper', stopVal: 6000 },
         { id: 'wa_utility', label: 'WhatsApp Utility (p/msg)', value: 11.5, locked: true, nonEditable: true },
-        { id: 'wa_promo', label: 'WhatsApp Promo (p/msg)', value: 86, locked: true, nonEditable: true },
+        { id: 'wa_promo', label: 'WhatsApp Marketing (p/msg)', value: 86.31, locked: true, nonEditable: true },
+        { id: 'wa_auth', label: 'WhatsApp Authentication (p/msg)', value: 11.5, locked: true, nonEditable: true },
         { id: 'wa_api', label: 'WhatsApp API Charge (p/msg)', value: 6, locked: false },
       ];
     case 'startup_rcs':
@@ -4667,7 +4700,7 @@ function renderFieldsGroupedCombined(items) {
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
     pstn_incoming: 'Call Charges', pstn_outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
-    wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
+    wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_auth: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
     pulse: 'Call Charges', human_handoff: 'Call Charges', call_rate_mode: 'Call Charges',
     intl_country: 'Call Charges', rm_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
@@ -5339,14 +5372,17 @@ window.toggleAddons = function (itemId, skuKey, tier) {
       if (!showWa) {
         delete item.values['wa_utility'];
         delete item.values['wa_promo'];
+        delete item.values['wa_auth'];
         delete item.values['wa_api'];
         item.waAddon = false;
       } else if (item.values['wa_api'] === undefined) {
         item.values['wa_utility'] = fields.find(f => f.id === 'wa_utility')?.value;
         item.values['wa_promo'] = fields.find(f => f.id === 'wa_promo')?.value;
+        item.values['wa_auth'] = fields.find(f => f.id === 'wa_auth')?.value;
         item.values['wa_api'] = fields.find(f => f.id === 'wa_api')?.value;
         item.waAddon = true;
       } else {
+        if (item.values['wa_auth'] === undefined) item.values['wa_auth'] = fields.find(f => f.id === 'wa_auth')?.value;
         item.waAddon = true;
       }
     }
@@ -5946,7 +5982,7 @@ function renderFieldsGrouped(fields, item) {
     single_leg: 'Call Charges', incoming: 'Call Charges', outgoing: 'Call Charges',
     pstn_incoming: 'Call Charges', pstn_outgoing: 'Call Charges',
     attempt: 'Call Charges', call_rate: 'Call Charges', sms_cost: 'Call Charges',
-    wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_api: 'Call Charges',
+    wa_utility: 'Call Charges', wa_promo: 'Call Charges', wa_auth: 'Call Charges', wa_api: 'Call Charges',
     rcs_biz: 'Call Charges', rcs_rich: 'Call Charges', rcs_reply: 'Call Charges',
     pulse: 'Call Charges', human_handoff: 'Call Charges', call_rate_mode: 'Call Charges',
     intl_country: 'Call Charges', rm_country: 'Call Charges', voip_incoming_usd: 'Call Charges',
@@ -6636,8 +6672,8 @@ function subSkuEditorHTML(item) {
     const shape = line.shape;
     let inputs = '';
     if (shape === 'amount')   inputs = num(line, 'amount', 'Amount (Rs)', 100);
-    if (shape === 'qty_rate') inputs = num(line, 'qty', 'Quantity', 70) + num(line, 'rate', 'Rate (Rs)', 100) + text(line, 'unit', 'Unit', 'pod', 100);
-    if (shape === 'rate')     inputs = num(line, 'amount', 'Rate (Rs)', 100) + text(line, 'unit', 'Per', 'message', 100);
+    if (shape === 'qty_rate') inputs = num(line, 'qty', 'Quantity', 70) + num(line, 'rate', 'Rate (paise)', 100) + text(line, 'unit', 'Unit', 'pod', 100);
+    if (shape === 'rate')     inputs = num(line, 'amount', 'Rate (paise)', 100) + text(line, 'unit', 'Per', 'message', 100);
     if (shape === 'duration') inputs = num(line, 'months', 'Months', 70);
     if (shape === 'text')     inputs = text(line, 'text', 'Reads', 'Dedicated CSM', 200);
 
@@ -6736,11 +6772,29 @@ window.setCustomLine = function (itemId, lineId, key, value) {
 // Two ways in, because neither covers everything: drag is quicker once you can
 // see where a line should go, the menu works on a touchpad, on a phone, and
 // when the target group is off-screen.
-function _qgItem(itemId) { return QG.skuItems.find(i => i.id === itemId); }
+// Every item a sub-SKU control can name. QG.skuItems holds only the bundle
+// tab that is open, while the preview draws both, so an id looked up there
+// alone comes back empty for the other tab's items - and the edit, a removal
+// included, is dropped on the floor with the line still on the proposal.
+function _qgAllItems() {
+  const all = (QG.skuItems || []).slice();
+  [QG.bundleA, QG.bundleB].forEach(b => {
+    (b && b.skuItems ? b.skuItems : []).forEach(i => { if (!all.includes(i)) all.push(i); });
+  });
+  return all;
+}
+function _qgItem(itemId) { return _qgAllItems().find(i => i.id === itemId); }
 function _qgTouched(item) {
   QG._dirty = true;
   updatePreview();
-  if (QG.currentSku && item && item.id === QG.activeItemId) renderSkuForm(QG.currentSku, QG.currentTier);
+  // Compare and Bundle Package put every item's card on screen at once, so the
+  // form has to be redrawn for any item it is showing, not just the active one:
+  // otherwise a line taken off a column that is not selected stays in its editor.
+  if (!QG.currentSku || !item) return;
+  const onScreen = item.id === QG.activeItemId
+    || !!document.getElementById('sku-fields-card-' + item.id)
+    || !!document.getElementById('sku-fields-card-bundle');
+  if (onScreen) renderSkuForm(QG.currentSku, QG.currentTier);
 }
 
 // Where the layout pass would print this row if the rep had never moved it.
@@ -6951,6 +7005,51 @@ function customLineRateSuffix(line) {
 // Rupees, to the paise only when there are paise. A per-message rate is often
 // well under a rupee, and rounding it to the nearest one would quote a price
 // nobody agreed to.
+// A rate is a per-something price, so it is typed and read in paise the way
+// every built-in rate in this app is: under a rupee it stays in paise, at a
+// rupee and over it reads in rupees. Typing 0.115 to mean 11.5p rounded away
+// to Rs 0.12 and quoted a price nobody agreed to.
+function fmtSubSkuRate(v) {
+  const num = Number(v) || 0;
+  return num >= 100 ? '₹' + (num / 100).toFixed(2) : num + 'p';
+}
+const SUBSKU_DIM = (t) => '<span style="color:#94a3b8;font-size:0.8em;">' + sanitize(t) + '</span>';
+
+// What a sub-SKU's value cell reads, wherever it is printed. opts.inline folds
+// the rate into the cell for the comparison tables, which have no sub-row to
+// hang it under.
+function customLineValueHTML(item, line, opts) {
+  const o = opts || {};
+  const zeroed = (v) => (Number(v) || 0) === 0;
+  // The layout pass drops this cell in as it stands, while the comparison and
+  // bundle tables escape any value that does not look like markup. What comes
+  // back here is already escaped, so it always leaves carrying a tag and is
+  // never put through sanitize a second time.
+  const cell = (h) => (/<[a-zA-Z]/.test(h) ? h : '<span>' + h + '</span>');
+  if (line.shape === 'text') return cell(sanitize(String(line.text || '-')));
+  if (line.shape === 'duration') {
+    const m = Number(line.months) || 0;
+    return cell(m + (m === 1 ? ' Month' : ' Months'));
+  }
+  if (line.shape === 'rate') {
+    return zeroed(line.amount) ? FREE_HTML
+      : cell(fmtSubSkuRate(line.amount) + ' ' + SUBSKU_DIM(customLineRateSuffix(line)));
+  }
+  if (line.shape === 'qty_rate') {
+    const qty = (Number(line.qty) || 0) + ' ' + sanitize(line.unit || 'unit');
+    return cell(o.inline ? qty + ' ' + SUBSKU_DIM('at') + ' ' + customLineRateHTML(line) : qty);
+  }
+  // Zero on a rep's own line means what it means on a built-in one: a charge
+  // given away reads as Waived, a rate given away reads as Free.
+  return zeroed(line.amount) ? WAIVED_HTML
+    : cell(fmtSubSkuMoney(line.amount) + (line.perMonth ? ' ' + SUBSKU_DIM('/month') : ''));
+}
+// The rate a quantity line multiplies by, as a cell of its own.
+function customLineRateHTML(line) {
+  return (Number(line.rate) || 0) === 0 ? FREE_HTML
+    : fmtSubSkuRate(line.rate) + ' ' + SUBSKU_DIM(customLineRateSuffix(line));
+}
+
 function fmtSubSkuMoney(v) {
   const num = Number(v) || 0;
   const places = Math.abs(num % 1) > 0.0001 ? 2 : 0;
@@ -6967,32 +7066,15 @@ function fmtSubSkuMoney(v) {
 // as bolted on.
 function customLineRowsHTML(item, line, months, opts) {
   const fmtR = fmtSubSkuMoney;
-  const dim = (t) => '<span style="color:#94a3b8;font-size:0.8em;">' + sanitize(t) + '</span>';
   const label = sanitize(line.label || 'Untitled line');
-  const unit = line.unit || 'unit';
   const t = customLineTerms(item, line, months);
   const valCls = opts.movable ? ' class="q-val"' : '';
   const sub = (name, val) => '<tr class="sub-row" data-owner="cl:' + sanitize(line.id) + '">'
     + '<td>' + sanitize(name) + '</td><td' + valCls + '>' + val + '</td></tr>';
 
-  let value;
+  const value = customLineValueHTML(item, line);
   const extra = [];
-  if (line.shape === 'waived') {
-    value = '<span class="waived-text"><svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg> Waived</span>';
-  } else if (line.shape === 'text') {
-    value = sanitize(String(line.text || '-'));
-  } else if (line.shape === 'duration') {
-    const m = Number(line.months) || 0;
-    value = m + (m === 1 ? ' Month' : ' Months');
-  } else if (line.shape === 'rate') {
-    value = fmtR(line.amount) + ' ' + dim(customLineRateSuffix(line));
-  } else if (line.shape === 'qty_rate') {
-    const qty = Number(line.qty) || 0;
-    value = qty + ' ' + sanitize(unit);
-    extra.push(sub('Rate', fmtR(line.rate) + ' ' + dim(customLineRateSuffix(line))));
-  } else {
-    value = fmtR(line.amount) + (line.perMonth ? ' ' + dim('/month') : '');
-  }
+  if (line.shape === 'qty_rate') extra.push(sub('Rate', customLineRateHTML(line)));
 
   const handle = opts.movable ? rowHandleHTML(item, 'cl:' + line.id, line.label || 'this line') : '';
   const rowCls = opts.movable ? ' class="q-hideable q-movable"' : '';
@@ -7002,10 +7084,55 @@ function customLineRowsHTML(item, line, months, opts) {
     + extra.join('');
 
   if (t && t.terms.length) {
-    const parts = t.terms.map(x => x.n + ' ' + x.label).concat(fmtR(t.price));
+    const priceRead = line.shape === 'qty_rate' ? fmtSubSkuRate(line.rate) : fmtR(t.price);
+    const parts = t.terms.map(x => x.n + ' ' + x.label).concat(priceRead);
     html += sub('Calculation', sanitize(parts.join(' × ')) + ' = <strong>' + fmtR(customLineAmount(item, line, months)) + '</strong>');
   }
   return html;
+}
+
+// ────────────────────────────────
+// Sub-SKUs in the tables that build their own rows.
+//
+// A per-SKU proposal prints a rep's line through the layout pass. The
+// comparison tables never run that pass - they build their own rows - so the
+// same lines are gathered here instead: one row per distinct name, under the
+// group the rep filed it in, in the order the columns first mention it.
+//
+// A column with no line by that name prints a dash, the same mark the add-on
+// rows use. That is the point of a comparison: a line one option carries and
+// another does not has to read as missing, not go silently absent.
+function customLineMatchKey(line) {
+  return String((line && line.label) || 'Untitled line').trim().toLowerCase();
+}
+function compareCustomLineRows(items, cmpRow) {
+  const order = [];
+  const seen = new Set();
+  items.forEach(item => customLines(item).forEach(l => {
+    const k = customLineMatchKey(l);
+    if (seen.has(k)) return;
+    seen.add(k);
+    order.push({ key: k, label: l.label || 'Untitled line', section: l.section || 'Plan Details' });
+  }));
+  if (!order.length) return '';
+  const DASH = '<span style="color:#94a3b8;">-</span>';
+  const sections = [];
+  order.forEach(o => { if (!sections.includes(o.section)) sections.push(o.section); });
+  let html = '';
+  sections.forEach(sec => {
+    html += cmpRow(sanitize(sec), [], true);
+    order.filter(o => o.section === sec).forEach(o => {
+      html += cmpRow(o.label, items.map(item => {
+        const line = customLines(item).find(l => customLineMatchKey(l) === o.key);
+        return line ? customLineValueHTML(item, line, { inline: true }) : DASH;
+      }));
+    });
+  });
+  return html;
+}
+// What each column's sub-SKUs add to its subtotal, in column order.
+function compareCustomLineSubtotals(items) {
+  return items.map(item => customLinesSubtotal(item, customLineMonths(item)));
 }
 
 // The grip that opens a line's "move to" menu, and starts a drag.
@@ -7191,7 +7318,7 @@ function buildItemRows(item, opts = {}) {
       return num + 'p/msg';
     });
 
-    const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+    const TICK = WAIVED_TICK_SVG;
     const W = `<span class="waived-text">${TICK} Waived</span>`;
     const FREE = `<span class="waived-text">${TICK} Free</span>`;
     let isFirstSec = true;
@@ -7303,7 +7430,8 @@ function buildItemRows(item, opts = {}) {
         if (showSms) tableHTML += stdRow('SMS Cost', fmtPaiseMsg(getSafeNum('sms_cost')));
         if (showWa) {
           tableHTML += stdRow('WhatsApp Utility Messages', fmtPaiseMsg(getVal('wa_utility')));
-          tableHTML += stdRow('WhatsApp Promotional Messages', fmtPaiseMsg(getVal('wa_promo')));
+          tableHTML += stdRow('WhatsApp Marketing Messages', fmtPaiseMsg(getVal('wa_promo')));
+          tableHTML += stdRow('WhatsApp Authentication Messages (OTP)', fmtPaiseMsg(getVal('wa_auth')));
           tableHTML += stdRow('WhatsApp API Charge', fmtPaiseMsg(getSafeNum('wa_api')));
         }
       }
@@ -7762,7 +7890,8 @@ function buildItemRows(item, opts = {}) {
       tableHTML += secRow('WhatsApp Credits & Rates');
       tableHTML += stdRow('WA Credits', fmtRupee(getSafeNum('credits')));
       tableHTML += stdRow('Utility Message Cost', fmtPaiseMsg(getSafeNum('wa_utility')));
-      tableHTML += stdRow('Promotional Message Cost', fmtPaiseMsg(getSafeNum('wa_promo')));
+      tableHTML += stdRow('Marketing Message Cost', fmtPaiseMsg(getSafeNum('wa_promo')));
+      tableHTML += stdRow('Authentication Message Cost (OTP)', fmtPaiseMsg(getSafeNum('wa_auth')));
       tableHTML += stdRow('API Charge (per msg)', fmtPaiseMsg(getSafeNum('wa_api')));
 
     } else if (effectiveSk === 'rcs_exotel') {
@@ -8064,7 +8193,7 @@ function _computeBundleRows(items) {
     single_leg: 'Call Credits & Charges', incoming: 'Call Credits & Charges', outgoing: 'Call Credits & Charges',
     pstn_incoming: 'Call Credits & Charges', pstn_outgoing: 'Call Credits & Charges',
     attempt: 'Call Credits & Charges', call_rate: 'Call Credits & Charges', sms_cost: 'Messaging & Services',
-    wa_utility: 'Messaging & Services', wa_promo: 'Messaging & Services', wa_api: 'Messaging & Services',
+    wa_utility: 'Messaging & Services', wa_promo: 'Messaging & Services', wa_auth: 'Messaging & Services', wa_api: 'Messaging & Services',
     rcs_biz: 'Messaging & Services', rcs_rich: 'Messaging & Services', rcs_reply: 'Messaging & Services',
     rcs_cost: 'Messaging & Services', pulse: 'Call Credits & Charges', human_handoff: 'Call Credits & Charges',
     call_rate_mode: 'Call Credits & Charges',
@@ -8083,7 +8212,7 @@ function _computeBundleRows(items) {
   const DURATION_FIELDS = new Set(['num_months', 'validity', 'extra_validity']);
   // Non-editable info rows that must still appear in bundles: per-message rates
   // for WhatsApp and RCS are fixed (nonEditable) but are shown for reference.
-  const BUNDLE_KEEP_NONEDITABLE = new Set(['wa_utility', 'wa_promo', 'rcs_biz', 'rcs_rich', 'rcs_reply']);
+  const BUNDLE_KEEP_NONEDITABLE = new Set(['wa_utility', 'wa_promo', 'wa_auth', 'rcs_biz', 'rcs_rich', 'rcs_reply']);
   // Fields shown as indented sub-rows in the single-SKU proposal - mirror that
   // here so the bundle breakdown reads the same (└ under their parent row).
   const BUNDLE_SUB_FIELDS = new Set(['extra_user_cost', 'extra_number', 'did_cost']);
@@ -8133,20 +8262,20 @@ function _computeBundleRows(items) {
       let displayVal;
 
       if (isWaived) {
-        displayVal = '✓ Waived';
+        displayVal = WAIVED_HTML;
       } else if (f.id === 'validity') {
         const extraV = getSafeNum('extra_validity');
         displayVal = extraV > 0 ? (rawVal + ' + ' + extraV + ' months') : (rawVal + ' Months');
       } else if (f.id === 'num_months') {
         displayVal = rawVal + ' Months';
       } else if (f.id === 'rental') {
-        if (numVal === 0) displayVal = '✓ Waived';
+        if (numVal === 0) displayVal = WAIVED_HTML;
         else if (f.label.toLowerCase().includes('/month') || f.type === 'rental_toggle') displayVal = fmtR(numVal) + '/month';
         else displayVal = fmtR(numVal);
       } else if (f.id === 'setup') {
-        displayVal = numVal === 0 ? '✓ Waived' : fmtR(numVal);
+        displayVal = numVal === 0 ? WAIVED_HTML : fmtR(numVal);
       } else if (f.id === 'setup_usd') {
-        displayVal = numVal === 0 ? '✓ Waived' : '$' + numVal.toFixed(2);
+        displayVal = numVal === 0 ? WAIVED_HTML : '$' + numVal.toFixed(2);
       } else if (f.id === 'free_users') {
         const fuExtra = getSafeNum('extra_users');
         displayVal = (rawVal === null || rawVal === 'Unlimited') ? 'Unlimited (Included)' : (fuExtra > 0 ? (rawVal + ' + ' + fuExtra + ' Users (Free)') : (rawVal + ' Users (Free)'));
@@ -8165,8 +8294,8 @@ function _computeBundleRows(items) {
         displayVal = item.sku_key === 'whatsapp_exotel' ? (rawVal + ' Own Number(s)') : (rawVal + ' Mobile DID(s)');
       } else if (f.id === 'did_cost') {
         displayVal = item.sku_key === 'whatsapp_exotel' ? (fmtR(numVal) + '/number/month') : (fmtR(numVal) + '/Mobile DID/month');
-      } else if (['sms_cost', 'wa_utility', 'wa_promo', 'wa_api', 'rcs_cost', 'rcs_biz', 'rcs_rich', 'rcs_reply', 'incoming', 'outgoing', 'pstn_incoming', 'pstn_outgoing', 'single_leg', 'session_cost', 'attempt', 'call_rate'].includes(f.id)) {
-        if (numVal === 0) displayVal = '✓ Free';
+      } else if (['sms_cost', 'wa_utility', 'wa_promo', 'wa_auth', 'wa_api', 'rcs_cost', 'rcs_biz', 'rcs_rich', 'rcs_reply', 'incoming', 'outgoing', 'pstn_incoming', 'pstn_outgoing', 'single_leg', 'session_cost', 'attempt', 'call_rate'].includes(f.id)) {
+        if (numVal === 0) displayVal = FREE_HTML;
         else if (numVal >= 100) displayVal = '₹' + (numVal / 100).toFixed(2);
         else displayVal = numVal + 'p';
       } else if (['rental','setup','credits','extra_credits','user_charge','extra_user_cost','channel_cost','brand_fee','procurement','call_transfer', 'extra_number', 'did_cost'].includes(f.id)) {
@@ -8178,7 +8307,7 @@ function _computeBundleRows(items) {
       // Extract suffix and append to value, remove from label
       let cleanLabel = f.label;
       const suffixMatch = cleanLabel.match(/\s*\(([^)]+)\)$/);
-      if (suffixMatch && displayVal !== '✓ Free' && displayVal !== '✓ Waived' && displayVal !== '-' && !displayVal.includes('</')) {
+      if (suffixMatch && displayVal !== '-' && !displayVal.includes('</')) {
         cleanLabel = cleanLabel.replace(suffixMatch[0], '').trim();
         let suffixInner = suffixMatch[1];
         
@@ -8305,6 +8434,36 @@ function _computeBundleRows(items) {
       pushCalc('Channel Plan', 'Calculation',
         `${numChs} channels × ${months} months × ${fmtR(chCost)} = <strong>${fmtR(numChs * chCost * months)}</strong>`);
     }
+
+    // A rep's own lines, printed and billed here the way the layout pass does
+    // them on a single-SKU proposal. The merged table builds its own rows, so
+    // without this a sub-SKU on a clubbed SKU would neither show nor charge.
+    customLines(item).forEach(line => {
+      const sec = line.section || 'Plan Details';
+      primaryRows.push({
+        key: item.id + ':cl:' + line.id,
+        itemId: item.id, skuKey: item.sku_key, skuLabel, skuEntity: sku.entity,
+        fieldId: '_subsku', label: line.label || 'Untitled line',
+        value: customLineValueHTML(item, line), rawVal: null,
+        isWaived: false, isExcluded: false, section: sec, isCalc: false,
+      });
+      if (line.shape === 'qty_rate') {
+        primaryRows.push({
+          key: item.id + ':cl:' + line.id + ':rate',
+          itemId: item.id, skuKey: item.sku_key, skuLabel, skuEntity: sku.entity,
+          fieldId: '_subsku', label: 'Rate', value: customLineRateHTML(line), rawVal: null,
+          isWaived: false, isExcluded: false, section: sec, isSub: true,
+        });
+      }
+      const t = customLineTerms(item, line, months);
+      if (t && t.terms.length) {
+        const priceRead = line.shape === 'qty_rate' ? fmtSubSkuRate(line.rate) : fmtSubSkuMoney(t.price);
+        const parts = t.terms.map(x => x.n + ' ' + x.label).concat(priceRead);
+        pushCalc(sec, 'Calculation',
+          sanitize(parts.join(' × ')) + ' = <strong>' + fmtSubSkuMoney(customLineAmount(item, line, months)) + '</strong>');
+      }
+    });
+    subtotals[item.id] += customLinesSubtotal(item, months);
   });
 
   return { primaryRows, dupeRows, subtotals };
@@ -8332,7 +8491,7 @@ function _renderBundlePackagePreview(doc, validItems, firstSku, logoSrc, company
   }
 
   const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x || 0));
-  const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+  const TICK = WAIVED_TICK_SVG;
   const PENCIL = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
 
   const { primaryRows, dupeRows, subtotals } = _computeBundleRows(validItems);
@@ -8566,7 +8725,7 @@ function updatePreview() {
   if (isUserCompare) {
     const skuDef = SKUS.find(s => s.key === validItems[0].sku_key);
     const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x));
-    const W = `<span class="waived-text">✓ Waived</span>`;
+    const W = WAIVED_HTML;
 
     const colData = validItems.map(item => {
       const fields = getSkuFields(item.sku_key, item.tier);
@@ -8597,8 +8756,8 @@ function updatePreview() {
       return (u * m * c) + nums + did;
     });
 
-    const FREE_CMP = `<span style="color:#16a34a;font-weight:600;">✓ Free</span>`;
-    const W_CMP = `<span style="color:#16a34a;font-weight:600;">✓ Waived</span>`;
+    const FREE_CMP = `<span style="color:#16a34a;font-weight:600;">${WAIVED_TICK_SVG} Free</span>`;
+    const W_CMP = `<span style="color:#16a34a;font-weight:600;">${WAIVED_TICK_SVG} Waived</span>`;
     let uRows = '';
     const allSku0 = validItems[0].sku_key;
 
@@ -8656,12 +8815,14 @@ function updatePreview() {
       uRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
       uRows += cmpRow('Incoming Call Charges', colData.map(({ getSN }) => { const inc = getSN('incoming'); return inc === 0 ? FREE_CMP : inc + 'p/min'; }));
       uRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => { const out = getSN('outgoing'); return out >= 100 ? '₹' + (out/100).toFixed(2) + '/min' : out + 'p/min'; }));
-      const veenoSubs = colData.map(({ getSN, getVal }) => {
+      uRows += compareCustomLineRows(validItems, cmpRow);
+      const subSkuSubs = compareCustomLineSubtotals(validItems);
+      const veenoSubs = colData.map(({ getSN, getVal }, i) => {
         const u = getSN('num_users'), v = parseFloat(getVal('validity')) || 0, c = getSN('user_charge');
         const r = getSN('rental') * v;
         const nums = getSN('num_paid_numbers') * getSN('extra_number') * (v + getSN('extra_validity'));
         const did = getSN('did_numbers') * (getSN('did_cost') || 1500) * v;
-        return getSN('credits') + r + (u * v * c) + nums + did;
+        return getSN('credits') + r + (u * v * c) + nums + did + subSkuSubs[i];
       });
       uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${veenoSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
       uRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${veenoSubs.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s*0.18))}</td>`).join('')}</tr>`;
@@ -8705,11 +8866,13 @@ function updatePreview() {
           return d > 0 ? `${d} ${label} × ${m} months × ${fmtR(cost)} = ${fmtR(d*m*cost)}` : '';
         }));
       }
-      const userSubs = colData.map(({ getSN }) => {
+      uRows += compareCustomLineRows(validItems, cmpRow);
+      const subSkuSubs = compareCustomLineSubtotals(validItems);
+      const userSubs = colData.map(({ getSN }, i) => {
         const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
         const nums = getSN('num_paid_numbers') * getSN('extra_number') * (m + getSN('extra_validity'));
         const did = getSN('did_numbers') * (getSN('did_cost') || 1500) * m;
-        return (u * m * c) + nums + did;
+        return (u * m * c) + nums + did + subSkuSubs[i];
       });
       uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${userSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
       uRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${userSubs.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s*0.18))}</td>`).join('')}</tr>`;
@@ -8777,7 +8940,7 @@ function updatePreview() {
       const n = parseFloat(v); if (isNaN(n)) return String(v);
       return n >= 100 ? '₹' + (n / 100).toFixed(2) + '/msg' : n + 'p/msg';
     };
-    const TICK = '<svg width="11" height="11" viewBox="0 0 12 12" style="display:inline;vertical-align:middle;margin-right:3px"><polyline points="1,6 4,10 11,2" style="fill:none;stroke:#16a34a;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round"/></svg>';
+    const TICK = WAIVED_TICK_SVG;
     const W = `<span class="waived-text">${TICK} Waived</span>`;
     const FREE = `<span class="waived-text">${TICK} Free</span>`;
     const perUnit = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
@@ -8813,7 +8976,7 @@ function updatePreview() {
       if (numPaidNums && extraNumCost) sub += numPaidNums * extraNumCost * (months + extraVal);
       const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
       if (didNums > 0) sub += didNums * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
-      return sub;
+      return sub + customLinesSubtotal(item, months);
     });
     const grandSub = subtotals.reduce((a, b) => a + b, 0);
 
@@ -8865,8 +9028,11 @@ function updatePreview() {
           tableRows += cmpRow('WhatsApp Utility Messages', colData.map(({ item }) =>
             item.waAddon ? fmtMsg(item.values['wa_utility']) : '<span style="color:#94a3b8;">-</span>'
           ));
-          tableRows += cmpRow('WhatsApp Promotional Messages', colData.map(({ item }) =>
+          tableRows += cmpRow('WhatsApp Marketing Messages', colData.map(({ item }) =>
             item.waAddon ? fmtMsg(item.values['wa_promo']) : '<span style="color:#94a3b8;">-</span>'
+          ));
+          tableRows += cmpRow('WhatsApp Authentication Messages (OTP)', colData.map(({ item, getVal }) =>
+            item.waAddon ? fmtMsg(getVal('wa_auth')) : '<span style="color:#94a3b8;">-</span>'
           ));
           tableRows += cmpRow('WhatsApp API Charge', colData.map(({ item }) =>
             item.waAddon ? fmtMsg(item.values['wa_api']) : '<span style="color:#94a3b8;">-</span>'
@@ -8994,6 +9160,8 @@ function updatePreview() {
       }
     }
 
+
+    tableRows += compareCustomLineRows(validItems, cmpRow);
 
     // Totals row
     tableRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;color:#0f172a;">Subtotal (excl. GST)</td>${subtotals.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
@@ -10631,7 +10799,8 @@ window.confirmGenerateProforma = async function () {
           }
           if (showWa) {
             lines.push(`WhatsApp Utility Messages: ${fmtPaiseMsg(getV('wa_utility'))}`);
-            lines.push(`WhatsApp Promotional Messages: ${fmtPaiseMsg(getV('wa_promo'))}`);
+            lines.push(`WhatsApp Marketing Messages: ${fmtPaiseMsg(getV('wa_promo'))}`);
+            lines.push(`WhatsApp Authentication Messages (OTP): ${fmtPaiseMsg(getV('wa_auth'))}`);
             lines.push(`WhatsApp API Charge: ${fmtPaiseMsg(getSN('wa_api'))}`);
           }
           if (showCt) {
@@ -11505,10 +11674,28 @@ window.viewQuote = async function (id) {
 
     } else if (data.sku_items && data.sku_items.length > 0) {
       // ── Standard (non-bundle) quote restore ───────────────────────
+      QG.bundleCompareMode = false;
+      QG.bundleMergeMode = false;
       QG.skuItems = data.sku_items;
       QG.activeItemId = data.sku_items[0].id;
       QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
       QG.multiSkuMode = QG.multiSkuMode || data.sku_items.length > 1;
+      // A side-by-side compare quote is one commercial, not one per column. The
+      // mode is saved with the quote and has to come back with it, or the same
+      // SKU repeated per column reopens as that many separate proposals. Set
+      // directly rather than through toggleCompareMode, which rebuilds the
+      // columns from defaults and would throw away what was just loaded.
+      QG.compareMode = data.compareMode === true;
+      if (QG.compareMode) {
+        QG.currentSku = data.sku_items[0].sku_key;
+        QG.currentTier = data.sku_items[0].tier || QG.currentTier;
+        // Keep the tier checkboxes in step, so a later pass over them rebuilds
+        // the columns this quote actually has rather than the default three.
+        ['dabbler', 'believer', 'influencer', 'elite'].forEach(t => {
+          const cb = document.getElementById('ct-' + t);
+          if (cb) cb.checked = data.sku_items.some(i => i.tier === t);
+        });
+      }
       syncActiveAliases();
 
       // Hydrate missing field defaults
