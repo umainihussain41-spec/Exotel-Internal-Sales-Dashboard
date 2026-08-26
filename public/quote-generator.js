@@ -4255,10 +4255,13 @@ function selectSku(key, userInitiated = false) {
   item.sku_key = key;
   item.values = {};
   item.stopLockOverrides = [];
-  // Lines hidden on the previous plan do not carry over: the keys are section
-  // and label, so a shared name like "Plan Details|Setup Charges" would silently
-  // take the same line out of a plan the rep never touched.
+  // A layout built on the previous plan does not carry over: these keys are
+  // section and label, so a shared name like "Plan Details|Setup Charges" would
+  // silently take a line out of, or reshuffle, a plan the rep never touched.
+  // Groups the rep opened are kept - those are names of their own, not keys.
   item.hiddenRows = {};
+  item.rowGroup = {};
+  item.rowOrder = {};
   QG._dirty = true;
 
   // Set entity lock on first selection
@@ -6815,7 +6818,26 @@ window.setRowGroup = function (itemId, encKey, encGroup) {
   if (line) line.section = group;          // a sub-SKU carries its own group
   else if (group) item.rowGroup[key] = group;
   else delete item.rowGroup[key];
+  // The menu names a group and nothing finer, so the row arrives at the end
+  // of it and any place it held in its old group goes with it.
+  forgetRowOrder(item, key);
   window.closeRowMoveMenu();
+  _qgTouched(item);
+};
+
+// A drop says both things at once: which group, and where in it. The handler
+// hands over the group's whole order because it is holding the rows the rep
+// can see, in the order they can see them, with the dragged one already put
+// where they let go of it.
+window.placeRow = function (itemId, key, group, keys) {
+  const item = _qgItem(itemId);
+  if (!item || !group) return;
+  if (!item.rowGroup) item.rowGroup = {};
+  const line = customLines(item).find(l => 'cl:' + l.id === key);
+  if (line) line.section = group;
+  else item.rowGroup[key] = group;
+  forgetRowOrder(item, key);
+  setRowOrderFor(item, group, keys);
   _qgTouched(item);
 };
 
@@ -6913,6 +6935,34 @@ function bindPreviewDragAndDrop() {
   doc._qgDragBound = true;
   let dragging = null;
 
+  // The rows of a group that can be ordered. A working is not one of them: it
+  // is bound to the line above it and is carried, never aimed at.
+  const rowsOf = (zone) => Array.from(zone.children).filter(tr => tr.dataset && tr.dataset.rk);
+  const clearMarks = () => {
+    doc.querySelectorAll('.q-drop-over, .q-drop-before, .q-drop-after')
+      .forEach(el => el.classList.remove('q-drop-over', 'q-drop-before', 'q-drop-after'));
+  };
+  // Which group is under the cursor, which row inside it, and whether the
+  // cursor is past that row's middle - the difference between landing above a
+  // line and below it, and the only way to say where a row goes when the move
+  // never leaves its group.
+  const dropTarget = (e) => {
+    const zone = e.target.closest && e.target.closest('tbody.q-drop-zone');
+    if (!zone) return null;
+    // One item's row can never be aimed at another item's table.
+    const table = zone.closest('table');
+    const owner = table && table.querySelector('.q-row-move');
+    if (owner && dragging && owner.dataset.item !== dragging.itemId) return null;
+    let row = e.target.closest('tr');
+    if (row && row.dataset.owner) {
+      row = zone.querySelector('tr[data-rk="' + CSS.escape(row.dataset.owner) + '"]');
+    }
+    const over = row && row.dataset && row.dataset.rk ? row : null;
+    if (!over) return { zone, over: null, after: false };
+    const box = over.getBoundingClientRect();
+    return { zone, over, after: e.clientY > box.top + box.height / 2 };
+  };
+
   doc.addEventListener('dragstart', (e) => {
     const grip = e.target.closest && e.target.closest('.q-row-move');
     if (!grip) return;
@@ -6925,26 +6975,43 @@ function bindPreviewDragAndDrop() {
   doc.addEventListener('dragend', () => {
     dragging = null;
     doc.querySelectorAll('.q-dragging').forEach(el => el.classList.remove('q-dragging'));
-    doc.querySelectorAll('.q-drop-over').forEach(el => el.classList.remove('q-drop-over'));
+    clearMarks();
   });
   doc.addEventListener('dragover', (e) => {
     if (!dragging) return;
-    const zone = e.target.closest && e.target.closest('tbody.q-drop-zone');
-    if (!zone) return;
+    const t = dropTarget(e);
+    if (!t) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    doc.querySelectorAll('.q-drop-over').forEach(el => { if (el !== zone) el.classList.remove('q-drop-over'); });
-    zone.classList.add('q-drop-over');
+    clearMarks();
+    // A line on the row it will land against says it precisely; the outline
+    // round the whole group is for when there is no row to land against.
+    if (t.over && t.over.dataset.rk !== dragging.rk) {
+      t.over.classList.add(t.after ? 'q-drop-after' : 'q-drop-before');
+    } else if (!t.over) {
+      t.zone.classList.add('q-drop-over');
+    }
   });
   doc.addEventListener('drop', (e) => {
     if (!dragging) return;
-    const zone = e.target.closest && e.target.closest('tbody.q-drop-zone');
-    if (!zone) return;
-    e.preventDefault();
-    const group = zone.getAttribute('data-group');
+    const t = dropTarget(e);
     const drop = dragging;
     dragging = null;
-    if (group) window.setRowGroup(drop.itemId, rowKeyAttr(drop.rk), rowKeyAttr(group));
+    clearMarks();
+    if (!t) return;
+    e.preventDefault();
+    const group = t.zone.getAttribute('data-group');
+    if (!group) return;
+    // Let go on the row being dragged and nothing was asked for.
+    if (t.over && t.over.dataset.rk === drop.rk) return;
+    const keys = rowsOf(t.zone).map(tr => tr.dataset.rk).filter(k => k !== drop.rk);
+    if (t.over) {
+      const at = keys.indexOf(t.over.dataset.rk);
+      keys.splice(at === -1 ? keys.length : at + (t.after ? 1 : 0), 0, drop.rk);
+    } else {
+      keys.push(drop.rk);
+    }
+    window.placeRow(drop.itemId, drop.rk, group, keys);
   });
 }
 
@@ -6971,6 +7038,25 @@ const GROUP_DRAG_ICON = '<svg width="10" height="10" viewBox="0 0 10 10" aria-hi
 function itemGroupOrder(item) { return Array.isArray(item && item.groupOrder) ? item.groupOrder : []; }
 function itemNewGroups(item) { return Array.isArray(item && item.newGroups) ? item.newGroups : []; }
 function itemRowGroup(item) { return (item && item.rowGroup) || {}; }
+function itemRowOrder(item) { return (item && item.rowOrder) || {}; }
+
+// A dragged row is remembered twice over: the group it belongs to, and where
+// it sits among that group's own rows. The group alone cannot say the second
+// thing - a row moved within one group never changes group - so an order is
+// kept per group, and it is the whole order, taken from what the rep was
+// looking at when they let go, rather than an offset to work back from.
+function setRowOrderFor(item, group, keys) {
+  if (!item.rowOrder) item.rowOrder = {};
+  item.rowOrder[String(group || '').toLowerCase()] = keys.slice();
+}
+// A row that leaves a group is no longer part of that group's order.
+function forgetRowOrder(item, key) {
+  const orders = itemRowOrder(item);
+  Object.keys(orders).forEach(g => {
+    orders[g] = orders[g].filter(k => k !== key);
+    if (!orders[g].length) delete orders[g];
+  });
+}
 
 // Every group the rep can move a line into: the ones this SKU printed, plus any
 // they opened themselves.
@@ -7220,7 +7306,41 @@ function applyItemLayout(tableHTML, item, opts = {}) {
   //    there is somewhere to drop a line.
   itemNewGroups(item).forEach(g => { if (!findGroup(g)) makeGroup(g); });
 
-  // 5. The rep's order wins; anything they never touched keeps its place.
+  // 5. And where each row sits inside its group. Same rule as the groups
+  //    themselves: a row the rep placed goes where they put it, and one they
+  //    never touched keeps the place its renderer gave it, which is to say it
+  //    stays with whichever neighbour it was printed beside. A working is not
+  //    ordered on its own - it travels with the line it explains.
+  const rowOrders = itemRowOrder(item);
+  if (Object.keys(rowOrders).length) {
+    Array.from(host.querySelectorAll('tbody')).forEach(tb => {
+      const want = rowOrders[groupOf(tb).toLowerCase()];
+      if (!want || !want.length) return;
+      const rows = Array.from(tb.children).filter(tr => tr.dataset && tr.dataset.rk);
+      if (rows.length < 2) return;
+      const byKey = {};
+      rows.forEach(tr => { byKey[tr.dataset.rk] = tr; });
+      const placed = want.map(k => byKey[k]).filter(Boolean);
+      rows.forEach((tr, i) => {
+        if (placed.indexOf(tr) !== -1) return;
+        // Behind the last of its natural neighbours that has a place already,
+        // so a row the rep never moved does not get swept to the bottom.
+        let at = 0;
+        for (let j = i - 1; j >= 0; j--) {
+          const k = placed.indexOf(rows[j]);
+          if (k !== -1) { at = k + 1; break; }
+        }
+        placed.splice(at, 0, tr);
+      });
+      placed.forEach(tr => {
+        tb.appendChild(tr);
+        Array.from(host.querySelectorAll('tr[data-owner="' + CSS.escape(tr.dataset.rk) + '"]'))
+          .forEach(k => tb.appendChild(k));
+      });
+    });
+  }
+
+  // 6. The rep's group order wins; anything they never touched keeps its place.
   const order = itemGroupOrder(item);
   if (order.length) {
     const bodies = Array.from(host.querySelectorAll('tbody'));
@@ -7231,7 +7351,7 @@ function applyItemLayout(tableHTML, item, opts = {}) {
     bodies.slice().sort((a, b) => rank(a) - rank(b)).forEach(tb => host.appendChild(tb));
   }
 
-  // 6. A group with nothing but its header reads as a mistake on the proposal.
+  // 7. A group with nothing but its header reads as a mistake on the proposal.
   //    One the rep just opened is a different thing: it needs to be on screen
   //    to be somewhere to drag a line into, so it survives the preview and is
   //    dropped from the printed page instead.
@@ -7247,7 +7367,7 @@ function applyItemLayout(tableHTML, item, opts = {}) {
     tb.remove();
   });
 
-  // 7. The controls, live preview only.
+  // 8. The controls, live preview only.
   if (movable) {
     Array.from(host.querySelectorAll('tbody')).forEach(tb => {
       const head = tb.querySelector('tr.section-header-row td');
