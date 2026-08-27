@@ -189,18 +189,28 @@ const CHANNELS_PER_BLOCK = 50;
 const CHANNEL_BLOCK_COST = 12500;   // ₹ per 50-channel block per month
 const NUM_SERIES_SKUS = ['num_1400', 'num_1600'];
 function isNumSeries(key) { return NUM_SERIES_SKUS.includes(key); }
+// ── Exotel user model: who actually gets charged ────────────────────────────
+// The free block is included and the rep adds extra users explicitly, exactly
+// the way the number plan adds extra numbers on top of the free ones. Nothing
+// is inferred from the Veeno head-count: switching a quote to the Exotel model
+// must never conjure a user charge the rep never typed. Every surface that
+// prices or prints the model - live preview, subtotal, text summary - reads
+// the count through here.
+function exotelChargedUsers(extraUsers) {
+  return Math.max(0, Number(extraUsers) || 0);
+}
+
 // Channel blocks + user charges for the number series. Kept out of the generic
 // channel/user maths because there is no per-channel rate to multiply, and
 // because users bill on whichever of the two models the rep picked.
 function numSeriesUserCost(item, getSafeNum, months) {
-  const users = Math.max(0, Number(getSafeNum('num_users')) || 0);
   if (item.values['user_model_exotel'] === 1) {
     // Exotel model: a block of free users, the rest at the extra-user rate.
-    const free = Math.max(0, Number(getSafeNum('exotel_free_users')) || 0);
     const charge = Number(getSafeNum('exotel_user_charge')) || 0;
-    return Math.max(0, users - free) * charge * months;
+    return exotelChargedUsers(getSafeNum('exotel_extra_users')) * charge * months;
   }
   // Veeno model: every user charged from the first.
+  const users = Math.max(0, Number(getSafeNum('num_users')) || 0);
   return users * (Number(getSafeNum('user_charge')) || 0) * months;
 }
 function numSeriesSubtotal(item, getSafeNum, months) {
@@ -1976,11 +1986,18 @@ function getSkuTncHtml(item, entity = 'Exotel') {
   }
 
   if (tncKey === 'voice_veeno_std' || tncKey === 'voice_veeno_user') {
-    const uc = getVal('user_charge');
+    // Veeno STD can also be sold on the Exotel user model, where agents bill at
+    // the extra-user rate above a block of free logins. The terms have to quote
+    // the same rate the pricing table does, never the Veeno rate the rep
+    // switched away from.
+    const isExoUserModel = getVal('user_model_exotel') === 1;
+    const uc = isExoUserModel ? getVal('exotel_user_charge') : getVal('user_charge');
+    const exoFreeTnc = parseFloat(getVal('exotel_free_users')) || 0;
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Pricing & Billing</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
+            ${isExoUserModel ? `<li>${exoFreeTnc} agent login(s) are included at no charge. Every agent beyond that is billed at the rate below.</li>` : ''}
             <li>₹${uc} + 18% GST per agent/month (deducted as ${uc} credits).</li>
             <li>1 credit = ₹1.</li>
             <li>The call charges will be applicable.</li>
@@ -2718,12 +2735,29 @@ function waivableCharge(id, label, stdValue) {
 // change carry QUOTE_SCHEMA_VERSION; anything older gets its waivable fields
 // reset to the waiver the client actually signed.
 const QUOTE_SCHEMA_VERSION = 2;
+// Quotes written before the Exotel model had its own extra-user input derived
+// the charged head-count from No. of Users minus the free block. That count is
+// an explicit field now, so carry the old derivation across the first time such
+// a quote is read back - otherwise a proposal already sent to a client would
+// come back with its user line silently at zero. Runs on saved items only; a
+// fresh item starts at zero extra users and bills nothing until the rep says so.
+function migrateExotelExtraUsers(item) {
+  if (!item || !item.values) return;
+  if (!(item.sku_key === 'voice_veeno_std' || isNumSeries(item.sku_key))) return;
+  if (item.values['user_model_exotel'] !== 1) return;
+  if (item.values['exotel_extra_users'] !== undefined) return;
+  const savedHeadCount = parseFloat(item.values['num_users'] ?? 0) || 0;
+  const savedFree = (parseFloat(item.values['exotel_free_users'] ?? 0) || 0)
+    + (parseFloat(item.values['extra_users'] ?? 0) || 0);
+  item.values['exotel_extra_users'] = Math.max(0, savedHeadCount - savedFree);
+}
 function hydrateItemFields(item, savedVersion) {
   delete item._lastTableHTML;
   if (!item || !item.sku_key) return;
   if (!item.values) item.values = {};
   const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
   const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
+  migrateExotelExtraUsers(item);
   const isLegacy = !(Number(savedVersion) >= QUOTE_SCHEMA_VERSION);
   fields.forEach(f => {
     if (f.note?.includes('Add-on')) return;
@@ -2797,6 +2831,7 @@ function getSkuFieldsBase(skuKey, tier) {
         },
         { id: 'user_model_exotel', label: 'Pricing Model', value: 0, type: 'model_toggle', locked: false },
         { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: false },
+        { id: 'exotel_extra_users', label: 'No. of Extra Users (Exotel model)', value: 0, locked: false, stopType: 'lower', stopVal: 0 },
         { id: 'exotel_user_charge', label: 'Extra User Charge - Exotel model (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 199 },
         { id: 'free_numbers', label: 'Free Numbers', value: 1, locked: false },
         { id: 'num_paid_numbers', label: 'No. of Extra Numbers', value: 0, locked: false },
@@ -3057,6 +3092,7 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'user_charge', label: 'User Charge - Veeno Model (₹/user/month)', value: 1000, locked: true, stopType: 'lower', stopVal: 1000, note: 'Non-waiveable. Charged from user 1.' },
         { id: 'user_model_exotel', label: 'Pricing Model', value: 0, type: 'model_toggle', locked: false },
         { id: 'exotel_free_users', label: 'Free Users (Exotel model)', value: 6, locked: false },
+        { id: 'exotel_extra_users', label: 'No. of Extra Users (Exotel model)', value: 0, locked: false, stopType: 'lower', stopVal: 0 },
         { id: 'exotel_user_charge', label: 'Extra User Charge - Exotel model (₹/user/month)', value: 199, locked: true, stopType: 'lower', stopVal: 199 },
         { id: 'num_months', label: 'No. of Months', value: 12, locked: true, stopType: 'lower', stopVal: 6 },
         { id: 'credits', label: 'Call Credits (₹)', value: 39000, locked: true, stopType: 'lower', stopVal: 20000 },
@@ -4691,6 +4727,7 @@ function renderFieldsGroupedCombined(items) {
     tc_numbers: 'Number Plan', tc_call_rate: 'Call Charges',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
+    exotel_extra_users: 'User Plan',
     user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
@@ -5426,19 +5463,18 @@ window.toggleAddons = function (itemId, skuKey, tier) {
     const card = document.getElementById(QG.bundleMergeMode ? 'sku-fields-card-bundle' : 'sku-fields-card-' + itemId);
     if (card) {
       const showExotel = item.values['user_model_exotel'] === 1;
-      // Fields that belong only to the Veeno per-user model. On the number
-      // series the head-count stays visible in both models, because the Exotel
-      // model prices the overflow above the free block and needs that input.
-      const veenoOnly = isNumSeries(skuKey)
-        ? ['user_charge']
-        : ['num_users', 'extra_users', 'user_charge'];
+      // The head-count and the per-user rate drive the Veeno model only. The
+      // Exotel model has its own free block and its own extra-user count, so
+      // every figure it bills on is a row the rep can see while that model is
+      // selected. Gifted free users apply to both and stay visible throughout.
+      const veenoOnly = ['num_users', 'user_charge'];
       veenoOnly.forEach(fid => {
         const el = card.querySelector(`#qf_${fid}_${itemId}`);
         const row = el?.closest('.q-field-row');
         if (row) row.style.display = showExotel ? 'none' : 'flex';
       });
       // Fields that belong only to the Exotel free-user model
-      ['exotel_free_users', 'exotel_user_charge'].forEach(fid => {
+      ['exotel_free_users', 'exotel_extra_users', 'exotel_user_charge'].forEach(fid => {
         const el = card.querySelector(`#qf_${fid}_${itemId}`);
         const row = el?.closest('.q-field-row');
         if (row) row.style.display = showExotel ? 'flex' : 'none';
@@ -5456,7 +5492,8 @@ window.toggleAddons = function (itemId, skuKey, tier) {
           row.style.display = showExotel ? 'none' : 'flex';
         }
         // Hide Exotel-model-only labels when in Veeno model
-        if (labelText === 'Free Users (Exotel model)' || labelText === 'Extra User Charge - Exotel model (₹/user/month)') {
+        if (labelText === 'Free Users (Exotel model)' || labelText === 'No. of Extra Users (Exotel model)'
+          || labelText === 'Extra User Charge - Exotel model (₹/user/month)') {
           row.style.display = showExotel ? 'flex' : 'none';
         }
       });
@@ -5973,6 +6010,7 @@ function renderFieldsGrouped(fields, item) {
     tc_numbers: 'Number Plan', tc_call_rate: 'Call Charges',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
+    exotel_extra_users: 'User Plan',
     user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
@@ -6616,9 +6654,8 @@ function itemSubtotal(item, fields) {
 
   // Veeno STD bills users on whichever of the two models the rep picked.
   if (item.sku_key === 'voice_veeno_std' && item.values['user_model_exotel'] === 1) {
-    const exoFree = effVal(item, 'exotel_free_users', parseFloat(item.values['exotel_free_users'] ?? 6) || 6);
     const exoCharge = effVal(item, 'exotel_user_charge', parseFloat(item.values['exotel_user_charge'] ?? 199) || 199);
-    const charged = Math.max(0, numUsers - exoFree);
+    const charged = exotelChargedUsers(effVal(item, 'exotel_extra_users', parseFloat(item.values['exotel_extra_users'] ?? 0) || 0));
     if (charged > 0) subtotal += charged * exoCharge * months;
   } else if (!isNumSeries(item.sku_key)) {
     const userCharge = getSafeNum('user_charge');
@@ -7586,7 +7623,10 @@ function buildItemRows(item, opts = {}) {
       const userModelExotel = getSafeNum('user_model_exotel') === 1;
       const exoFreeUsers = getSafeNum('exotel_free_users') || 6;
       const exoUserCharge = getSafeNum('exotel_user_charge') || 1999;
-      const chargedUsers = Math.max(0, numUsers - (userModelExotel ? exoFreeUsers : 0));
+      const vStdExtraUsers = getSafeNum('extra_users') || 0;
+      const chargedUsers = userModelExotel
+        ? exotelChargedUsers(getSafeNum('exotel_extra_users'))
+        : numUsers;
       const totalUserCostV = userModelExotel
         ? chargedUsers * validity * exoUserCharge
         : numUsers * validity * uCharge;
@@ -7606,7 +7646,6 @@ function buildItemRows(item, opts = {}) {
       tableHTML += waivableRow(stdRow, 'Setup Charges', getSafeNum('setup'), fmtRupee);
 
       tableHTML += secRow('User Plan');
-      const vStdExtraUsers = getSafeNum('extra_users') || 0;
       if (userModelExotel) {
         const freeDisplay = vStdExtraUsers > 0 ? `${exoFreeUsers} + ${vStdExtraUsers} Users (Free)` : `${exoFreeUsers} Users (Free)`;
         tableHTML += stdRow('Free Users', freeDisplay);
@@ -8050,7 +8089,9 @@ function buildItemRows(item, opts = {}) {
       const nsExotelModel = getSafeNum('user_model_exotel') === 1;
       const nsExoFreeUsers = getSafeNum('exotel_free_users') || 0;
       const nsExoUserCharge = getSafeNum('exotel_user_charge') || 0;
-      const nsChargedUsers = Math.max(0, numUsersN - (nsExotelModel ? nsExoFreeUsers : 0));
+      const nsChargedUsers = nsExotelModel
+        ? exotelChargedUsers(getSafeNum('exotel_extra_users'))
+        : numUsersN;
       const totalRental = numRental * numMosN;
       const totalChs = numBlocksN * numMosN * blockCostN;
       const totalUsersCost = nsExotelModel
@@ -8301,6 +8342,7 @@ function _computeBundleRows(items) {
     num_months: 'Plan Details',
     num_users: 'User Plan', free_users: 'User Plan', user_charge: 'User Plan', extra_user_cost: 'User Plan', extra_users: 'User Plan',
     user_model_exotel: 'User Plan', exotel_free_users: 'User Plan', exotel_user_charge: 'User Plan',
+    exotel_extra_users: 'User Plan',
     user_charge_usd: 'User Plan', unlimited_users: 'User Plan',
     free_numbers: 'Number Plan', num_paid_numbers: 'Number Plan', extra_number: 'Number Plan',
     num_numbers: 'Number Plan', number_cost: 'Number Plan', did_numbers: 'Number Plan', add_vn: 'Number Plan',
@@ -10356,6 +10398,7 @@ window.previewHistoricalVersion = function (vId) {
   // Select SKU & Tier
   if (data.sku_items && data.sku_items.length > 0) {
     QG.skuItems = data.sku_items;
+    QG.skuItems.forEach(migrateExotelExtraUsers);
     QG.activeItemId = data.sku_items[0].id;
     QG.lockedEntity = data.entity || (SKUS.find(s => s.key === data.sku_items[0].sku_key)?.entity);
     syncActiveAliases();
@@ -10789,6 +10832,7 @@ window.confirmGenerateProforma = async function () {
     // ── Compute totals from quote data ────────────────────────────
     const skuItems = data.sku_items || [{ sku_key: data.sku_key, tier: data.tier, values: data.fields || {}, stopLockOverrides: [] }];
     const validItems = skuItems.filter(i => i.sku_key);
+    validItems.forEach(migrateExotelExtraUsers);
 
     let grandSubtotal = 0;
     const lineItems = [];
@@ -10951,9 +10995,9 @@ window.confirmGenerateProforma = async function () {
           const exoFreeUsersSN = getSN('exotel_free_users') || 6;
           const exoUserChargeSN = getSN('exotel_user_charge') || 1999;
           if (userModelExotelSN) {
-            const freeCountSN = Math.min(numUsers, exoFreeUsersSN);
-            const chargedUsersSN = Math.max(0, numUsers - exoFreeUsersSN);
-            lines.push(`Free Users: ${freeCountSN} Users (Free)`);
+            const chargedUsersSN = exotelChargedUsers(getSN('exotel_extra_users'));
+            const freeLabelSN = vStdExtraUsers > 0 ? `${exoFreeUsersSN} + ${vStdExtraUsers}` : `${exoFreeUsersSN}`;
+            lines.push(`Free Users: ${freeLabelSN} Users (Free)`);
             lines.push(`Extra User Cost: ${fmtRupee(exoUserChargeSN)}/user/month`);
             if (chargedUsersSN > 0) {
               lines.push(`Charged Users: ${chargedUsersSN} users @ ${fmtRupee(exoUserChargeSN)}/user/month`);
