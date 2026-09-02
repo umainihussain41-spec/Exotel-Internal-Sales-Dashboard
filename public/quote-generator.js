@@ -1129,7 +1129,18 @@ const STARTUP_PARENT_MAP = {
 
 function getSkuTncHtml(item, entity = 'Exotel') {
   const fields = getSkuFields(item.sku_key, item.tier);
-  const getVal = (id) => item.values[id] ?? fields.find(x => x.id === id)?.value ?? 0;
+  // The terms quote prices in prose, so they have to read the same effective
+  // rate the commercial table prints. A struck-through field bills at its
+  // discount, and effVal returns that number (the list price when nothing is
+  // struck), so "₹2000 per agent/month" can no longer survive down here after
+  // the rep has discounted the agent rate to ₹1400 in the table above.
+  const getVal = (id) => effVal(item, id, item.values[id] ?? fields.find(x => x.id === id)?.value ?? 0);
+  // Digits are grouped the same way the pricing table groups them, so a rate
+  // never reads as ₹1400 in the terms under a table that says ₹1,400. A
+  // free-text value passes through untouched - there is nothing to group.
+  const grp = (v, locale) => { const n = _num(v); return n === null ? String(v ?? '') : new Intl.NumberFormat(locale || 'en-IN', { maximumFractionDigits: 2 }).format(n); };
+  const inr = (v) => '₹' + grp(v);
+  const usd = (v) => '$' + grp(v, 'en-US');
 
   let tncKey = item.sku_key;
   if (tncKey === 'startup') {
@@ -1288,7 +1299,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Pricing & Billing</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>₹${uc} + 18% GST per agent/month (deducted as ${uc} credits).</li>
+            <li>${inr(uc)} + 18% GST per agent/month (deducted as ${grp(uc)} credits).</li>
             <li>1 credit = ₹1.</li>
             <li>Billing cycle: Monthly, from the 1st. Ensure the wallet is topped up by the 29th.</li>
             <li>Pro-rata billing applicable only in the first month.</li>
@@ -1297,7 +1308,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         <li style="margin-bottom:8px;"><strong>Agent Management</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Charges apply to all created agent profiles (verified/unverified, active/inactive).</li>
-            <li>Adding an agent deducts ₹${uc}.</li>
+            <li>Adding an agent deducts ${inr(uc)}.</li>
             <li>Updating an agent’s details (i.e. changing the registered phone number) will not be treated as deleting and re-adding the agent. No credits will be deducted from your wallet for such modifications.</li>
             <li>However, deleting an agent profile and adding a new one mid-month will deduct the full monthly rental as credits again. To avoid unnecessary charges, it is recommended to perform deletions at the end of the month and add new agents at the beginning of the month.</li>
             <li>Recommendation: Delete unused agents before month-end to avoid extra billing.</li>
@@ -1508,15 +1519,14 @@ function getSkuTncHtml(item, entity = 'Exotel') {
     const chCostUnl = getVal('channel_cost') || UNLIMITED_CHANNEL_COST[tncKey];
     const chQtyUnl = getVal('num_channels') || UNLIMITED_MIN_CHANNELS;
     const monthsUnl = getVal('num_months') || 12;
-    const rupee = (v) => '₹' + new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v);
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>${entity} Unlimited ${product} - What "Unlimited" Means</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li><strong>Domestic incoming and outgoing talk-time on the subscribed channels is unlimited</strong> for the full term of this proposal. There is no per-minute rate and no pulse.</li>
             <li>Failed or unanswered call attempts are <strong>not charged</strong> on this plan.</li>
-            <li>The entire recurring charge is the per-channel monthly fee: ${rupee(chCostUnl)} per channel per month.</li>
-            <li>At ${chQtyUnl} channels over ${monthsUnl} months, the channel charge is ${chQtyUnl} × ${monthsUnl} × ${rupee(chCostUnl)} = <strong>${rupee(chQtyUnl * monthsUnl * chCostUnl)}</strong>, exclusive of GST.</li>
+            <li>The entire recurring charge is the per-channel monthly fee: ${inr(chCostUnl)} per channel per month.</li>
+            <li>At ${grp(chQtyUnl)} channels over ${grp(monthsUnl)} months, the channel charge is ${grp(chQtyUnl)} × ${grp(monthsUnl)} × ${inr(chCostUnl)} = <strong>${inr(chQtyUnl * monthsUnl * chCostUnl)}</strong>, exclusive of GST.</li>
           </ul>
         </li>
         <li style="margin-bottom:8px;"><strong>Channels &amp; Concurrency</strong>
@@ -1998,7 +2008,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         <li style="margin-bottom:8px;"><strong>Pricing & Billing</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             ${isExoUserModel ? `<li>${exoFreeTnc} agent login(s) are included at no charge. Every agent beyond that is billed at the rate below.</li>` : ''}
-            <li>₹${uc} + 18% GST per agent/month (deducted as ${uc} credits).</li>
+            <li>${inr(uc)} + 18% GST per agent/month (deducted as ${grp(uc)} credits).</li>
             <li>1 credit = ₹1.</li>
             <li>The call charges will be applicable.</li>
             <li>Billing cycle: Monthly, from the 1st. Ensure the wallet is topped up by the 29th.</li>
@@ -2008,7 +2018,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         <li style="margin-bottom:8px;"><strong>Agent Management</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Charges apply to all created agent profiles (verified/unverified, active/inactive).</li>
-            <li>Adding an agent deducts ₹${uc}.</li>
+            <li>Adding an agent deducts ${inr(uc)}.</li>
             <li>Updating an agent’s details (i.e. changing the registered phone number) will not be treated as deleting and re-adding the agent. No credits will be deducted from your wallet for such modifications.</li>
             <li>However, deleting an agent profile and adding a new one mid-month will deduct the full monthly rental as credits again. To avoid unnecessary charges, it is recommended to perform deletions at the end of the month and add new agents at the beginning of the month.</li>
             <li>Recommendation: Delete unused agents before month-end to avoid extra billing.</li>
@@ -2319,7 +2329,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         <li style="margin-bottom:8px;"><strong>USD Pricing & Account Billing</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Pricing and billing for this plan are denominated exclusively in US Dollars (USD).</li>
-            <li>Fixed Prepaid model: Minimum initial prepay amount is $${prepaid}. Account access is subject to maintaining a positive balance.</li>
+            <li>Fixed Prepaid model: Minimum initial prepay amount is ${usd(prepaid)}. Account access is subject to maintaining a positive balance.</li>
             <li>Billing cycle: Monthly subscription fees are deducted automatically from the prepaid balance on the 1st of each month.</li>
           </ul>
         </li>
@@ -2368,7 +2378,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Channels are provisioned in fixed blocks of ${CHANNELS_PER_BLOCK}. There is no per-channel pricing.</li>
             <li>Additional capacity is added in further ${CHANNELS_PER_BLOCK}-channel blocks.</li>
-            <li>Each block of ${CHANNELS_PER_BLOCK} channels is charged at ₹${CHANNEL_BLOCK_COST.toLocaleString('en-IN')} per month. This proposal covers ${blocks} block(s), i.e. ${blocks * CHANNELS_PER_BLOCK} concurrent channels.</li>
+            <li>Each block of ${CHANNELS_PER_BLOCK} channels is charged at ${inr(CHANNEL_BLOCK_COST)} per month. This proposal covers ${grp(blocks)} block(s), i.e. ${grp(blocks * CHANNELS_PER_BLOCK)} concurrent channels.</li>
             <li>No separate PRI line charges.</li>
           </ul>
         </li>
@@ -2442,7 +2452,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Streaming Channels</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Each concurrent streaming channel is charged at $${chCost} per channel per month.</li>
+            <li>Each concurrent streaming channel is charged at ${usd(chCost)} per channel per month.</li>
             <li>A channel represents one concurrent bi-directional WebSocket media stream. Concurrency beyond the subscribed channels is rejected.</li>
             <li>Channels are billed for the full month regardless of usage; mid-month additions are billed pro-rata.</li>
           </ul>
@@ -2948,9 +2958,11 @@ function getSkuFieldsBase(skuKey, tier) {
         waivableCharge('rental', 'Account Rental (₹/month)', '₹10,499'),
         waivableCharge('setup', 'Setup Charges (₹)', '₹2,000'),
         { id: 'num_months', label: 'No. of Months', value: 12, locked: false, stopType: 'lower', stopVal: 6 },
-        // hardMin, not a stop-lock: 30 channels is the floor of the plan, so
-        // there is no manager override - the field simply cannot go below it.
-        { id: 'num_channels', label: 'No. of Channels', value: UNLIMITED_MIN_CHANNELS, locked: false, hardMin: UNLIMITED_MIN_CHANNELS },
+        // hardMin, not a stop-lock: there is no manager override on the plan
+        // floor - the field simply cannot go below it. The floor itself is the
+        // grant's business: 30 channels for everyone, 1 for a rep who holds
+        // Channel Floor. The default stays 30 either way.
+        { id: 'num_channels', label: 'No. of Channels', value: UNLIMITED_MIN_CHANNELS, locked: false, hardMin: unlimitedChannelFloor() },
         { id: 'channel_cost', label: 'Channel Cost (₹/channel/month)', value: chCostUnl, locked: true, stopType: 'lower', stopVal: chCostUnl, note: 'Unlimited calling is priced on channels alone' },
         { id: 'free_users', label: 'Free Users', value: 3, locked: true, stopType: 'upper', stopVal: 5 },
         { id: 'extra_users', label: 'Additional Free Users', value: 0, locked: false, note: 'Gifted - no charge to client' },
@@ -4056,6 +4068,19 @@ function canUseUnitPricing() {
 function canUseSubSkus() {
   if (QG.bundleMergeMode) return false;
   return !!(QG.features && QG.features.sub_skus);
+}
+
+// ── Exclusive feature: the Unlimited channel floor ───────────────────────
+// Unlimited SIP Trunking and Web Streaming are sold from 30 channels up because
+// below that a flat fee undercuts the minutes it replaces. A rep holding this
+// grant may quote fewer: the floor drops to 1 channel, so the field stops
+// snapping back and the channel calculator stops rounding its answer up to 30.
+// Everyone else keeps the 30-channel floor exactly as before.
+function canLowerChannelFloor() {
+  return !!(QG.features && QG.features.channel_floor);
+}
+function unlimitedChannelFloor() {
+  return canLowerChannelFloor() ? 1 : UNLIMITED_MIN_CHANNELS;
 }
 
 function loadFeatureFlags() {
@@ -6342,7 +6367,7 @@ window.openChannelCalc = function (itemId) {
       <div class="cc-grid">
         ${[0.25, 0.5, 0.75, 1].map(f => `<div class="cc-gridline" style="bottom:${f * 100}%"></div>`).join('')}
       </div>
-      ${hardMin ? `<div class="cc-floorwrap"><div class="cc-floor" style="bottom:${(hardMin / peak) * 100}%"><span>plan minimum ${hardMin}</span></div></div>` : ''}
+      ${hardMin > 1 ? `<div class="cc-floorwrap"><div class="cc-floor" style="bottom:${(hardMin / peak) * 100}%"><span>plan minimum ${hardMin}</span></div></div>` : ''}
       <div class="cc-bars">
         ${series.map((s, i) => `
           <div class="cc-col${i === activeIdx ? ' active' : ''}">

@@ -1833,7 +1833,7 @@ function setupAdminPanel() {
 }
 
 // ── Exclusive feature access control ─────────────────────────────────────────
-const FEATURE_LABELS = { unit_pricing: 'Unit Pricing', sub_skus: 'Sub-SKUs' };
+const FEATURE_LABELS = { unit_pricing: 'Unit Pricing', sub_skus: 'Sub-SKUs', channel_floor: 'Channel Floor' };
 
 async function fetchFeatureGrants() {
     const listEl = document.getElementById('feature-grants-list');

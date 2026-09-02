@@ -153,7 +153,7 @@ db.exec(`
 // The unlimited plans (and the channel calculator that sizes them) used to sit
 // here as 'unlimited_plans'. They are open to every rep now, so the grant is
 // gone and its old rows are swept below.
-const EXCLUSIVE_FEATURES = ['unit_pricing', 'sub_skus'];
+const EXCLUSIVE_FEATURES = ['unit_pricing', 'sub_skus', 'channel_floor'];
 
 // The table is created at boot, but a database file carried over from an older
 // deploy (Railway's volume, or a local logs.db copied from elsewhere) can reach
@@ -1604,6 +1604,12 @@ app.post('/api/ai-quote-parse', ensureAuthenticated, async (req, res) => {
     }
 
     try {
+        // The Unlimited channel floor is a per-rep grant (see EXCLUSIVE_FEATURES),
+        // so the prompt has to quote the floor this rep actually works under -
+        // otherwise the parser talks a granted rep back up to 30 channels and the
+        // field they are allowed to lower never gets the number they asked for.
+        const chFloor = userFeatures(email).channel_floor ? 1 : 30;
+
         // ── System instruction: baked-in domain context (cached, not charged per-call) ──
         const systemInstruction = `You are an AI assistant inside the Exotel Internal Sales Dashboard.
 Your job: listen to a sales rep's voice and extract quote details into structured JSON.
@@ -1642,13 +1648,13 @@ Pick the best-matching skuKey using reasoning. Use ONLY these exact keys:
                         USE FOR: "unlimited streaming", "unlimited web streaming",
                         "unlimited plan" together with streaming/WebSocket/bot,
                         "flat fee streaming", "no per minute streaming".
-                        Minimum 30 channels. Default channel cost 4000/channel/month.
+                        Minimum ${chFloor} channels. Default channel cost 4000/channel/month.
 
   unlimited_sip      → Unlimited SIP Trunking: flat per-channel monthly fee, unlimited minutes.
                         USE FOR: "unlimited SIP", "unlimited SIP trunking", "unlimited trunk",
                         "unlimited VSIP", "unlimited plan" together with SIP/trunking,
                         "flat fee SIP", "no per minute SIP".
-                        Minimum 30 channels. Default channel cost 2000/channel/month.
+                        Minimum ${chFloor} channels. Default channel cost 2000/channel/month.
 
 UNLIMITED RULE: Only pick an unlimited_* key when the user actually says "unlimited"
 (or "flat fee" / "no per-minute charge"). A plain "SIP" or "streaming" request stays on
@@ -1743,7 +1749,7 @@ WEB STREAMING & VOICEBOT FIELDS (voice_exotel_stream, voice_exotel_voicebot) - c
   "volume / monthly volume / call volume / X minutes"    → key: "volume"
 
 UNLIMITED PLAN FIELDS (unlimited_stream, unlimited_sip):
-  "number of channels / X channels / X lines"            → key: "num_channels" (minimum 30)
+  "number of channels / X channels / X lines"            → key: "num_channels" (minimum ${chFloor})
   "channel cost / X per channel"                         → key: "channel_cost"
   "months / validity"                                    → key: "num_months"
   "free users / X users free"                            → key: "free_users"
