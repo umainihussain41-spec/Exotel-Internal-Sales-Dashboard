@@ -10661,6 +10661,78 @@ window.printHistoricalQuote = async function (id) {
 // State holder for the PI modal
 window._piQuoteData = null;
 
+// ── Expiry date field ─────────────────────────────────────────────
+// A native <input type="date"> always paints itself in the browser's locale, so
+// an Indian user on a US-English browser sees 09/20/2026. The visible box is
+// therefore plain text in DD/MM/YYYY; the native input stays invisible behind
+// the calendar button purely to carry the ISO value every other PI path reads.
+function piLocalIso(d) {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+function piIsoToDisplay(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}
+function piDisplayToIso(str) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec((str || '').trim());
+  if (!m) return '';
+  const dd = Number(m[1]), mm = Number(m[2]), yyyy = Number(m[3]);
+  const d = new Date(yyyy, mm - 1, dd);
+  // Rejects 31/02 and friends, which Date would silently roll into March.
+  if (d.getFullYear() !== yyyy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return '';
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+function piExpiryHint(text, bad) {
+  const hint = document.getElementById('pi-expiry-hint');
+  if (!hint) return;
+  hint.textContent = text;
+  hint.style.color = bad ? '#dc2626' : '#94a3b8';
+}
+window.piSetExpiry = function (iso) {
+  const native = document.getElementById('pi-expiry-date');
+  const display = document.getElementById('pi-expiry-display');
+  if (native) native.value = iso || '';
+  if (display) { display.value = piIsoToDisplay(iso); display.style.borderColor = '#cbd5e1'; }
+  piExpiryHint('Date format: DD/MM/YYYY', false);
+};
+window.piExpiryTyped = function (el) {
+  // Slashes are inserted as the digits are typed, so the field can only ever
+  // hold DD/MM/YYYY - there is no order left for the user to get wrong.
+  const digits = el.value.replace(/\D/g, '').slice(0, 8);
+  let out = digits.slice(0, 2);
+  if (digits.length > 2) out += '/' + digits.slice(2, 4);
+  if (digits.length > 4) out += '/' + digits.slice(4, 8);
+  el.value = out;
+  const iso = piDisplayToIso(out);
+  const native = document.getElementById('pi-expiry-date');
+  if (native) native.value = iso;
+  if (digits.length === 8 && !iso) piExpiryHint('That date does not exist. Use DD/MM/YYYY.', true);
+  else piExpiryHint('Date format: DD/MM/YYYY', false);
+};
+window.piExpiryBlur = function (el) {
+  const iso = piDisplayToIso(el.value);
+  const native = document.getElementById('pi-expiry-date');
+  const empty = !el.value.trim();
+  if (native) native.value = iso;
+  el.style.background = '#f8fafc';
+  el.style.borderColor = (empty || iso) ? '#cbd5e1' : '#dc2626';
+  if (empty) piExpiryHint('Left blank, the PI expires 30 days after the quote date.', false);
+  else piExpiryHint(iso ? 'Date format: DD/MM/YYYY' : 'That date does not exist. Use DD/MM/YYYY.', !iso);
+};
+window.piExpiryPicked = function (el) {
+  const display = document.getElementById('pi-expiry-display');
+  if (display) { display.value = piIsoToDisplay(el.value); display.style.borderColor = '#cbd5e1'; }
+  piExpiryHint('Date format: DD/MM/YYYY', false);
+};
+window.piOpenExpiryPicker = function () {
+  const native = document.getElementById('pi-expiry-date');
+  if (!native || native.disabled) return;
+  try { native.showPicker(); }
+  catch (e) { native.focus(); native.click(); }   // browsers with no showPicker
+};
+
 window.generateProformaInvoice = async function (id) {
   try {
     // Fetch quote
@@ -10743,13 +10815,11 @@ window.generateProformaInvoice = async function (id) {
     if (tdsSel) { tdsSel.value = ''; tdsSel.disabled = false; }
     if (tdsCustom) { tdsCustom.value = ''; tdsCustom.style.display = 'none'; tdsCustom.disabled = false; }
 
-    // Set expiry date to 30 days from quote date
-    const expiryEl = document.getElementById('pi-expiry-date');
-    if (expiryEl) {
-      const quoteDate = new Date(q.created_at);
-      const expiry = new Date(quoteDate.getTime() + 30 * 24 * 3600 * 1000);
-      expiryEl.value = expiry.toISOString().split('T')[0];
-    }
+    // Set expiry date to 30 days out. The PI prints today as the quote date, so
+    // the default expiry counts from today, not from when the quote was saved.
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 30);
+    window.piSetExpiry(piLocalIso(expiry));
 
     // Show modal
     const overlay = document.getElementById('pi-modal-overlay');
@@ -10787,6 +10857,17 @@ window.confirmGenerateProforma = async function () {
   const gstNumber = gstUnreg ? 'Unregistered' : ((document.getElementById('pi-gst')?.value || '').trim());
   const expiryDateVal = document.getElementById('pi-expiry-date')?.value || '';
 
+  // A half-typed or impossible date leaves the ISO value empty; say so rather
+  // than quietly falling back to the 30-day default.
+  const expiryTyped = (document.getElementById('pi-expiry-display')?.value || '').trim();
+  if (expiryTyped && !expiryDateVal) {
+    const el = document.getElementById('pi-expiry-display');
+    el.style.borderColor = '#dc2626';
+    el.focus();
+    piExpiryHint('Enter the expiry date as DD/MM/YYYY, or clear it to expire 30 days from today.', true);
+    return;
+  }
+
   // TDS rate: from preset dropdown or custom input
   const tdsRateSelect = document.getElementById('pi-tds-rate');
   const tdsCustomInput = document.getElementById('pi-tds-custom');
@@ -10804,6 +10885,8 @@ window.confirmGenerateProforma = async function () {
   const gstInput = document.getElementById('pi-gst');
   const gstUnregisteredInput = document.getElementById('pi-gst-unregistered');
   const expiryDateInput = document.getElementById('pi-expiry-date');
+  const expiryDisplayInput = document.getElementById('pi-expiry-display');
+  const expiryPickerBtn = document.getElementById('pi-expiry-picker-btn');
 
   // Disable all fields & buttons to prevent user interaction during generation
   if (confirmBtn) {
@@ -10826,6 +10909,8 @@ window.confirmGenerateProforma = async function () {
   if (gstInput) gstInput.disabled = true;
   if (gstUnregisteredInput) gstUnregisteredInput.disabled = true;
   if (expiryDateInput) expiryDateInput.disabled = true;
+  if (expiryDisplayInput) expiryDisplayInput.disabled = true;
+  if (expiryPickerBtn) { expiryPickerBtn.disabled = true; expiryPickerBtn.style.cursor = 'not-allowed'; }
   if (tdsRateSelect) tdsRateSelect.disabled = true;
   if (tdsCustomInput) tdsCustomInput.disabled = true;
 
@@ -10846,6 +10931,8 @@ window.confirmGenerateProforma = async function () {
     if (billingAddressInput) billingAddressInput.disabled = false;
     if (gstUnregisteredInput) gstUnregisteredInput.disabled = false;
     if (expiryDateInput) expiryDateInput.disabled = false;
+    if (expiryDisplayInput) expiryDisplayInput.disabled = false;
+    if (expiryPickerBtn) { expiryPickerBtn.disabled = false; expiryPickerBtn.style.cursor = 'pointer'; }
     if (tdsRateSelect) tdsRateSelect.disabled = false;
     if (tdsCustomInput) tdsCustomInput.disabled = false;
     if (gstInput) {
@@ -11394,12 +11481,14 @@ window.confirmGenerateProforma = async function () {
     const fmtINRFull = (v) => '&#8377;' + fmtINR(v);
 
     // ── Date strings ──────────────────────────────────────────────
-    const quoteDateObj = new Date(q.created_at);
+    // The PI is issued today, so it carries today's date - not the date the
+    // underlying quote happened to be saved on.
+    const quoteDateObj = new Date();
     const fmtDate = (d) => {
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
       const yyyy = d.getFullYear();
-      return `${mm}/${dd}/${yyyy}`;
+      return `${dd}/${mm}/${yyyy}`;
     };
     const quoteDateStr = fmtDate(quoteDateObj);
     const expiryDateStr = expiryDateVal
