@@ -1941,18 +1941,22 @@ window.revokeFeatureAccess = async function (id) {
 // somewhere to go back to. The button is only drawn on a build that deployed
 // successfully and is not the one already running; the server checks both again
 // before it acts, because this panel can sit open across a deploy.
+// "Removed" is Railway's word for a build that was superseded, not one that went
+// wrong: every good build before the current one ends up there, and that is what
+// a rollback goes back to. Calling it Removed in the panel reads as damage, so
+// it says Previous instead.
 const DEPLOY_STATUS_STYLE = {
-    SUCCESS:      { label: 'Stable',    fg: '#15803d', bg: '#dcfce7' },
+    SUCCESS:      { label: 'Live',      fg: '#15803d', bg: '#dcfce7' },
+    REMOVED:      { label: 'Previous',  fg: '#475569', bg: '#e2e8f0' },
+    SLEEPING:     { label: 'Sleeping',  fg: '#475569', bg: '#e2e8f0' },
     FAILED:       { label: 'Failed',    fg: '#b91c1c', bg: '#fee2e2' },
     CRASHED:      { label: 'Crashed',   fg: '#b91c1c', bg: '#fee2e2' },
+    SKIPPED:      { label: 'Skipped',   fg: '#475569', bg: '#e2e8f0' },
     BUILDING:     { label: 'Building',  fg: '#a16207', bg: '#fef9c3' },
     DEPLOYING:    { label: 'Deploying', fg: '#a16207', bg: '#fef9c3' },
     INITIALIZING: { label: 'Starting',  fg: '#a16207', bg: '#fef9c3' },
     QUEUED:       { label: 'Queued',    fg: '#475569', bg: '#e2e8f0' },
     WAITING:      { label: 'Waiting',   fg: '#475569', bg: '#e2e8f0' },
-    REMOVED:      { label: 'Removed',   fg: '#475569', bg: '#e2e8f0' },
-    SKIPPED:      { label: 'Skipped',   fg: '#475569', bg: '#e2e8f0' },
-    SLEEPING:     { label: 'Sleeping',  fg: '#475569', bg: '#e2e8f0' },
 };
 function deployStatusStyle(status) {
     return Object.prototype.hasOwnProperty.call(DEPLOY_STATUS_STYLE, status)
@@ -2009,7 +2013,7 @@ function renderDeploymentRow(d, i) {
 
     let action;
     if (d.isCurrent) action = pill('Running now', '#1d4ed8', '#dbeafe');
-    else if (!d.stable) action = pill('Cannot roll back', '#94a3b8', '#f1f5f9');
+    else if (!d.rollbackable) action = pill('Cannot roll back', '#94a3b8', '#f1f5f9');
     else action = `<button onclick="rollbackToDeployment(${i})"
             style="flex-shrink:0;padding:6px 14px;background:#fff;color:#c2410c;border:1px solid #fdba74;border-radius:7px;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;"
             onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background='#fff'">Roll back</button>`;

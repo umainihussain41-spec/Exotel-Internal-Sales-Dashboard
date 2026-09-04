@@ -1375,6 +1375,26 @@ const DEPLOY_META_QUERY = `query Deployments($input: DeploymentListInput!, $firs
     }
 }`;
 
+// Which builds are worth going back to.
+//
+// The trap here is that SUCCESS does not mean "this build was good" - it means
+// "this build is the one serving traffic". The moment a new deploy takes over,
+// the build before it is torn down and goes to REMOVED, however well it ran. So
+// on a healthy service exactly one deployment is SUCCESS and every previous good
+// one is REMOVED, and REMOVED is precisely what a rollback targets.
+//
+// Railway's own canRollback is the better answer where it is given, so it can
+// open a build up but never close one off: if that field is missing or stale,
+// the status still decides, and a working panel beats a panel that offers
+// nothing at all.
+const DEPLOY_DEAD = ['FAILED', 'CRASHED', 'SKIPPED'];
+const DEPLOY_BUSY = ['BUILDING', 'DEPLOYING', 'INITIALIZING', 'QUEUED', 'WAITING', 'NEEDS_APPROVAL'];
+function deployIsRollbackTarget(node, status) {
+    if (node.canRollback === true) return true;
+    if (DEPLOY_DEAD.includes(status) || DEPLOY_BUSY.includes(status)) return false;
+    return ['SUCCESS', 'REMOVED', 'SLEEPING'].includes(status);
+}
+
 // Railway hangs the git details off a free-form `meta` blob whose shape depends
 // on how the service was deployed. Read what is there and stay quiet about what
 // is not, rather than inventing a commit line.
@@ -1398,20 +1418,23 @@ async function fetchRailwayDeployments(limit) {
     const rows = (r.data.deployments?.edges || [])
         .map(e => e && e.node)
         .filter(Boolean)
-        .map(n => ({
-            id: n.id,
-            status: String(n.status || ''),
-            createdAt: n.createdAt,
-            // A build that never came up is not somewhere to go back to.
-            stable: String(n.status || '') === 'SUCCESS',
-            canRollback: !!n.canRollback,
-            isCurrent: deploymentId ? n.id === deploymentId : false,
-            commit: describeDeployMeta(n.meta),
-        }));
-    // Railway did not inject a deployment id, so the newest build that came up
-    // is the one serving this request.
+        .map(n => {
+            const status = String(n.status || '');
+            return {
+                id: n.id,
+                status,
+                createdAt: n.createdAt,
+                rollbackable: deployIsRollbackTarget(n, status),
+                canRollback: n.canRollback === true,
+                isCurrent: deploymentId ? n.id === deploymentId : false,
+                commit: describeDeployMeta(n.meta),
+            };
+        });
+    // Railway did not inject a deployment id, so the build still marked SUCCESS
+    // is the one serving this request. Nothing is guessed when none is: Railway
+    // refuses a rollback onto the live build anyway.
     if (!rows.some(x => x.isCurrent)) {
-        const live = rows.find(x => x.stable);
+        const live = rows.find(x => x.status === 'SUCCESS');
         if (live) live.isCurrent = true;
     }
     return { rows };
@@ -1460,7 +1483,7 @@ app.post('/api/dev/rollback', ensureAuthenticated, ensureDeveloper, async (req, 
         const target = rows.find(d => d.id === deploymentId);
         if (!target) return res.status(404).json({ error: 'That build is no longer in this service\'s recent history. Refresh the list and try again.' });
         if (target.isCurrent) return res.status(400).json({ error: 'That build is the one already running.' });
-        if (!target.stable) return res.status(400).json({ error: 'That build did not deploy successfully, so there is nothing stable to go back to.' });
+        if (!target.rollbackable) return res.status(400).json({ error: 'That build never served traffic, so there is nothing to go back to.' });
 
         const r = await railwayGraphQL(`mutation Rollback($id: String!) { deploymentRollback(id: $id) }`, { id: deploymentId });
         const failed = railwayErrorResponse(res, r, 'ROLLBACK');

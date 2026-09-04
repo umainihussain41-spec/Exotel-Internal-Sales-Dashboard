@@ -921,6 +921,44 @@
                             Redeploy Server
                         </button>
                     </div>
+
+                    <!-- Roll back: developer-only. Sits inside Server Controls
+                         because it is the same kind of operation as Redeploy,
+                         but stays hidden unless the viewer is the developer. -->
+                    <div id="dev-rollback" class="hidden" style="border-top:1px solid #e2e8f0; background:#fff; padding:20px 22px;">
+                        <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+                            <div style="flex:1 1 380px; min-width:280px;">
+                                <div style="font-weight:600; color:#1e293b; font-size:0.93rem; margin-bottom:4px; display:flex; align-items:center; gap:8px;">
+                                    Roll Back to an Earlier Build
+                                    <span class="admin-badge" style="background:#ea580c; font-size:0.6rem;">Dev</span>
+                                </div>
+                                <div style="font-size:0.83rem; color:#64748b; max-width:520px; line-height:1.5;">
+                                    Redeploy above puts the current commit back up. This puts a <strong>different</strong> build in
+                                    front of everyone, so it is the lead developer's call and nobody else's.
+                                </div>
+                            </div>
+                            <button id="btn-refresh-deployments"
+                                style="flex-shrink:0; display:inline-flex; align-items:center; gap:7px; padding:8px 16px; background:#fff; color:#c2410c; border:1px solid #fdba74; border-radius:8px; font-size:0.85rem; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s;"
+                                onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background='#fff'">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                                </svg>
+                                Refresh
+                            </button>
+                        </div>
+
+                        <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:12px 14px; margin:16px 0;">
+                            <div style="font-size:0.8rem; color:#92400e; line-height:1.55;">
+                                Rolling back restarts the service on an older build. <strong>The database is not touched</strong>, so an
+                                older build meets today's data: if a release changed the schema, go back to a build from after that change.
+                                Every rollback is recorded in the activity log.
+                            </div>
+                        </div>
+
+                        <div id="deployments-list" style="display:flex; flex-direction:column; gap:8px;">
+                            <p style="color:#94a3b8; font-size:0.85rem; margin:0;">Loading builds…</p>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ── Exclusive Features (developer-only, hidden for admins) ── -->
@@ -999,44 +1037,6 @@
                             <div id="feature-grants-list" style="display:flex; flex-direction:column; gap:8px;">
                                 <p style="color:#94a3b8; font-size:0.85rem; margin:0;">Loading…</p>
                             </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ── Version Rollback (developer-only, hidden for admins) ── -->
-                <div id="dev-rollback" class="hidden" style="margin-top:40px; border:1.5px solid #fed7aa; border-radius:14px; overflow:hidden;">
-                    <div style="background:linear-gradient(135deg,#fff7ed 0%,#fffbeb 100%); padding:18px 22px; border-bottom:1px solid #fed7aa; display:flex; align-items:center; gap:12px;">
-                        <div style="width:36px; height:36px; background:#fff; border:1px solid #fdba74; border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ea580c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 3v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L3 9"/><path d="M12 7v5l3 2"/>
-                            </svg>
-                        </div>
-                        <div style="flex:1; min-width:0;">
-                            <div style="font-weight:700; color:#9a3412; font-size:0.95rem; letter-spacing:0.01em;">
-                                Version Rollback
-                                <span class="admin-badge" style="background:#ea580c; font-size:0.6rem; vertical-align:middle; margin-left:6px;">Dev</span>
-                            </div>
-                            <div style="font-size:0.8rem; color:#c2410c; margin-top:1px;">Put an earlier build of the app back in front of everyone. Only the lead developer can do this.</div>
-                        </div>
-                        <button id="btn-refresh-deployments"
-                            style="flex-shrink:0; display:inline-flex; align-items:center; gap:7px; padding:7px 14px; background:#fff; color:#c2410c; border:1px solid #fdba74; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; font-family:inherit;">
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                            </svg>
-                            Refresh
-                        </button>
-                    </div>
-
-                    <div style="padding:20px 22px; background:#fff;">
-                        <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:12px 14px; margin-bottom:16px;">
-                            <div style="font-size:0.8rem; color:#92400e; line-height:1.55;">
-                                Rolling back restarts the service on an older build. <strong>The database is not touched</strong>, so an
-                                older build meets today's data: if a release changed the schema, go back to a build from after that change.
-                                Every rollback is recorded in the activity log.
-                            </div>
-                        </div>
-                        <div id="deployments-list" style="display:flex; flex-direction:column; gap:8px;">
-                            <p style="color:#94a3b8; font-size:0.85rem; margin:0;">Loading builds…</p>
                         </div>
                     </div>
                 </div>
