@@ -1400,6 +1400,212 @@
 
 .q-sub-add.ghost:hover { background: #f8fafc; border-color: #cbd5e1; color: #0369a1; }
 
+/* ── The proposal logo picker ────────────────────────────────────────────────
+   Sits in the Quote Information card for reps holding the Sub-SKUs grant. The
+   thumbnail is the point of it: the chips say what was chosen, the thumbnail
+   says what will actually print. */
+
+.q-logo-value { flex-direction: column; align-items: flex-end; gap: 7px; }
+
+.q-logo-chips { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
+
+.q-logo-chip {
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: #fff;
+    color: #64748b;
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 3px 11px;
+    cursor: pointer;
+    transition: border-color 0.14s, background 0.14s, color 0.14s;
+}
+
+.q-logo-chip:hover { border-color: #7dd3fc; color: #0369a1; }
+.q-logo-chip.active { background: #0284c7; border-color: #0284c7; color: #fff; }
+
+.q-logo-upload { border-style: dashed; }
+.q-logo-upload:hover { background: #f0f9ff; }
+
+.q-logo-clear {
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 50%;
+    background: #fee2e2;
+    color: #ef4444;
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.q-logo-clear:hover { background: #fecaca; }
+
+.q-logo-preview {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    max-width: 100%;
+}
+
+.q-logo-preview img {
+    max-height: 22px;
+    max-width: 96px;
+    object-fit: contain;
+}
+
+.q-logo-preview span {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+/* ── What this plan usually carries ──────────────────────────────────────────
+   Sits above the rep's own lines and offers back what other reps have already
+   put on this SKU. Tinted rather than boxed, so it reads as a shortcut into the
+   editor and not as another list of lines already on the quote. */
+
+.q-sug {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border: 1px solid #e0f2fe;
+    border-radius: 7px;
+    background: #f8fcff;
+}
+
+.q-sug-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #7dd3fc;
+}
+
+.q-sug-all {
+    border: 1px solid #7dd3fc;
+    border-radius: 6px;
+    background: #fff;
+    color: #0369a1;
+    font-size: 0.71rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+    white-space: nowrap;
+    transition: background 0.14s, border-color 0.14s;
+}
+
+.q-sug-all:hover { background: #e0f2fe; border-color: #38bdf8; }
+
+.q-sug-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+
+.q-sug-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #e2e8f0;
+    border-radius: 20px;
+    background: #fff;
+    color: #475569;
+    font-size: 0.73rem;
+    font-weight: 600;
+    padding: 3px 5px 3px 10px;
+    cursor: pointer;
+    transition: border-color 0.14s, color 0.14s;
+}
+
+.q-sug-chip:hover { border-color: #7dd3fc; color: #0369a1; }
+
+/* How many quotes for this plan carried the line. Small enough to read as
+   provenance rather than as part of the name. */
+.q-sug-chip em {
+    min-width: 17px;
+    padding: 0 4px;
+    border-radius: 10px;
+    background: #f1f5f9;
+    color: #94a3b8;
+    font-size: 0.66rem;
+    font-style: normal;
+    font-weight: 700;
+    text-align: center;
+}
+
+.q-sug-chip:hover em { background: #e0f2fe; color: #0369a1; }
+
+.q-sug-done { margin-top: 9px; font-size: 0.73rem; color: #94a3b8; font-style: italic; }
+
+.q-sug-auto { margin-top: 9px; font-size: 0.74rem; color: #64748b; }
+
+/* ── The Custom line's formula box ───────────────────────────────────────────
+   Takes a row to itself: the sum is the whole point of the line, and the
+   answer under it is what tells the rep they have written what they meant. */
+
+.q-fx-field { flex: 1 1 100%; min-width: 0; }
+
+.q-fx-input {
+    width: 100%;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.82rem;
+}
+
+/* .q-sub-field > span dresses its children as field captions; the answer and
+   the legend are prose and a keypad, so they opt back out. Matched through the
+   parent because that caption rule is a class plus an element, and would
+   otherwise outrank a bare class here. */
+.q-sub-field > span.q-fx-out,
+.q-sub-field > span.q-fx-legend {
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.q-sub-field > span.q-fx-out {
+    margin-top: 5px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #0369a1;
+}
+
+.q-sub-field > span.q-fx-out.err { color: #dc2626; font-weight: 500; }
+
+.q-fx-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    margin-top: 7px;
+}
+
+.q-fx-tok {
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    background: #fff;
+    color: #64748b;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.7rem;
+    padding: 2px 7px;
+    cursor: pointer;
+    transition: border-color 0.14s, background 0.14s, color 0.14s;
+}
+
+.q-fx-tok:hover { border-color: #7dd3fc; background: #f0f9ff; color: #0369a1; }
+
+.q-fx-help {
+    margin-left: 2px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+    color: #cbd5e1;
+    cursor: help;
+}
+
+.q-fx-none { font-size: 0.72rem; color: #94a3b8; font-style: italic; }
+
 /* A group opened but not yet filled. It exists only so there is somewhere to
    drag a line into, so it says so plainly and never reaches the PDF. */
 .quote-sku-table tbody.q-group-empty tr.section-header-row td { opacity: 0.75; }

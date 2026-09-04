@@ -37,6 +37,7 @@ const QG = {
   _bundleShowDupes: false,    // reveal the greyed overlapping fields collapsed by smart dedup
   // ── Exclusive features (entitlement-gated) ─────────────────
   features: {},               // { unit_pricing: true } - resolved from the server
+  quoteLogo: { mode: 'auto', src: '', name: '' },  // the mark on the proposal masthead
   _renamingRowKey: null,      // "itemId:fieldId" being renamed outside bundle mode
 };
 
@@ -374,6 +375,7 @@ const SUB_SKU_PRESETS = {
   rate:      { label: 'Rate only',         hint: 'A per-something rate in paise',         shape: 'rate',     perMonth: false, billed: false },
   duration:  { label: 'Validity',          hint: 'A period, in months',                   shape: 'duration', perMonth: false, billed: false },
   text:      { label: 'Free text',         hint: 'Words rather than a number',            shape: 'text',     perMonth: false, billed: false },
+  custom:    { label: 'Custom',            hint: 'Write the sum yourself, from the numbers on this plan', shape: 'formula', perMonth: false, billed: true  },
 };
 // The per-unit multipliers a line can hang off, read from the plan itself so a
 // "per user" line follows the head-count the rep typed rather than a copy of it.
@@ -407,6 +409,7 @@ function makeCustomLine(preset, section) {
     label: '', preset, section: section || 'Plan Details',
     shape: base.shape, perMonth: base.perMonth, perUnit: null, billed: base.billed,
     amount: 0, qty: 1, rate: 0, unit: '', text: '', months: 0, rateSuffix: '',
+    formula: '',
   };
 }
 // How many of the plan's own units this line rides on (1 when it rides on none).
@@ -428,10 +431,15 @@ function customLineUnitCount(item, line) {
 function customLineTerms(item, line, months) {
   if (!line.billed) return null;
   // A rate is typed in paise and an amount in rupees, so the quantity line's
-  // rate comes down to rupees before anything multiplies by it.
-  const price = line.shape === 'qty_rate'
-    ? (Number(line.rate) || 0) / 100
-    : (Number(line.amount) || 0);
+  // rate comes down to rupees before anything multiplies by it. A custom line
+  // works its own answer out first and then rides the same multipliers as any
+  // other, so "per user" and "per month" mean on it exactly what they mean
+  // everywhere else.
+  const price = line.shape === 'formula'
+    ? customFormula(item, line).value
+    : line.shape === 'qty_rate'
+      ? (Number(line.rate) || 0) / 100
+      : (Number(line.amount) || 0);
   if (!price) return null;
   const terms = [];
   if (line.shape === 'qty_rate') terms.push({ n: Number(line.qty) || 0, label: line.unit || 'units' });
@@ -452,6 +460,227 @@ function customLinesSubtotal(item, months) {
 function customLineMonths(item) {
   const m = parseFloat(item && item.values ? (item.values['num_months'] ?? item.values['validity'] ?? 1) : 1);
   return isNaN(m) ? 1 : m;
+}
+
+// ── Custom lines: arithmetic the rep writes themselves ─────────────────────
+// The presets are the shapes we knew we needed. Custom is for the ones we did
+// not: the rep writes the sum, in the plan's own numbers, and the line prints
+// its working the way every built-in row does.
+//
+//   pods * months * 1200        a flat expression
+//   users * 250 + 5000          the plan's head-count, plus a joining fee
+//   max(channels, 30) * 1500    a floor, with no second line to explain it
+//
+// A name resolves against the plan the line is sitting on, so the figure
+// follows what the rep types in the form above rather than a copy taken when
+// the line was written. A name this plan has never heard of is an error, not a
+// silent zero: a formula that quietly drops a term quotes a price nobody
+// agreed to.
+const FORMULA_ALIASES = {
+  months:   ['num_months', 'validity'],
+  users:    ['num_users', 'free_users'],
+  numbers:  ['num_paid_numbers', 'num_numbers', 'free_numbers'],
+  channels: ['num_channels', 'num_paid_channels'],
+  dids:     ['did_numbers'],
+  credits:  ['credits'],
+  rental:   ['rental'],
+  setup:    ['setup'],
+  volume:   ['volume'],
+};
+const FORMULA_FNS = {
+  min: Math.min, max: Math.max, round: Math.round,
+  ceil: Math.ceil, floor: Math.floor, abs: Math.abs,
+};
+const FORMULA_MAX_LEN = 240;
+// Looked up by hand rather than with a bare index: every object in JavaScript
+// answers to `constructor` and `toString`, and FORMULA_FNS[name] would hand one
+// of those back as though the rep had named a real function.
+const formulaOwn = (obj, name) => (Object.prototype.hasOwnProperty.call(obj, name) ? obj[name] : null);
+
+// The number behind a name, or null when this plan carries no such figure.
+// Aliases are tried in order, so `users` means the head-count on a plan that
+// has one and the free-user block on a plan that does not.
+function formulaLookup(item, name) {
+  if (!item) return null;
+  const fields = getSkuFields(item.sku_key, item.tier) || [];
+  const read = (id) => {
+    const has = item.values && item.values[id] !== undefined;
+    const raw = has ? item.values[id] : (fields.find(f => f.id === id) || {}).value;
+    const n = parseFloat(raw);
+    return isNaN(n) ? null : unitQty(item, id, n);
+  };
+  const ids = formulaOwn(FORMULA_ALIASES, name) || [name];
+  for (const id of ids) {
+    const n = read(id);
+    if (n !== null) return n;
+  }
+  return null;
+}
+// The names this plan actually answers to, for the legend under the box. An
+// alias that resolves to nothing here is left out rather than offered and then
+// rejected.
+function formulaNames(item) {
+  return Object.keys(FORMULA_ALIASES)
+    .map(name => ({ name, value: formulaLookup(item, name) }))
+    .filter(x => x.value !== null);
+}
+function fmtFormulaNum(n) {
+  return new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(Number(n) || 0);
+}
+
+// The one line under the formula box: the mistake if there is one, otherwise
+// the sum, its answer, and - when months or units ride on top - what the line
+// comes to over the whole term.
+function formulaReadout(item, line) {
+  const fx = customFormula(item, line);
+  if (fx.empty) return 'Write a sum from the names below, e.g. users * 250 + 5000';
+  if (fx.error) return fx.error;
+  const base = line.billed
+    ? fmtSubSkuMoney(fx.value)
+    : fmtFormulaNum(fx.value) + (line.unit ? ' ' + line.unit : '');
+  const total = customLineAmount(item, line, customLineMonths(item));
+  const rides = line.billed && Math.abs(total - fx.value) > 0.005;
+  return fx.working + ' = ' + base + (rides ? '  ·  ' + fmtSubSkuMoney(total) + ' over the term' : '');
+}
+function formulaOutId(itemId, lineId) { return 'fx-out_' + itemId + '_' + lineId; }
+// Typing must not tear the form out from under the caret, so the answer is
+// rewritten in place rather than by redrawing the editor.
+function refreshFormulaReadout(item, line) {
+  if (typeof document === 'undefined') return;
+  const out = document.getElementById(formulaOutId(item.id, line.id));
+  if (!out) return;
+  out.className = 'q-fx-out' + (customFormula(item, line).error ? ' err' : '');
+  out.textContent = formulaReadout(item, line);
+}
+
+// A four-function calculator, not an eval(): what a rep types into a quote must
+// never be able to run as code.
+function lexFormula(src) {
+  const s = String(src || '');
+  if (s.length > FORMULA_MAX_LEN) return { error: 'That formula is too long' };
+  const re = /(\d+(?:\.\d+)?)|([A-Za-z_][A-Za-z0-9_]*)|(\*\*|[-+*/%(),^])/y;
+  const tokens = [];
+  let i = 0;
+  while (i < s.length) {
+    if (/\s/.test(s[i])) { i++; continue; }
+    re.lastIndex = i;
+    const m = re.exec(s);
+    if (!m) return { error: 'Cannot read "' + s.slice(i, i + 12) + '"' };
+    i = re.lastIndex;
+    if (m[1] !== undefined) tokens.push({ t: 'num', v: Number(m[1]), raw: m[1] });
+    else if (m[2] !== undefined) tokens.push({ t: 'name', v: m[2], raw: m[2] });
+    else tokens.push({ t: 'op', v: m[3] === '**' ? '^' : m[3], raw: m[3] });
+  }
+  return { tokens };
+}
+// Ordinary precedence, so a formula means on the page what it means on paper.
+// Throws on anything it cannot make sense of; the caller turns that into the
+// message under the box.
+function runFormula(tokens, resolve) {
+  let p = 0;
+  const isOp = (v) => { const t = tokens[p]; return !!t && t.t === 'op' && t.v === v; };
+  const eat = (v) => { if (!isOp(v)) throw new Error('Expected "' + v + '"'); p++; };
+
+  function expr() {
+    let v = term();
+    while (isOp('+') || isOp('-')) {
+      const o = tokens[p++].v;
+      const r = term();
+      v = o === '+' ? v + r : v - r;
+    }
+    return v;
+  }
+  function term() {
+    let v = power();
+    while (isOp('*') || isOp('/') || isOp('%')) {
+      const o = tokens[p++].v;
+      const r = power();
+      if (o !== '*' && r === 0) throw new Error('That divides by zero');
+      v = o === '*' ? v * r : o === '/' ? v / r : v % r;
+    }
+    return v;
+  }
+  function power() {
+    const v = unary();
+    if (isOp('^')) { p++; return Math.pow(v, power()); }
+    return v;
+  }
+  function unary() {
+    if (isOp('-')) { p++; return -unary(); }
+    if (isOp('+')) { p++; return unary(); }
+    return primary();
+  }
+  function primary() {
+    const t = tokens[p];
+    if (!t) throw new Error('The formula stops early');
+    if (t.t === 'num') { p++; return t.v; }
+    if (t.t === 'name') {
+      p++;
+      const fn = formulaOwn(FORMULA_FNS, t.v);
+      if (isOp('(')) {
+        if (!fn) throw new Error('"' + t.v + '" is not something you can call');
+        p++;
+        const args = [];
+        if (!isOp(')')) { args.push(expr()); while (isOp(',')) { p++; args.push(expr()); } }
+        eat(')');
+        return fn.apply(null, args);
+      }
+      if (fn) throw new Error('"' + t.v + '" needs brackets, like ' + t.v + '(a, b)');
+      return resolve(t.v);
+    }
+    if (isOp('(')) { p++; const v = expr(); eat(')'); return v; }
+    throw new Error('Unexpected "' + t.raw + '"');
+  }
+
+  const value = expr();
+  if (p < tokens.length) throw new Error('Unexpected "' + tokens[p].raw + '"');
+  return value;
+}
+// The same expression with every name swapped for the figure it stands for, so
+// the proposal can show the sum rather than assert its answer.
+function formulaWorking(item, tokens) {
+  let out = '';
+  tokens.forEach((t, i) => {
+    let txt;
+    if (t.t === 'name' && !formulaOwn(FORMULA_FNS, t.v)) {
+      const n = formulaLookup(item, t.v);
+      txt = n === null ? t.v : fmtFormulaNum(n);
+    } else if (t.t === 'op' && t.v === '*') txt = '×';
+    else if (t.t === 'op' && t.v === '/') txt = '÷';
+    else txt = t.raw;
+    const prev = tokens[i - 1];
+    const tight = !out
+      || txt === ')' || txt === ','
+      || (prev && prev.t === 'op' && prev.v === '(')
+      || (txt === '(' && prev && prev.t === 'name');
+    out += (tight ? '' : ' ') + txt;
+  });
+  return out;
+}
+// What a custom line comes to, and why. `empty` is a line not written yet, and
+// reads as nothing rather than as a mistake.
+function customFormula(item, line) {
+  const src = String((line && line.formula) || '').trim();
+  if (!src) return { value: 0, empty: true, error: null, working: '' };
+  const lex = lexFormula(src);
+  if (lex.error) return { value: 0, error: lex.error, working: '' };
+  const missing = [];
+  let value;
+  try {
+    value = runFormula(lex.tokens, (name) => {
+      const n = formulaLookup(item, name);
+      if (n === null) { missing.push(name); return 0; }
+      return n;
+    });
+  } catch (e) {
+    return { value: 0, error: e.message, working: '' };
+  }
+  if (missing.length) {
+    const uniq = missing.filter((m, i) => missing.indexOf(m) === i);
+    return { value: 0, error: 'This plan has no ' + uniq.join(', '), working: '' };
+  }
+  if (!isFinite(value)) return { value: 0, error: 'That does not come out to a number', working: '' };
+  return { value: Math.round(value * 100) / 100, error: null, working: formulaWorking(item, lex.tokens) };
 }
 
 // ── Canonical field readers ─────────────────────────────────────────────────
@@ -2945,6 +3174,10 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'extra_number', label: 'Extra Number Cost (₹/number/month)', value: 499, locked: false, stopType: 'lower', stopVal: 299 },
         { id: 'did_numbers', label: 'No. of Mobile DID Numbers', value: 0, locked: false },
         { id: 'did_cost', label: 'Mobile DID Cost (₹/number/month)', value: 1500, locked: true, stopType: 'lower', stopVal: 1000 },
+        // A streaming deal is rarely voice alone: the same bot that answers the
+        // call follows up over SMS or WhatsApp. Both ride here as add-ons, off
+        // until the rep ticks them on, exactly as they do on Exotel STD.
+        sms_field, ...wa_fields,
       ];
     // ── Unlimited plans (Web Streaming / SIP Trunking) ──────────────
     // Deliberately no credits, incoming, outgoing, attempt or pulse fields:
@@ -4083,6 +4316,119 @@ function unlimitedChannelFloor() {
   return canLowerChannelFloor() ? 1 : UNLIMITED_MIN_CHANNELS;
 }
 
+// ── Exclusive feature: the proposal logo ───────────────────────────────────
+// The masthead normally follows the entity the SKU belongs to, and for most
+// reps that is the right answer and not worth a control. A rep holding Sub-SKUs
+// is already building proposals the SKU sheet does not describe - a partner's
+// paper, a white-labelled deal - so the same grant lets them say which mark
+// goes on top. It travels with the quote, so reopening one prints what was sent.
+const QUOTE_LOGOS = {
+  auto:   { label: 'Follow the SKU', src: null },
+  exotel: { label: 'Exotel',         src: '/exotel-logo.png' },
+  veeno:  { label: 'Veeno',          src: '/veeno-logo.png' },
+  custom: { label: 'Uploaded',       src: null },
+};
+// Small enough to sit inside a saved quote without bloating the row it lives in.
+const QUOTE_LOGO_MAX_BYTES = 512 * 1024;
+const quoteLogoMode = (m) => (Object.prototype.hasOwnProperty.call(QUOTE_LOGOS, m) ? QUOTE_LOGOS[m] : null);
+
+function quoteLogo() {
+  if (!QG.quoteLogo || typeof QG.quoteLogo !== 'object') QG.quoteLogo = { mode: 'auto', src: '', name: '' };
+  return QG.quoteLogo;
+}
+function resetQuoteLogo() { QG.quoteLogo = { mode: 'auto', src: '', name: '' }; }
+// The mark this proposal actually prints. `entityDefault` is what the SKU would
+// have picked, and it stays the answer for everyone who has not overridden it,
+// which includes every rep without the grant - their override cannot be set.
+function quoteLogoSrc(entityDefault) {
+  if (!canUseSubSkus()) return entityDefault;
+  const l = quoteLogo();
+  if (l.mode === 'custom') return l.src || entityDefault;
+  const preset = quoteLogoMode(l.mode);
+  return (preset && preset.src) || entityDefault;
+}
+// What the thumbnail falls back to. The live preview works the entity out for
+// itself, DID overrides and all; this only has to be right often enough to show
+// the rep which mark "Follow the SKU" currently means.
+function quoteEntityLogo() {
+  const first = (QG.skuItems || []).find(i => i.sku_key);
+  const sku = first && SKUS.find(s => s.key === first.sku_key);
+  return sku && sku.entity === 'Veeno' ? '/veeno-logo.png' : '/exotel-logo.png';
+}
+
+function renderQuoteLogoPicker() {
+  const host = document.getElementById('q-logo-picker');
+  if (!host) return;
+  if (!canUseSubSkus()) { host.innerHTML = ''; return; }
+  const l = quoteLogo();
+  const custom = l.mode === 'custom' && !!l.src;
+  const chip = (mode) =>
+    '<button type="button" class="q-logo-chip' + (l.mode === mode ? ' active' : '') + '"' +
+    ' onclick="window.setQuoteLogo(\'' + mode + '\')">' + sanitize(QUOTE_LOGOS[mode].label) + '</button>';
+  host.innerHTML =
+    '<div class="q-field-row">' +
+    '<span class="q-field-label">Proposal Logo</span>' +
+    '<div class="q-field-value q-logo-value">' +
+    '<div class="q-logo-chips">' +
+    ['auto', 'exotel', 'veeno'].map(chip).join('') +
+    '<label class="q-logo-chip q-logo-upload' + (custom ? ' active' : '') + '" title="A PNG, JPEG, SVG or WebP under 512KB">' +
+    (custom ? 'Change file' : 'Upload') +
+    '<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden' +
+    ' onchange="window.uploadQuoteLogo(this)"></label>' +
+    (custom
+      ? '<button type="button" class="q-logo-clear" title="Go back to the logo the SKU picks"' +
+        ' onclick="window.setQuoteLogo(\'auto\')">&times;</button>'
+      : '') +
+    '</div>' +
+    '<div class="q-logo-preview">' +
+    '<img src="' + sanitize(quoteLogoSrc(quoteEntityLogo())) + '" alt=""' +
+    ' onerror="this.style.visibility=\'hidden\'">' +
+    '<span>' + sanitize(custom ? (l.name || 'Uploaded image') : 'Printed at the top of every proposal page') + '</span>' +
+    '</div>' +
+    '</div></div>';
+}
+
+window.setQuoteLogo = function (mode) {
+  if (!quoteLogoMode(mode)) return;
+  const l = quoteLogo();
+  l.mode = mode;
+  // Dropping the file with the mode, so a quote that no longer prints an
+  // uploaded logo does not still carry one around.
+  if (mode !== 'custom') { l.src = ''; l.name = ''; }
+  QG._dirty = true;
+  renderQuoteLogoPicker();
+  updatePreview();
+};
+
+window.uploadQuoteLogo = function (input) {
+  const file = input && input.files && input.files[0];
+  if (input) input.value = '';        // so the same file can be chosen twice running
+  if (!file) return;
+  if (!/^image\//.test(file.type || '')) {
+    showAlert('Pick an image file: PNG, JPEG, SVG or WebP.', { type: 'warning', title: 'Not an Image' });
+    return;
+  }
+  if (file.size > QUOTE_LOGO_MAX_BYTES) {
+    showAlert('That image is ' + Math.round(file.size / 1024) + 'KB. Keep it under 512KB, so it can travel inside the saved quote.',
+      { type: 'warning', title: 'Image Too Large' });
+    return;
+  }
+  const reader = new FileReader();
+  // Read as a data URL rather than uploaded: the logo has to survive into the
+  // PDF, which is rendered from this page's own markup on the server.
+  reader.onload = () => {
+    const l = quoteLogo();
+    l.mode = 'custom';
+    l.src = String(reader.result || '');
+    l.name = file.name || 'Uploaded image';
+    QG._dirty = true;
+    renderQuoteLogoPicker();
+    updatePreview();
+  };
+  reader.onerror = () => showAlert('That image could not be read.', { type: 'error', title: 'Upload Failed' });
+  reader.readAsDataURL(file);
+};
+
 function loadFeatureFlags() {
   return fetch('/api/features/me')
     .then(r => r.ok ? r.json() : { features: {} })
@@ -4157,6 +4503,9 @@ function renderBundleTabSwitcher() {
 
 
 function renderSkuSelector() {
+  // Redrawn from here because this runs on every mode switch and SKU choice,
+  // which is exactly when the picker's availability and its thumbnail change.
+  renderQuoteLogoPicker();
   const grid = document.getElementById('sku-selector-grid');
   if (!grid) return;
 
@@ -6698,6 +7047,151 @@ function itemSubtotal(item, fields) {
   if (item.sku_key === 'truecaller_exotel') subtotal = truecallerSubtotalINR(item);
   return subtotal + customLinesSubtotal(item, months);
 }
+// ── What this plan usually carries ─────────────────────────────────────────
+// Reps quoting the same SKU reach for the same lines. The server counts which
+// ones, and which of them get added in one go; this offers them back at the top
+// of the editor, already priced, so the second rep to need a line does not
+// rebuild it from the name up.
+const SUBSKU_AUTOADD_KEY = 'qg.subSkuAutoAdd';
+function subSkuAutoAdd() {
+  try { return localStorage.getItem(SUBSKU_AUTOADD_KEY) === '1'; } catch (_) { return false; }
+}
+window.setSubSkuAutoAdd = function (on) {
+  try { localStorage.setItem(SUBSKU_AUTOADD_KEY, on ? '1' : '0'); } catch (_) { /* private window */ }
+  if (on) autoAddSubSkus();
+  if (QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
+};
+function subSkuSuggestions(skuKey) {
+  return (QG._subSkuSuggest || {})[skuKey] || null;
+}
+// Asked once per SKU per session: the answer is a handful of rows, and a rep
+// moving between two plans should not re-ask on every redraw.
+function loadSubSkuSuggestions(skuKey) {
+  if (!skuKey || !canUseSubSkus()) return;
+  if (!QG._subSkuSuggest) QG._subSkuSuggest = {};
+  if (QG._subSkuSuggest[skuKey]) {
+    if (!QG._subSkuSuggest[skuKey].loading) setTimeout(autoAddSubSkus, 0);
+    return;
+  }
+  QG._subSkuSuggest[skuKey] = { loading: true, lines: [], combo: null };
+  fetch('/api/sub-skus/suggest?sku=' + encodeURIComponent(skuKey))
+    .then(r => (r.ok ? r.json() : null))
+    .then(d => {
+      QG._subSkuSuggest[skuKey] = { loading: false, lines: (d && d.lines) || [], combo: (d && d.combo) || null };
+      autoAddSubSkus();
+      // The answer lands after the form is already on screen. Redrawing under a
+      // rep who is mid-word would take the caret with it, so a form being typed
+      // into keeps what it has and picks the strip up on its next redraw.
+      const el = document.activeElement;
+      const typing = el && el.matches && el.matches('input, select, textarea');
+      if (!typing && QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
+    })
+    .catch(() => { QG._subSkuSuggest[skuKey] = { loading: false, lines: [], combo: null }; });
+}
+// A suggestion is a line somebody already wrote, so it arrives priced: the rep
+// gets it where they would have typed it and is free to change any of it. A
+// name already on this SKU is left alone rather than doubled.
+function applySuggestedLines(item, raws) {
+  if (!Array.isArray(item.customLines)) item.customLines = [];
+  const have = customLines(item).map(customLineMatchKey);
+  const fallbackGroup = availableGroups(item, (QG._itemTables || {})[item.id])[0] || 'Plan Details';
+  let added = 0;
+  (raws || []).forEach(raw => {
+    const label = String((raw && raw.label) || '').trim();
+    if (!label) return;
+    const key = label.toLowerCase();
+    if (have.includes(key)) return;
+    have.push(key);
+    const line = makeCustomLine(raw.preset || 'one_time', raw.section || fallbackGroup);
+    ['label', 'shape', 'perUnit', 'unit', 'amount', 'qty', 'rate', 'months', 'text', 'rateSuffix', 'formula']
+      .forEach(k => { if (raw[k] !== undefined && raw[k] !== null) line[k] = raw[k]; });
+    line.perMonth = !!raw.perMonth;
+    line.billed = !!raw.billed;
+    item.customLines.push(line);
+    added++;
+  });
+  return added;
+}
+// "Add by default" means exactly that: on a plan whose usual set is known, a
+// rep who has asked for it gets those lines the moment the form opens. Once per
+// item, so a line taken back off stays off.
+function autoAddSubSkus() {
+  if (!canUseSubSkus() || !subSkuAutoAdd()) return;
+  if (!QG._autoSubSkuDone) QG._autoSubSkuDone = {};
+  let changed = false;
+  _qgAllItems().forEach(item => {
+    if (!item || !item.sku_key || QG._autoSubSkuDone[item.id]) return;
+    const sug = subSkuSuggestions(item.sku_key);
+    if (!sug || sug.loading) return;
+    const usual = (sug.combo && sug.combo.lines) || [];
+    if (!usual.length) return;
+    QG._autoSubSkuDone[item.id] = true;
+    if (customLines(item).length) return;   // the rep is already writing their own
+    if (applySuggestedLines(item, usual)) changed = true;
+  });
+  if (!changed) return;
+  QG._dirty = true;
+  updatePreview();
+  const el = document.activeElement;
+  const typing = el && el.matches && el.matches('input, select, textarea');
+  if (!typing && QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
+}
+function subSkuChipHint(s) {
+  const n = Number(s.times_used) || 1;
+  const kind = (SUB_SKU_PRESETS[(s.line && s.line.preset) || ''] || {}).label || '';
+  return 'On ' + n + ' quote' + (n === 1 ? '' : 's') + ' for this plan' + (kind ? ' · ' + kind : '');
+}
+// The strip above the editor's own lines. Anything already on this SKU drops
+// out of it, so it always reads as what is still on offer.
+function subSkuSuggestHTML(item) {
+  const sug = subSkuSuggestions(item.sku_key);
+  if (!sug || sug.loading) return '';
+  const on = customLines(item).map(customLineMatchKey);
+  const nameOf = (l) => String((l && l.label) || '').trim().toLowerCase();
+  // Nothing has been recorded against this plan yet, so there is nothing to
+  // say. Once there is, the strip stays put even with every line already on the
+  // quote: it is where the automatic setting lives, and a rep who wants to turn
+  // that off must not have to empty the quote first to find the switch.
+  if (!(sug.lines || []).length) return '';
+  const offer = sug.lines.map((s, i) => ({ s, i })).filter(x => !on.includes(nameOf(x.s)));
+  const usualLeft = ((sug.combo && sug.combo.lines) || []).filter(l => !on.includes(nameOf(l)));
+  const skuName = (SKUS.find(s => s.key === item.sku_key) || {}).label || 'this plan';
+  const chips = offer.slice(0, 8).map(({ s, i }) =>
+    '<button type="button" class="q-sug-chip" title="' + sanitize(subSkuChipHint(s)) + '"' +
+    ' onclick="window.addSuggestedSubSku(\'' + item.id + '\',' + i + ')">' +
+    sanitize(s.label) + '<em>' + (Number(s.times_used) || 1) + '</em></button>').join('');
+  const all = usualLeft.length > 1
+    ? '<button type="button" class="q-sug-all" title="The set most often added to ' + sanitize(skuName) + ' in one go"' +
+      ' onclick="window.addSuggestedSubSkuAll(\'' + item.id + '\')">Add the usual ' + usualLeft.length + '</button>'
+    : '';
+  return '<div class="q-sug">' +
+    '<div class="q-sug-head"><span>Usually added to ' + sanitize(skuName) + '</span>' + all + '</div>' +
+    (chips
+      ? '<div class="q-sug-chips">' + chips + '</div>'
+      : '<div class="q-sug-done">Every one of them is already on this quote.</div>') +
+    '<label class="q-sub-check q-sug-auto"><input type="checkbox"' + (subSkuAutoAdd() ? ' checked' : '') +
+    ' onchange="window.setSubSkuAutoAdd(this.checked)"> Put the usual set on automatically</label>' +
+    '</div>';
+}
+window.addSuggestedSubSku = function (itemId, idx) {
+  const item = _qgItem(itemId);
+  if (!item) return;
+  const sug = subSkuSuggestions(item.sku_key);
+  const hit = ((sug && sug.lines) || [])[Number(idx)];
+  if (!hit || !hit.line) return;
+  applySuggestedLines(item, [hit.line]);
+  _qgTouched(item);
+};
+window.addSuggestedSubSkuAll = function (itemId) {
+  const item = _qgItem(itemId);
+  if (!item) return;
+  const sug = subSkuSuggestions(item.sku_key);
+  const usual = (sug && sug.combo && sug.combo.lines) || [];
+  if (!usual.length) return;
+  applySuggestedLines(item, usual);
+  _qgTouched(item);
+};
+
 // ── The sub-SKU editor ─────────────────────────────────────────────────────
 // Sits at the foot of a SKU's config card. A preset decides which inputs are
 // worth showing, so the common cases are three fields and done; Advanced opens
@@ -6705,6 +7199,7 @@ function itemSubtotal(item, fields) {
 function subSkuEditorHTML(item) {
   const lines = customLines(item);
   const groups = availableGroups(item, (QG._itemTables || {})[item.id]);
+  loadSubSkuSuggestions(item.sku_key);
 
   const presetChips = (line) => Object.keys(SUB_SKU_PRESETS).map(k =>
     '<button type="button" class="q-preset' + (line.preset === k ? ' active' : '') + '"' +
@@ -6724,6 +7219,29 @@ function subSkuEditorHTML(item) {
     ' value="' + sanitize(String(line[key] ?? '')) + '"' +
     ' oninput="window.setCustomLine(\'' + item.id + '\',\'' + line.id + '\',\'' + key + '\',this.value)"></label>';
 
+  // Custom is the one shape with no fixed set of inputs, so it gets a box, the
+  // answer it currently comes to, and the names this plan will actually answer
+  // to. Clicking a name appends it, which beats remembering how each plan
+  // spells its head-count.
+  const formulaField = (line) => {
+    const fx = customFormula(item, line);
+    const legend = formulaNames(item).map(n =>
+      '<button type="button" class="q-fx-tok" title="Currently ' + sanitize(fmtFormulaNum(n.value)) + '"' +
+      ' onclick="window.insertFormulaToken(\'' + item.id + '\',\'' + line.id + '\',\'' + n.name + '\')">' +
+      sanitize(n.name) + '</button>').join('');
+    return '<div class="q-sub-field q-fx-field"><span>Formula</span>' +
+      '<input type="text" class="q-input q-fx-input" spellcheck="false" placeholder="users * 250 + 5000"' +
+      ' value="' + sanitize(String(line.formula || '')) + '"' +
+      ' oninput="window.setCustomLine(\'' + item.id + '\',\'' + line.id + '\',\'formula\',this.value)">' +
+      '<span class="q-fx-out' + (fx.error ? ' err' : '') + '" id="' + formulaOutId(item.id, line.id) + '">' +
+      sanitize(formulaReadout(item, line)) + '</span>' +
+      '<span class="q-fx-legend">' +
+      (legend || '<em class="q-fx-none">This plan offers no names to build on, so use plain numbers.</em>') +
+      '<span class="q-fx-help" title="min, max, round, ceil, floor and abs are available too, with brackets: max(channels, 30)">' +
+      '+ - * / % ^ ( ) and min max round ceil floor abs</span></span>' +
+      '</div>';
+  };
+
   const groupPicker = (line) =>
     '<label class="q-sub-field"><span>Group</span><select class="q-input" style="width:170px"' +
     ' onchange="window.setCustomLine(\'' + item.id + '\',\'' + line.id + '\',\'section\',this.value)">' +
@@ -6741,6 +7259,7 @@ function subSkuEditorHTML(item) {
     if (shape === 'rate')     inputs = num(line, 'amount', 'Rate (paise)', 100) + text(line, 'unit', 'Per', 'message', 100);
     if (shape === 'duration') inputs = num(line, 'months', 'Months', 70);
     if (shape === 'text')     inputs = text(line, 'text', 'Reads', 'Dedicated CSM', 200);
+    if (shape === 'formula')  inputs = formulaField(line) + text(line, 'unit', 'Counting', 'pods', 100);
 
     const adv = line._adv ? (
       '<div class="q-sub-adv">' +
@@ -6781,6 +7300,7 @@ function subSkuEditorHTML(item) {
     '<span class="q-sub-head-btns">' +
     '<button type="button" class="q-sub-add ghost" title="Open a group with nothing in it yet, then drag lines into it on the proposal" onclick="window.addItemGroup(\'' + item.id + '\',\'\')">+ New group</button>' +
     '<button type="button" class="q-sub-add" onclick="window.addCustomLine(\'' + item.id + '\')">+ Add line</button></span></div>' +
+    subSkuSuggestHTML(item) +
     (lines.length ? body : '<div class="q-sub-empty">Anything the SKU sheet does not cover: a setup fee, a per-message rate, a longer validity, a note. It prints in the group you pick and, when there is money in it, shows its working.</div>') +
     '</div>';
 }
@@ -6825,12 +7345,28 @@ window.setCustomLine = function (itemId, lineId, key, value) {
     line[key] = value;
   }
 
+  // Every edit can move a custom line's answer - the sum itself, whether it is
+  // billed, what it counts - so the readout is refreshed on all of them.
+  if (line.shape === 'formula') refreshFormulaReadout(item, line);
+
   // Typing in a text box must not tear the field out from under the caret, so
   // only the changes that reshape the form redraw it.
   const reshapes = ['preset', '_adv', 'perUnit', 'section'];
   QG._dirty = true;
   updatePreview();
   if (reshapes.includes(key) && QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
+};
+
+// Appends a name to a custom line's formula. A name straight after another is
+// nearly always a multiplication, so the operator goes in too rather than
+// leaving behind a formula that cannot parse.
+window.insertFormulaToken = function (itemId, lineId, name) {
+  const item = _qgItem(itemId);
+  const line = item && customLines(item).find(l => l.id === lineId);
+  if (!line) return;
+  const cur = String(line.formula || '').trim();
+  line.formula = cur + (!cur ? '' : (/[-+*/%(^,]$/.test(cur) ? ' ' : ' * ')) + name;
+  _qgTouched(item);
 };
 
 // ── Moving lines and groups ────────────────────────────────────────────────
@@ -7159,7 +7695,11 @@ function customLineRateSuffix(line) {
 // to Rs 0.12 and quoted a price nobody agreed to.
 function fmtSubSkuRate(v) {
   const num = Number(v) || 0;
-  return num >= 100 ? '₹' + (num / 100).toFixed(2) : num + 'p';
+  if (num < 100) return num + 'p';
+  // Paise only where there are paise: 100p reads as ₹1, not ₹1.00. A rate that
+  // does carry paise keeps both places, so ₹1.50 never shortens to ₹1.5.
+  const rupees = Math.round(num) / 100;
+  return '₹' + (Number.isInteger(rupees) ? String(rupees) : rupees.toFixed(2));
 }
 const SUBSKU_DIM = (t) => '<span style="color:#94a3b8;font-size:0.8em;">' + sanitize(t) + '</span>';
 
@@ -7186,6 +7726,15 @@ function customLineValueHTML(item, line, opts) {
   if (line.shape === 'qty_rate') {
     const qty = (Number(line.qty) || 0) + ' ' + sanitize(line.unit || 'unit');
     return cell(o.inline ? qty + ' ' + SUBSKU_DIM('at') + ' ' + customLineRateHTML(line) : qty);
+  }
+  if (line.shape === 'formula') {
+    const fx = customFormula(item, line);
+    if (fx.empty || fx.error) return cell(SUBSKU_DIM(fx.error ? 'Check the formula' : '-'));
+    // Not billed means the formula is counting something rather than pricing
+    // it, so the answer prints as the plain number it is.
+    if (!line.billed) return cell(fmtFormulaNum(fx.value) + (line.unit ? ' ' + SUBSKU_DIM(line.unit) : ''));
+    return fx.value === 0 ? WAIVED_HTML
+      : cell(fmtSubSkuMoney(fx.value) + (line.perMonth ? ' ' + SUBSKU_DIM('/month') : ''));
   }
   // Zero on a rep's own line means what it means on a built-in one: a charge
   // given away reads as Waived, a rate given away reads as Free.
@@ -7223,6 +7772,13 @@ function customLineRowsHTML(item, line, months, opts) {
   const value = customLineValueHTML(item, line);
   const extra = [];
   if (line.shape === 'qty_rate') extra.push(sub('Rate', customLineRateHTML(line)));
+  // The sum behind the cell above, so the client can check the number rather
+  // than take it on trust. Any months or units ride on top of it in the
+  // Calculation row below, exactly as they do for a built-in line.
+  if (line.shape === 'formula') {
+    const fx = customFormula(item, line);
+    if (fx.working) extra.push(sub('Formula', sanitize(fx.working)));
+  }
 
   const handle = opts.movable ? rowHandleHTML(item, 'cl:' + line.id, line.label || 'this line') : '';
   const rowCls = opts.movable ? ' class="q-hideable q-movable"' : '';
@@ -7967,6 +8523,17 @@ function buildItemRows(item, opts = {}) {
         tableHTML += stdRow('Attempt Charges', attemptDisplay);
       }
 
+      if (showSms || showWa) {
+        tableHTML += secRow('Messaging & Communication Services');
+        if (showSms) tableHTML += stdRow('SMS Cost', fmtPaiseMsg(getSafeNum('sms_cost')));
+        if (showWa) {
+          tableHTML += stdRow('WhatsApp Utility Messages', fmtPaiseMsg(getVal('wa_utility')));
+          tableHTML += stdRow('WhatsApp Marketing Messages', fmtPaiseMsg(getVal('wa_promo')));
+          tableHTML += stdRow('WhatsApp Authentication Messages (OTP)', fmtPaiseMsg(getVal('wa_auth')));
+          tableHTML += stdRow('WhatsApp API Charge', fmtPaiseMsg(getSafeNum('wa_api')));
+        }
+      }
+
     } else if (effectiveSk === 'voice_exotel_campaigns' || sk === 'voice_veeno_campaigns') {
       const campValidity = parseFloat(getVal('validity')) || 0;
       const campRate = getSafeNum('call_rate') || 0;
@@ -8642,6 +9209,15 @@ function _computeBundleRows(items) {
           isWaived: false, isExcluded: false, section: sec, isSub: true,
         });
       }
+      if (line.shape === 'formula') {
+        const fx = customFormula(item, line);
+        if (fx.working) primaryRows.push({
+          key: item.id + ':cl:' + line.id + ':fx',
+          itemId: item.id, skuKey: item.sku_key, skuLabel, skuEntity: sku.entity,
+          fieldId: '_subsku', label: 'Formula', value: sanitize(fx.working), rawVal: null,
+          isWaived: false, isExcluded: false, section: sec, isSub: true,
+        });
+      }
       const t = customLineTerms(item, line, months);
       if (t && t.terms.length) {
         const priceRead = line.shape === 'qty_rate' ? fmtSubSkuRate(line.rate) : fmtSubSkuMoney(t.price);
@@ -8880,7 +9456,7 @@ function updatePreview() {
     }
   }
   firstSku.entity = effectiveEntity;
-  const logoSrc = firstSku.entity === 'Veeno' ? '/veeno-logo.png' : '/exotel-logo.png';
+  const logoSrc = quoteLogoSrc(firstSku.entity === 'Veeno' ? '/veeno-logo.png' : '/exotel-logo.png');
   const company = document.getElementById('q-client-company')?.value || 'Client Company';
   const contact = document.getElementById('q-client-contact')?.value || '';
   const clientEmail = document.getElementById('q-client-email')?.value || '';
@@ -9934,22 +10510,30 @@ window.printQuote = async function () {
 };
 
 // -- Generate Quote (Save) ----------------------------------
+function subSkuLogPayload(l) {
+  return {
+    label: l.label, preset: l.preset, shape: l.shape,
+    perMonth: !!l.perMonth, perUnit: l.perUnit || null, billed: !!l.billed,
+    unit: l.unit || '', amount: l.amount, qty: l.qty, rate: l.rate,
+    months: l.months, text: l.text, rateSuffix: l.rateSuffix || '',
+    formula: l.formula || '', section: l.section || '',
+  };
+}
+// Grouped by SKU rather than sent as one flat list: which plan a set of lines
+// was written for is the point of recording it at all, and it is what lets the
+// editor offer the same set back the next time that plan is quoted.
 function logSubSkusUsed(items) {
-  const lines = [];
-  (items || []).forEach(it => customLines(it).forEach(l => {
-    if (!String(l.label || '').trim()) return;
-    lines.push({
-      label: l.label, preset: l.preset, shape: l.shape,
-      perMonth: !!l.perMonth, perUnit: l.perUnit || null, billed: !!l.billed,
-      unit: l.unit || '', amount: l.amount, qty: l.qty, rate: l.rate,
-      months: l.months, text: l.text, rateSuffix: l.rateSuffix || '',
-    });
-  }));
-  if (!lines.length) return;
+  const bySku = [];
+  (items || []).forEach(it => {
+    if (!it || !it.sku_key) return;
+    const lines = customLines(it).filter(l => String(l.label || '').trim()).map(subSkuLogPayload);
+    if (lines.length) bySku.push({ sku_key: it.sku_key, tier: it.tier || null, lines });
+  });
+  if (!bySku.length) return;
   fetch('/api/sub-skus/log', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ lines }),
+    body: JSON.stringify({ items: bySku }),
   }).catch(() => null);
 }
 
@@ -10061,6 +10645,9 @@ async function generateQuote() {
       phone: document.getElementById('q-se-phone')?.value,
     },
     date: today(),
+    // The masthead is part of what was sent, so reopening a quote prints the
+    // logo the client saw rather than whichever one the SKU would pick today.
+    quoteLogo: quoteLogo(),
     stop_lock_overrides: [...QG.stopLockOverrides],
 
     // Legacy fallback fields
@@ -10174,6 +10761,7 @@ async function saveDraft(e, silent = false) {
     sku_key: QG.currentSku,
     tier: QG.currentTier,
     entity: firstSku.entity,
+    quoteLogo: quoteLogo(),
     fields: { ...QG.skuValues },
     client: {
       company: document.getElementById('q-client-company')?.value,
@@ -10536,6 +11124,7 @@ window.printHistoricalQuote = async function (id) {
       skuValues: { ...QG.skuValues },
       quoteNumber: QG.quoteNumber,
       currentQuoteId: QG.currentQuoteId,
+      quoteLogo: QG.quoteLogo,
       company:  document.getElementById('q-client-company')?.value,
       contact:  document.getElementById('q-client-contact')?.value,
       email:    document.getElementById('q-client-email')?.value,
@@ -10544,6 +11133,8 @@ window.printHistoricalQuote = async function (id) {
       qNum:     document.getElementById('q-quote-number')?.textContent,
       date:     document.getElementById('q-date')?.textContent,
     };
+
+    QG.quoteLogo = data.quoteLogo || { mode: 'auto', src: '', name: '' };
 
     // ── Restore historical state exactly as viewQuote does ────────
     if (data.bundleCompareMode && data.bundle_a_items?.length > 0) {
@@ -10640,7 +11231,9 @@ window.printHistoricalQuote = async function (id) {
       QG.skuValues       = bkup.skuValues;
       QG.quoteNumber     = bkup.quoteNumber;
       QG.currentQuoteId  = bkup.currentQuoteId;
+      QG.quoteLogo       = bkup.quoteLogo || { mode: 'auto', src: '', name: '' };
       syncActiveAliases();
+      renderQuoteLogoPicker();
       if (document.getElementById('q-client-company'))  document.getElementById('q-client-company').value  = bkup.company  || '';
       if (document.getElementById('q-client-contact'))  document.getElementById('q-client-contact').value  = bkup.contact  || '';
       if (document.getElementById('q-client-email'))    document.getElementById('q-client-email').value    = bkup.email    || '';
@@ -11002,6 +11595,12 @@ window.confirmGenerateProforma = async function () {
           if (line.shape === 'text') return `${name}: ${line.text || '-'}`;
           if (line.shape === 'duration') return `${name}: ${Number(line.months) || 0} months`;
           if (line.shape === 'rate') return `${name}: ${fmtSubSkuMoney(line.amount)} ${customLineRateSuffix(line)}`;
+          if (line.shape === 'formula') {
+            const fx = customFormula(item, line);
+            if (fx.empty || fx.error) return `${name}: -`;
+            if (!line.billed) return `${name}: ${fmtFormulaNum(fx.value)}${line.unit ? ' ' + line.unit : ''}`;
+            return `${name}: ${fmtSubSkuMoney(customLineAmount(item, line, months))}`;
+          }
           const total = customLineAmount(item, line, months);
           return total
             ? `${name}: ${fmtSubSkuMoney(total)}`
@@ -11349,6 +11948,16 @@ window.confirmGenerateProforma = async function () {
             if (handoff === 1 || handoff === true || handoff === '1') {
               lines.push(`Human Handoff: Enabled`);
             }
+          }
+
+          if (item.values['sms_cost'] !== undefined) {
+            lines.push(`SMS Cost: ${fmtPaiseMsg(getSN('sms_cost'))}`);
+          }
+          if (item.values['wa_api'] !== undefined) {
+            lines.push(`WhatsApp Utility Messages: ${fmtPaiseMsg(getV('wa_utility'))}`);
+            lines.push(`WhatsApp Marketing Messages: ${fmtPaiseMsg(getV('wa_promo'))}`);
+            lines.push(`WhatsApp Authentication Messages (OTP): ${fmtPaiseMsg(getV('wa_auth'))}`);
+            lines.push(`WhatsApp API Charge: ${fmtPaiseMsg(getSN('wa_api'))}`);
           }
         } else if (effectiveSk === 'voice_exotel_campaigns') {
           // Campaigns is validity-based with a CPM channel pool - it has no
@@ -11892,6 +12501,7 @@ window.viewQuote = async function (id) {
     if (!q) { showAlert('Quote not found or permission denied.', { type: 'error', title: 'Not Found' }); return; }
 
     const data = typeof q.quote_data === 'string' ? JSON.parse(q.quote_data) : q.quote_data;
+    QG.quoteLogo = data.quoteLogo || { mode: 'auto', src: '', name: '' };
 
     // Switch to New Quote tab
     document.querySelector('[data-qtab="new-quote"]').click();
@@ -12086,6 +12696,7 @@ window.resumeDraft = async function (id) {
     const d = drafts.find(x => x.id === id);
     if (!d) return;
     const data = typeof d.draft_data === 'string' ? JSON.parse(d.draft_data) : d.draft_data;
+    QG.quoteLogo = data.quoteLogo || { mode: 'auto', src: '', name: '' };
     // Switch to New Quote tab
     document.querySelector('[data-qtab="new-quote"]').click();
     // Select SKU
@@ -12399,6 +13010,8 @@ function resetQuoteForm() {
 
   // ── Clear core SKU + quote state ───────────────────────────
   initSkuItems();
+  resetQuoteLogo();
+  renderQuoteLogoPicker();
   QG.draftKey = null;
   QG._dirty = false;
   QG.currentQuoteId = null;   // exit edit mode
@@ -12988,6 +13601,7 @@ function setupQuoteGenerator() {
   // proposal, and whether Bundle Package is on offer at all. The flags land
   // after the first paint, so every surface that asks is redrawn once they do.
   loadFeatureFlags().then(() => {
+    renderQuoteLogoPicker();
     renderSkuSelector();
     if (QG.currentSku) renderSkuForm(QG.currentSku, QG.currentTier);
     updatePreview();

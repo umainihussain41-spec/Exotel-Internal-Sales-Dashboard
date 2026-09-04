@@ -160,6 +160,14 @@ async function checkDeveloperStatus() {
                     document.getElementById('feature-grant-feature')?.addEventListener('change', fetchFeatureGrants);
                     fetchFeatureGrants();
                 }
+                // So does version rollback. An admin never sees the panel, and the
+                // routes behind it turn an admin away too.
+                const rollback = document.getElementById('dev-rollback');
+                if (rollback) {
+                    rollback.classList.remove('hidden');
+                    document.getElementById('btn-refresh-deployments')?.addEventListener('click', fetchDeployments);
+                    fetchDeployments();
+                }
             }
         }
     } catch (e) {
@@ -1926,6 +1934,129 @@ window.revokeFeatureAccess = async function (id) {
     const res = await fetch('/api/dev/feature-grants/' + id, { method: 'DELETE' });
     if (res.ok) { showToast('Access revoked.', 'success'); fetchFeatureGrants(); }
     else showToast('Failed to revoke access.', 'error');
+};
+
+// ── Version Rollback (developer-only) ────────────────────────────────────────
+// Lists this service's recent Railway builds and offers the stable ones as
+// somewhere to go back to. The button is only drawn on a build that deployed
+// successfully and is not the one already running; the server checks both again
+// before it acts, because this panel can sit open across a deploy.
+const DEPLOY_STATUS_STYLE = {
+    SUCCESS:      { label: 'Stable',    fg: '#15803d', bg: '#dcfce7' },
+    FAILED:       { label: 'Failed',    fg: '#b91c1c', bg: '#fee2e2' },
+    CRASHED:      { label: 'Crashed',   fg: '#b91c1c', bg: '#fee2e2' },
+    BUILDING:     { label: 'Building',  fg: '#a16207', bg: '#fef9c3' },
+    DEPLOYING:    { label: 'Deploying', fg: '#a16207', bg: '#fef9c3' },
+    INITIALIZING: { label: 'Starting',  fg: '#a16207', bg: '#fef9c3' },
+    QUEUED:       { label: 'Queued',    fg: '#475569', bg: '#e2e8f0' },
+    WAITING:      { label: 'Waiting',   fg: '#475569', bg: '#e2e8f0' },
+    REMOVED:      { label: 'Removed',   fg: '#475569', bg: '#e2e8f0' },
+    SKIPPED:      { label: 'Skipped',   fg: '#475569', bg: '#e2e8f0' },
+    SLEEPING:     { label: 'Sleeping',  fg: '#475569', bg: '#e2e8f0' },
+};
+function deployStatusStyle(status) {
+    return Object.prototype.hasOwnProperty.call(DEPLOY_STATUS_STYLE, status)
+        ? DEPLOY_STATUS_STYLE[status]
+        : { label: String(status || 'Unknown').toLowerCase(), fg: '#475569', bg: '#e2e8f0' };
+}
+function deployWhen(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+function deployTitle(d) {
+    const c = d.commit || {};
+    return c.message || (c.sha ? 'Commit ' + c.sha : 'Build ' + String(d.id || '').slice(0, 8));
+}
+
+async function fetchDeployments() {
+    const listEl = document.getElementById('deployments-list');
+    if (!listEl) return;
+    const fail = (msg) => { listEl.innerHTML = `<p style="color:#b91c1c;font-size:0.85rem;margin:0;">${sanitizeHTML(msg)}</p>`; };
+    listEl.innerHTML = `<p style="color:#94a3b8;font-size:0.85rem;margin:0;">Loading builds…</p>`;
+    try {
+        const res = await fetch('/api/dev/deployments');
+        if (!res.ok) {
+            let detail = `Request failed (${res.status}).`;
+            try { const j = await res.json(); if (j && j.error) detail = j.error; } catch (_) {}
+            if (res.status === 404) detail = 'Endpoint not found - the server is running an older build. Restart it to pick up the change.';
+            fail(detail);
+            return;
+        }
+        const data = await res.json();
+        // Held so a row can be acted on by its place in the list: a deployment id
+        // never goes into an inline handler.
+        window._deployments = data.deployments || [];
+        if (!window._deployments.length) { fail('Railway returned no builds for this service.'); return; }
+        listEl.innerHTML = window._deployments.map(renderDeploymentRow).join('');
+    } catch (e) {
+        fail('Could not reach the server: ' + e.message);
+    }
+}
+
+function renderDeploymentRow(d, i) {
+    const s = deployStatusStyle(d.status);
+    const c = d.commit || {};
+    const bits = [];
+    if (c.sha) bits.push(sanitizeHTML(c.sha));
+    if (c.branch) bits.push(sanitizeHTML(c.branch));
+    const when = deployWhen(d.createdAt);
+    if (when) bits.push(sanitizeHTML(when));
+    if (c.author) bits.push(sanitizeHTML(c.author));
+
+    const pill = (text, fg, bg) =>
+        `<span style="flex-shrink:0;font-size:0.72rem;font-weight:700;color:${fg};background:${bg};border-radius:20px;padding:4px 12px;">${text}</span>`;
+
+    let action;
+    if (d.isCurrent) action = pill('Running now', '#1d4ed8', '#dbeafe');
+    else if (!d.stable) action = pill('Cannot roll back', '#94a3b8', '#f1f5f9');
+    else action = `<button onclick="rollbackToDeployment(${i})"
+            style="flex-shrink:0;padding:6px 14px;background:#fff;color:#c2410c;border:1px solid #fdba74;border-radius:7px;font-size:0.8rem;font-weight:600;cursor:pointer;font-family:inherit;transition:background 0.15s;"
+            onmouseover="this.style.background='#fff7ed'" onmouseout="this.style.background='#fff'">Roll back</button>`;
+
+    return `
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; padding:10px 14px; border:1px solid ${d.isCurrent ? '#bfdbfe' : '#f1f5f9'}; background:${d.isCurrent ? '#eff6ff' : '#fff'}; border-radius:9px;">
+                <div style="min-width:0; overflow:hidden;">
+                    <div style="font-weight:600; color:#1e293b; font-size:0.86rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${sanitizeHTML(deployTitle(d))}</div>
+                    <div style="font-size:0.75rem; color:#94a3b8; margin-top:2px;">${bits.join(' &middot; ') || 'No commit details'}</div>
+                </div>
+                <div style="display:flex; align-items:center; gap:10px; flex-shrink:0;">
+                    <span style="font-size:0.72rem; font-weight:700; color:${s.fg}; background:${s.bg}; border-radius:20px; padding:3px 10px;">${sanitizeHTML(s.label)}</span>
+                    ${action}
+                </div>
+            </div>`;
+}
+
+window.rollbackToDeployment = async function (idx) {
+    const d = (window._deployments || [])[Number(idx)];
+    if (!d) return;
+    const ok = await showConfirm(
+        `This puts <strong>${sanitizeHTML(deployTitle(d))}</strong> back in front of every user and <strong>restarts the server</strong>. The app will be briefly unavailable while it comes back up.` +
+        `<br><br>The database is <strong>not</strong> rolled back with it, so this build will meet today's data.`,
+        { title: 'Roll back to this build?', type: 'warning', confirmText: 'Roll back', cancelText: 'Cancel', danger: true }
+    );
+    if (!ok) return;
+
+    const listEl = document.getElementById('deployments-list');
+    if (listEl) listEl.style.opacity = '0.6';
+    try {
+        const res = await fetch('/api/dev/rollback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deploymentId: d.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.success) {
+            showToast(data.message || 'Rolling back. The server will restart shortly.', 'success');
+        } else {
+            showToast(data.error || 'Failed to roll back.', 'error');
+            if (listEl) listEl.style.opacity = '';
+            fetchDeployments();
+        }
+    } catch (e) {
+        // Expected once the service actually restarts underneath us.
+        showToast('Rollback request sent. If the server was reachable, it is now restarting.', 'info');
+    }
 };
 
 async function fetchAdminLogs() {

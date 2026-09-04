@@ -978,27 +978,89 @@ function ensureSubSkuLibraryTable() {
 }
 ensureSubSkuLibraryTable();
 
+// ── Which sub-SKUs go with which SKU ────────────────────────────────────────
+// The library above records that a line exists at all. These two record where
+// it is used. sub_sku_sku_usage counts one line against one plan; sub_sku_combo
+// counts a whole set added together, which is the thing worth offering back:
+// reps who quote Web Streaming reach for the same three lines every time, and
+// the editor can hand them over rather than making each rep type them again.
+function ensureSubSkuComboTables() {
+    db.exec(`CREATE TABLE IF NOT EXISTS sub_sku_sku_usage (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        sku_key     TEXT NOT NULL,
+        signature   TEXT NOT NULL,
+        label       TEXT NOT NULL,
+        line        TEXT NOT NULL,
+        first_by    TEXT NOT NULL,
+        first_at    TEXT NOT NULL,
+        last_by     TEXT,
+        last_at     TEXT,
+        times_used  INTEGER NOT NULL DEFAULT 1,
+        UNIQUE (sku_key, signature)
+    )`);
+    db.exec(`CREATE TABLE IF NOT EXISTS sub_sku_combo (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        sku_key     TEXT NOT NULL,
+        combo_sig   TEXT NOT NULL,
+        size        INTEGER NOT NULL,
+        labels      TEXT NOT NULL,
+        lines       TEXT NOT NULL,
+        first_by    TEXT NOT NULL,
+        first_at    TEXT NOT NULL,
+        last_by     TEXT,
+        last_at     TEXT,
+        times_used  INTEGER NOT NULL DEFAULT 1,
+        UNIQUE (sku_key, combo_sig)
+    )`);
+}
+ensureSubSkuComboTables();
+
+// The fields of a line worth keeping, so a suggestion comes back filled in
+// rather than as a name the rep has to price all over again.
+const SUB_SKU_LINE_KEYS = [
+    'label', 'preset', 'shape', 'perMonth', 'perUnit', 'billed', 'unit',
+    'amount', 'qty', 'rate', 'months', 'text', 'rateSuffix', 'formula', 'section',
+];
+function subSkuLinePayload(line) {
+    const out = {};
+    for (const k of SUB_SKU_LINE_KEYS) if (line[k] !== undefined && line[k] !== null) out[k] = line[k];
+    return out;
+}
+
 // Computed here rather than trusted from the browser, so two reps who describe
 // the same line the same way always collide on the same row.
 function subSkuSignature(line) {
     const label = String(line.label || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
     const unit = String(line.unit || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
-    return [
+    const parts = [
         label,
         String(line.shape || ''),
         line.perMonth ? 'm' : '-',
         String(line.perUnit || '-'),
         line.billed ? 'b' : '-',
         unit,
-    ].join('|');
+    ];
+    // Held to the characters a formula can legally be made of: every other part
+    // of the signature is built from stripped-down text, and this one should not
+    // be the one able to carry a quote or a backslash into it.
+    const formula = String(line.formula || '').toLowerCase().replace(/[^a-z0-9_+\-*/%(),.^]/g, '');
+    // Appended only when there is one, so every signature written before custom
+    // lines existed still names the same row it always did.
+    if (formula) parts.push(formula);
+    return parts.join('|');
 }
 
-// POST /api/sub-skus/log   { lines: [...] }
+// POST /api/sub-skus/log   { items: [{ sku_key, lines: [...] }], lines: [...] }
 // Called when a quote is generated. Unnamed lines are skipped: a half-typed
-// row is not yet anybody's idea.
+// row is not yet anybody's idea. `items` says which plan each set was written
+// for; `lines` alone is still accepted, so a tab left open on the old build
+// keeps feeding the library.
 app.post('/api/sub-skus/log', ensureAuthenticated, (req, res) => {
     const email = req.user?.emails?.[0]?.value || 'unknown';
-    const lines = Array.isArray(req.body?.lines) ? req.body.lines : [];
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const lines = Array.isArray(req.body?.lines) && req.body.lines.length
+        ? req.body.lines
+        : items.reduce((all, it) => all.concat(Array.isArray(it?.lines) ? it.lines : []), []);
     const now = new Date().toISOString();
     let created = 0, bumped = 0;
     try {
@@ -1033,10 +1095,92 @@ app.post('/api/sub-skus/log', ensureAuthenticated, (req, res) => {
             if (existed) bumped++; else created++;
         }
         if (created) addLog('SUB_SKU_NEW', 'SUCCESS', created + ' new sub-SKU line(s) recorded from a quote', email);
+        recordSubSkuCombos(items, email, now);
         res.json({ created, bumped });
     } catch (e) {
         console.error('sub-sku log failed:', e.message);
         res.status(500).json({ error: 'Failed to record sub-SKUs' });
+    }
+});
+
+// One pass per SKU on the quote. A set is identified by its lines' signatures
+// sorted, so the same three lines count as the same set however they were
+// ordered on the page.
+function recordSubSkuCombos(items, email, now) {
+    ensureSubSkuComboTables();
+    const bumpLine = db.prepare(`INSERT INTO sub_sku_sku_usage
+        (sku_key, signature, label, line, first_by, first_at, last_by, last_at, times_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(sku_key, signature) DO UPDATE SET
+            times_used = times_used + 1,
+            label = excluded.label,
+            line = excluded.line,
+            last_by = excluded.last_by,
+            last_at = excluded.last_at`);
+    const bumpCombo = db.prepare(`INSERT INTO sub_sku_combo
+        (sku_key, combo_sig, size, labels, lines, first_by, first_at, last_by, last_at, times_used)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(sku_key, combo_sig) DO UPDATE SET
+            times_used = times_used + 1,
+            lines = excluded.lines,
+            last_by = excluded.last_by,
+            last_at = excluded.last_at`);
+
+    for (const item of items) {
+        const skuKey = String(item?.sku_key || '').trim();
+        if (!skuKey) continue;
+        const seen = new Set();
+        const kept = [];
+        for (const line of (Array.isArray(item.lines) ? item.lines : [])) {
+            if (!String(line?.label || '').trim()) continue;
+            const sig = subSkuSignature(line);
+            if (seen.has(sig)) continue;
+            seen.add(sig);
+            kept.push({ sig, line: subSkuLinePayload(line) });
+        }
+        if (!kept.length) continue;
+        for (const k of kept) {
+            bumpLine.run(skuKey, k.sig, String(k.line.label), JSON.stringify(k.line), email, now, email, now);
+        }
+        const comboSig = kept.map(k => k.sig).sort().join('||');
+        bumpCombo.run(
+            skuKey, comboSig, kept.length,
+            JSON.stringify(kept.map(k => k.line.label)),
+            JSON.stringify(kept.map(k => k.line)),
+            email, now, email, now
+        );
+    }
+}
+
+// GET /api/sub-skus/suggest?sku=<key>
+// What this plan usually carries: the lines most often put on it, and the set
+// most often added to it in one go. Scoped to the SKU in front of the rep, so
+// it reads as "the usual for this plan" rather than as a catalogue of every
+// one-off anybody has ever written.
+app.get('/api/sub-skus/suggest', ensureAuthenticated, (req, res) => {
+    const skuKey = String(req.query.sku || '').trim();
+    if (!skuKey) return res.json({ sku: '', lines: [], combo: null });
+    try {
+        ensureSubSkuComboTables();
+        const parse = (s, fallback) => { try { return JSON.parse(s); } catch (_) { return fallback; } };
+        const rows = db.prepare(`SELECT signature, label, line, times_used
+            FROM sub_sku_sku_usage WHERE sku_key = ?
+            ORDER BY times_used DESC, last_at DESC LIMIT 8`).all(skuKey);
+        const lines = rows
+            .map(r => ({ signature: r.signature, label: r.label, times_used: r.times_used, line: parse(r.line, null) }))
+            .filter(r => r.line);
+        // Two or more, because "add the usual" earning its own button means
+        // saving the rep more than one click.
+        const comboRow = db.prepare(`SELECT combo_sig, size, lines, times_used
+            FROM sub_sku_combo WHERE sku_key = ? AND size > 1
+            ORDER BY times_used DESC, size DESC, last_at DESC LIMIT 1`).get(skuKey);
+        const combo = comboRow
+            ? { signature: comboRow.combo_sig, times_used: comboRow.times_used, lines: parse(comboRow.lines, []) }
+            : null;
+        res.json({ sku: skuKey, lines, combo: combo && combo.lines.length > 1 ? combo : null });
+    } catch (e) {
+        console.error('sub-sku suggest failed:', e.message);
+        res.json({ sku: skuKey, lines: [], combo: null });
     }
 });
 
@@ -1048,6 +1192,22 @@ app.get('/api/admin/sub-skus', ensureAuthenticated, ensureAdmin, (req, res) => {
         res.json(db.prepare(`SELECT * FROM sub_sku_library ORDER BY times_used DESC, first_at DESC`).all());
     } catch (e) {
         res.status(500).json({ error: 'Failed to read the sub-SKU library' });
+    }
+});
+
+// GET /api/admin/sub-sku-combos - which lines are being written for which
+// plan, and which sets travel together. Admins only, like the library itself.
+app.get('/api/admin/sub-sku-combos', ensureAuthenticated, ensureAdmin, (req, res) => {
+    try {
+        ensureSubSkuComboTables();
+        res.json({
+            perSku: db.prepare(`SELECT sku_key, label, signature, times_used, last_at
+                FROM sub_sku_sku_usage ORDER BY sku_key ASC, times_used DESC`).all(),
+            combos: db.prepare(`SELECT sku_key, size, labels, times_used, last_at
+                FROM sub_sku_combo ORDER BY times_used DESC, sku_key ASC`).all(),
+        });
+    } catch (e) {
+        res.status(500).json({ error: 'Failed to read the sub-SKU pairings' });
     }
 });
 
@@ -1109,17 +1269,70 @@ app.post('/api/admin/reset-db', ensureAuthenticated, ensureAdmin, (req, res) => 
     }
 });
 
+// ─── Railway's API, in one place ─────────────────────────────────────────────
+// RAILWAY_PROJECT_ID, RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID are injected
+// automatically at runtime; the only thing anyone has to add by hand is a
+// RAILWAY_API_TOKEN in the service variables.
+//
+// Account, Workspace and OAuth tokens authenticate with `Authorization: Bearer`,
+// while Project tokens use a header of their own, and which kind is sitting in
+// RAILWAY_API_TOKEN cannot be told from the token itself. So Bearer goes first
+// and the project header second. Redeploy and rollback both come through here.
+function railwayEnv() {
+    return {
+        token: process.env.RAILWAY_API_TOKEN,
+        projectId: process.env.RAILWAY_PROJECT_ID,
+        serviceId: process.env.RAILWAY_SERVICE_ID,
+        environmentId: process.env.RAILWAY_ENVIRONMENT_ID,
+        deploymentId: process.env.RAILWAY_DEPLOYMENT_ID,
+    };
+}
+// Returns exactly one of: { data }, { authFailed }, { apiError }, { httpError }.
+// Overridable so the rollback flow can be exercised against a stand-in; every
+// deployment leaves it unset and talks to Railway.
+const RAILWAY_API_URL = process.env.RAILWAY_API_URL || 'https://backboard.railway.com/graphql/v2';
+async function railwayGraphQL(query, variables) {
+    const { token } = railwayEnv();
+    const post = (headers) => axios.post(
+        RAILWAY_API_URL,
+        { query, variables },
+        { headers: { ...headers, 'Content-Type': 'application/json' }, timeout: 15000, validateStatus: () => true }
+    );
+    const isAuthError = (resp) =>
+        resp.status === 401 || resp.status === 403 ||
+        (Array.isArray(resp.data?.errors) && resp.data.errors.some(e => /not authorized|unauthorized|authenticate|access denied|invalid.*token/i.test(e?.message || '')));
+
+    let r = await post({ Authorization: `Bearer ${token}` });
+    if (isAuthError(r)) r = await post({ 'Project-Access-Token': token });
+
+    if (isAuthError(r)) return { authFailed: true };
+    if (Array.isArray(r.data?.errors) && r.data.errors.length) {
+        return { apiError: r.data.errors.map(e => e.message).join('; ') };
+    }
+    if (r.status >= 400) return { httpError: r.status };
+    return { data: r.data?.data };
+}
+// Turns a Railway failure into the message the panel shows, so every route says
+// the same thing about the same problem.
+function railwayErrorResponse(res, r, where) {
+    if (r.authFailed) {
+        console.error(`[${where}] Railway rejected the token`);
+        return res.status(502).json({ error: 'Railway rejected the token (Not Authorized). Verify RAILWAY_API_TOKEN is valid and, if it is a Project token, that it belongs to this exact project + environment.' });
+    }
+    if (r.apiError) {
+        console.error(`[${where}] Railway API error:`, r.apiError);
+        return res.status(502).json({ error: 'Railway API error: ' + r.apiError });
+    }
+    if (r.httpError) return res.status(502).json({ error: 'Railway API returned HTTP ' + r.httpError });
+    return null;
+}
+
 // ─── Admin: Trigger a Railway redeploy of this service ───────────────────────
-// Uses Railway's public GraphQL API. RAILWAY_SERVICE_ID and RAILWAY_ENVIRONMENT_ID
-// are injected automatically by Railway at runtime; the admin only needs to add a
-// RAILWAY_API_TOKEN in the service variables. Account/Workspace tokens use the
-// `Authorization: Bearer` header while Project tokens use `Project-Access-Token`,
-// so we try Bearer first and fall back to the project-token header on auth failure.
+// Rebuilds and restarts whatever is on the current commit. See the rollback
+// route below for going back to an earlier build instead.
 app.post('/api/admin/redeploy', ensureAuthenticated, ensureAdmin, async (req, res) => {
     const callerEmail = req.user?.emails?.[0]?.value;
-    const token = process.env.RAILWAY_API_TOKEN;
-    const serviceId = process.env.RAILWAY_SERVICE_ID;
-    const environmentId = process.env.RAILWAY_ENVIRONMENT_ID;
+    const { token, serviceId, environmentId } = railwayEnv();
 
     if (!token) {
         return res.status(400).json({ error: 'Redeploy is not configured. Add a RAILWAY_API_TOKEN variable to this service on Railway.' });
@@ -1132,38 +1345,136 @@ app.post('/api/admin/redeploy', ensureAuthenticated, ensureAdmin, async (req, re
         serviceInstanceRedeploy(serviceId: $serviceId, environmentId: $environmentId)
     }`;
 
-    const post = (headers) => axios.post(
-        'https://backboard.railway.com/graphql/v2',
-        { query, variables: { serviceId, environmentId } },
-        { headers: { ...headers, 'Content-Type': 'application/json' }, timeout: 15000, validateStatus: () => true }
-    );
-    const isAuthError = (resp) =>
-        resp.status === 401 || resp.status === 403 ||
-        (Array.isArray(resp.data?.errors) && resp.data.errors.some(e => /not authorized|unauthorized|authenticate|access denied|invalid.*token/i.test(e?.message || '')));
-
     try {
-        // Account / Workspace / OAuth tokens use Bearer; Project tokens use their own header.
-        let r = await post({ Authorization: `Bearer ${token}` });
-        if (isAuthError(r)) r = await post({ 'Project-Access-Token': token });
-
-        if (isAuthError(r)) {
-            console.error('[REDEPLOY] Railway rejected the token');
-            return res.status(502).json({ error: 'Railway rejected the token (Not Authorized). Verify RAILWAY_API_TOKEN is valid and, if it is a Project token, that it belongs to this exact project + environment.' });
-        }
-        if (Array.isArray(r.data?.errors) && r.data.errors.length) {
-            const msg = r.data.errors.map(e => e.message).join('; ');
-            console.error('[REDEPLOY] Railway API error:', msg);
-            return res.status(502).json({ error: 'Railway API error: ' + msg });
-        }
-        if (r.status >= 400) {
-            return res.status(502).json({ error: 'Railway API returned HTTP ' + r.status });
-        }
+        const r = await railwayGraphQL(query, { serviceId, environmentId });
+        const failed = railwayErrorResponse(res, r, 'REDEPLOY');
+        if (failed) return failed;
         addLog('SERVER_REDEPLOY', 'WARNING', `Railway redeploy triggered by ${callerEmail}`, callerEmail);
         console.warn(`[REDEPLOY] Triggered by ${callerEmail} at ${new Date().toISOString()}`);
         res.json({ success: true, message: 'Redeploy triggered. The server will restart shortly.' });
     } catch (e) {
         const detail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
         console.error('[REDEPLOY ERROR]', detail);
+        res.status(502).json({ error: 'Failed to reach Railway API: ' + (e.response?.status || e.message) });
+    }
+});
+
+// ─── Developer: roll the service back to an earlier build ────────────────────
+// Deliberately narrower than the redeploy button beside it. Redeploy puts the
+// current commit back up, which is what an admin needs when the app is wedged.
+// A rollback puts a *different* build of the whole app in front of every user
+// and leaves the repository saying something else is live, so it is the lead
+// developer's call and nobody else's - the same door the feature grants use.
+//
+// The database is not touched, and that is the thing to be careful about: an
+// older build meeting a newer schema is the one way this bites. The panel says
+// so, and every rollback is logged with who did it.
+const DEPLOY_META_QUERY = `query Deployments($input: DeploymentListInput!, $first: Int!) {
+    deployments(input: $input, first: $first) {
+        edges { node { id status createdAt canRollback meta } }
+    }
+}`;
+
+// Railway hangs the git details off a free-form `meta` blob whose shape depends
+// on how the service was deployed. Read what is there and stay quiet about what
+// is not, rather than inventing a commit line.
+function describeDeployMeta(meta) {
+    const m = (meta && typeof meta === 'object') ? meta : {};
+    return {
+        sha: String(m.commitHash || m.commitSha || '').slice(0, 7),
+        message: String(m.commitMessage || '').split('\n')[0].slice(0, 140),
+        branch: String(m.branch || ''),
+        author: String(m.commitAuthor || ''),
+    };
+}
+
+async function fetchRailwayDeployments(limit) {
+    const { projectId, serviceId, environmentId, deploymentId } = railwayEnv();
+    const r = await railwayGraphQL(DEPLOY_META_QUERY, {
+        first: limit,
+        input: { projectId, serviceId, environmentId },
+    });
+    if (!r.data) return { error: r };
+    const rows = (r.data.deployments?.edges || [])
+        .map(e => e && e.node)
+        .filter(Boolean)
+        .map(n => ({
+            id: n.id,
+            status: String(n.status || ''),
+            createdAt: n.createdAt,
+            // A build that never came up is not somewhere to go back to.
+            stable: String(n.status || '') === 'SUCCESS',
+            canRollback: !!n.canRollback,
+            isCurrent: deploymentId ? n.id === deploymentId : false,
+            commit: describeDeployMeta(n.meta),
+        }));
+    // Railway did not inject a deployment id, so the newest build that came up
+    // is the one serving this request.
+    if (!rows.some(x => x.isCurrent)) {
+        const live = rows.find(x => x.stable);
+        if (live) live.isCurrent = true;
+    }
+    return { rows };
+}
+
+function railwayRollbackReady(res) {
+    const { token, projectId, serviceId, environmentId } = railwayEnv();
+    if (!token) {
+        res.status(400).json({ error: 'Rollback is not configured. Add a RAILWAY_API_TOKEN variable to this service on Railway.' });
+        return false;
+    }
+    if (!projectId || !serviceId || !environmentId) {
+        res.status(400).json({ error: 'Missing RAILWAY_PROJECT_ID / RAILWAY_SERVICE_ID / RAILWAY_ENVIRONMENT_ID. These are normally injected by Railway automatically.' });
+        return false;
+    }
+    return true;
+}
+
+// GET /api/dev/deployments - this service's recent builds, newest first.
+app.get('/api/dev/deployments', ensureAuthenticated, ensureDeveloper, async (req, res) => {
+    if (!railwayRollbackReady(res)) return;
+    try {
+        const { rows, error } = await fetchRailwayDeployments(20);
+        if (error) return railwayErrorResponse(res, error, 'DEPLOYMENTS');
+        res.json({ deployments: rows });
+    } catch (e) {
+        console.error('[DEPLOYMENTS ERROR]', e.message);
+        res.status(502).json({ error: 'Failed to reach Railway API: ' + (e.response?.status || e.message) });
+    }
+});
+
+// POST /api/dev/rollback   { deploymentId }
+app.post('/api/dev/rollback', ensureAuthenticated, ensureDeveloper, async (req, res) => {
+    const callerEmail = req.user?.emails?.[0]?.value;
+    if (!railwayRollbackReady(res)) return;
+    const deploymentId = String(req.body?.deploymentId || '').trim();
+    if (!deploymentId) return res.status(400).json({ error: 'Pick the build to roll back to.' });
+
+    try {
+        // The list is read again here rather than trusting what the browser sent.
+        // A panel left open since before the last deploy would otherwise be able
+        // to roll the app back onto a build that has since failed, or onto the
+        // one already running.
+        const { rows, error } = await fetchRailwayDeployments(20);
+        if (error) return railwayErrorResponse(res, error, 'ROLLBACK');
+        const target = rows.find(d => d.id === deploymentId);
+        if (!target) return res.status(404).json({ error: 'That build is no longer in this service\'s recent history. Refresh the list and try again.' });
+        if (target.isCurrent) return res.status(400).json({ error: 'That build is the one already running.' });
+        if (!target.stable) return res.status(400).json({ error: 'That build did not deploy successfully, so there is nothing stable to go back to.' });
+
+        const r = await railwayGraphQL(`mutation Rollback($id: String!) { deploymentRollback(id: $id) }`, { id: deploymentId });
+        const failed = railwayErrorResponse(res, r, 'ROLLBACK');
+        if (failed) return failed;
+
+        const label = target.commit.sha || deploymentId.slice(0, 8);
+        addLog('SERVER_ROLLBACK', 'WARNING',
+            `Rolled back to deployment ${label}${target.commit.message ? ' (' + target.commit.message + ')' : ''} by ${callerEmail}`,
+            callerEmail);
+        console.warn(`[ROLLBACK] ${callerEmail} rolled back to ${deploymentId} at ${new Date().toISOString()}`);
+        res.json({ success: true, message: 'Rolling back to ' + label + '. The server will restart shortly.' });
+    } catch (e) {
+        const detail = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+        console.error('[ROLLBACK ERROR]', detail);
         res.status(502).json({ error: 'Failed to reach Railway API: ' + (e.response?.status || e.message) });
     }
 });
