@@ -126,6 +126,16 @@ const TIER_DEFAULTS = {
 // SKUs that support a custom plan name rename
 const CUSTOM_NAME_SKUS = ['voice_exotel_std', 'voice_veeno_std', 'voice_exotel_user', 'voice_veeno_user', 'sip_veeno', 'voice_exotel_stream', 'voice_exotel_voicebot', 'voice_exotel_campaigns', 'voice_exotel_tfn', 'sms_exotel', 'whatsapp_exotel', 'rcs_exotel', 'num_1400', 'num_1600', 'voice_intl', 'voice_intl_stream', 'truecaller_exotel', 'unlimited_stream', 'unlimited_sip'];
 
+// ── Comparing plans side by side ────────────────────────────────────────────
+// Two kinds of comparison, told apart by the SKU: a tiered plan compares its
+// own tiers, and a plan priced per user compares configurations of itself.
+// Both stop at three columns - past that the table stops fitting the page and
+// the client stops reading it - and both open with the number a rep reaches
+// for, which is every tier for the first and two configurations for the second.
+const TIER_COMPARE_SKUS = ['voice_exotel_std', 'sip_veeno'];
+const USER_COMPARE_SKUS = ['voice_exotel_user', 'voice_veeno_user', 'voice_veeno_std'];
+const COMPARE_MAX_COLUMNS = 3;
+
 // ── Unlimited plans ─────────────────────────────────────────────────────────
 // One commercial idea, two products: the client buys concurrency, not minutes.
 // There is no incoming/outgoing/attempt rate and no call-credit balance - the
@@ -1356,7 +1366,10 @@ const STARTUP_PARENT_MAP = {
   startup_campaigns: 'voice_exotel_campaigns',
 };
 
-function getSkuTncHtml(item, entity = 'Exotel') {
+// `peers` are the other columns of a comparison. A clause that states a figure
+// which differs between them names all of them, so one set of terms can stand
+// for the whole table instead of being reprinted per column.
+function getSkuTncHtml(item, entity = 'Exotel', peers = null) {
   const fields = getSkuFields(item.sku_key, item.tier);
   // The terms quote prices in prose, so they have to read the same effective
   // rate the commercial table prints. A struck-through field bills at its
@@ -1370,6 +1383,31 @@ function getSkuTncHtml(item, entity = 'Exotel') {
   const grp = (v, locale) => { const n = _num(v); return n === null ? String(v ?? '') : new Intl.NumberFormat(locale || 'en-IN', { maximumFractionDigits: 2 }).format(n); };
   const inr = (v) => '₹' + grp(v);
   const usd = (v) => '$' + grp(v, 'en-US');
+  // The rental clause used to name the two standard tier lengths - "Rentals
+  // for 5/11 months" - which stopped being true the moment a rep changed the
+  // term, and was never true on the plans sold by the month rather than by
+  // tier. It reads the plan's own term now, written the way the commercial
+  // table writes it, gifted months and all.
+  const termOf = (it) => {
+    const flds = getSkuFields(it.sku_key, it.tier) || [];
+    const read = (fid) => effVal(it, fid, it.values[fid] ?? flds.find(x => x.id === fid)?.value ?? 0);
+    const base = _num(read(flds.some(x => x.id === 'validity') ? 'validity' : 'num_months')) || 0;
+    const extra = _num(read('extra_validity')) || 0;
+    return extra > 0 ? `${grp(base)} + ${grp(extra)}` : grp(base);
+  };
+  const planTerm = () => [...new Set((peers && peers.length ? peers : [item]).map(termOf))].join(' / ');
+  // The same idea for any other figure a clause quotes: every option's value,
+  // in column order, with the repeats collapsed. On a quote that is not a
+  // comparison this is simply the one value.
+  const peerVal = (id) => {
+    const cols = (peers && peers.length ? peers : [item]);
+    const vals = cols.map(it => {
+      const flds = getSkuFields(it.sku_key, it.tier) || [];
+      return effVal(it, id, it.values[id] ?? flds.find(x => x.id === id)?.value ?? 0);
+    });
+    return [...new Set(vals.map(v => grp(v)))].join(' / ');
+  };
+  const peerInr = (id) => [...new Set(peerVal(id).split(' / '))].map(v => '₹' + v).join(' / ');
 
   let tncKey = item.sku_key;
   if (tncKey === 'startup') {
@@ -1427,7 +1465,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Rentals for 5/11 months include: User logins, Virtual numbers, Call recordings, Analytics</li>
+            <li>Rentals for the ${planTerm()} month term include: User logins, Virtual numbers, Call recordings, Analytics</li>
             <li>Agreement validity: 1 year from the start date.</li>
             <li>Rates may change as per TRAI regulations with a 30-day notice.</li>
           </ul>
@@ -1523,12 +1561,13 @@ function getSkuTncHtml(item, entity = 'Exotel') {
   }
 
   if (tncKey === 'voice_exotel_user') {
-    const uc = getVal('user_charge');
+    const uc = peerVal('user_charge');
+    const ucInr = peerInr('user_charge');
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Pricing & Billing</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>${inr(uc)} + 18% GST per agent/month (deducted as ${grp(uc)} credits).</li>
+            <li>${ucInr} + 18% GST per agent/month (deducted as ${uc} credits).</li>
             <li>1 credit = ₹1.</li>
             <li>Billing cycle: Monthly, from the 1st. Ensure the wallet is topped up by the 29th.</li>
             <li>Pro-rata billing applicable only in the first month.</li>
@@ -1890,7 +1929,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Rentals for 5/11 months include user logins, virtual numbers, call recordings, and analytics.</li>
+            <li>Rentals for the ${planTerm()} month term include user logins, virtual numbers, call recordings, and analytics.</li>
             <li>Agreement validity: 1 year from the start date.</li>
             <li>Rates are subject to TRAI regulations, with a 30-day prior notice for any change.</li>
           </ul>
@@ -2230,14 +2269,16 @@ function getSkuTncHtml(item, entity = 'Exotel') {
     // the same rate the pricing table does, never the Veeno rate the rep
     // switched away from.
     const isExoUserModel = getVal('user_model_exotel') === 1;
-    const uc = isExoUserModel ? getVal('exotel_user_charge') : getVal('user_charge');
-    const exoFreeTnc = parseFloat(getVal('exotel_free_users')) || 0;
+    const ucField = isExoUserModel ? 'exotel_user_charge' : 'user_charge';
+    const uc = peerVal(ucField);
+    const ucInr = peerInr(ucField);
+    const exoFreeTnc = peerVal('exotel_free_users');
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>Pricing & Billing</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             ${isExoUserModel ? `<li>${exoFreeTnc} agent login(s) are included at no charge. Every agent beyond that is billed at the rate below.</li>` : ''}
-            <li>${inr(uc)} + 18% GST per agent/month (deducted as ${grp(uc)} credits).</li>
+            <li>${ucInr} + 18% GST per agent/month (deducted as ${uc} credits).</li>
             <li>1 credit = ₹1.</li>
             <li>The call charges will be applicable.</li>
             <li>Billing cycle: Monthly, from the 1st. Ensure the wallet is topped up by the 29th.</li>
@@ -2390,7 +2431,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Rentals for 5/11 months include user logins, virtual numbers, call recordings, and analytics.</li>
+            <li>Rentals for the ${planTerm()} month term include user logins, virtual numbers, call recordings, and analytics.</li>
             <li>Agreement is valid for 1 year from start date.</li>
             <li>Rates may change as per TRAI regulations with 30 days’ notice.</li>
           </ul>
@@ -2494,7 +2535,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Rental Coverage</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>Rentals for 5/11 months include: User logins, Virtual numbers, Call recordings, Analytics.</li>
+            <li>Rentals for the ${planTerm()} month term include: User logins, Virtual numbers, Call recordings, Analytics.</li>
             <li>Agreement validity: 1 year from the start date.</li>
             <li>Rates may change as per TRAI regulations with a 30-day notice.</li>
           </ul>
@@ -2553,6 +2594,15 @@ function getSkuTncHtml(item, entity = 'Exotel') {
     const users = getVal('num_users') || 1;
     const numbers = getVal('num_numbers') || 1;
     const country = getVal('intl_country') || 'United States';
+    // The rentals and the leg rates are quoted in prose here, so they have to
+    // be the ones this proposal actually charges - and the legs have to be
+    // named after the countries the rep picked. Naming India and the US at a
+    // fixed $0.08 made the terms contradict the rate table on every plan sold
+    // anywhere else.
+    const rmCountry = getVal('rm_country') || 'India';
+    const userFeeUsd = getVal('user_charge_usd') || 15;
+    const numFeeUsd = getVal('number_charge_usd') || 15;
+    const rmLegUsd = _num(item.values['_rm_rate']) ?? 0.08;
     return `
       <ol style="margin:0; padding-left:20px; text-align:left; font-size:0.8rem;">
         <li style="margin-bottom:8px;"><strong>USD Pricing & Account Billing</strong>
@@ -2564,15 +2614,15 @@ function getSkuTncHtml(item, entity = 'Exotel') {
         </li>
         <li style="margin-bottom:8px;"><strong>Monthly Rentals</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
-            <li>User access fee: $15 per agent profile per month.</li>
-            <li>Number rental fee: $15 per virtual number per month.</li>
+            <li>User access fee: ${usd(userFeeUsd)} per agent profile per month.</li>
+            <li>Number rental fee: ${usd(numFeeUsd)} per virtual number per month.</li>
             <li>Monthly rentals are deducted from the prepaid credits. If the balance falls below zero, outgoing calls may be suspended.</li>
           </ul>
         </li>
         <li style="margin-bottom:8px;"><strong>International Call Routing & Leg-based Billing</strong>
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li><strong>VoIP Calling:</strong> Incoming calls to VoIP client are Free. Outgoing calls are charged at the outbound destination country rate.</li>
-            <li><strong>PSTN Calling:</strong> Incoming calls forwarded to Indian numbers are charged at $0.08/min (the India leg) as the US leg is free. Outgoing calls are billed for both legs: the destination country leg plus the Indian telecaller leg ($0.08/min).</li>
+            <li><strong>PSTN Calling:</strong> Incoming calls forwarded to numbers in ${sanitize(rmCountry)} are charged at ${usd(rmLegUsd)}/min (the ${sanitize(rmCountry)} leg) as the ${sanitize(country)} leg is free. Outgoing calls are billed for both legs: the destination country leg plus the ${sanitize(rmCountry)} telecaller leg (${usd(rmLegUsd)}/min).</li>
             <li>Pulse rate: All calls are billed on a 60-second pulse.</li>
           </ul>
         </li>
@@ -2607,7 +2657,7 @@ function getSkuTncHtml(item, entity = 'Exotel') {
           <ul style="margin:2px 0 0 0; padding-left:18px; list-style-type:circle;">
             <li>Channels are provisioned in fixed blocks of ${CHANNELS_PER_BLOCK}. There is no per-channel pricing.</li>
             <li>Additional capacity is added in further ${CHANNELS_PER_BLOCK}-channel blocks.</li>
-            <li>Each block of ${CHANNELS_PER_BLOCK} channels is charged at ${inr(CHANNEL_BLOCK_COST)} per month. This proposal covers ${grp(blocks)} block(s), i.e. ${grp(blocks * CHANNELS_PER_BLOCK)} concurrent channels.</li>
+            <li>Each block of ${CHANNELS_PER_BLOCK} channels is charged at ${inr(getVal('block_cost') || CHANNEL_BLOCK_COST)} per month. This proposal covers ${grp(blocks)} block(s), i.e. ${grp(blocks * CHANNELS_PER_BLOCK)} concurrent channels.</li>
             <li>No separate PRI line charges.</li>
           </ul>
         </li>
@@ -2899,12 +2949,23 @@ function buildUnlimitedRows(item, h) {
 
 function generateTncHtml(validItems, entity) {
   let html = '';
+  // A comparison is one commercial with a column per option, and a quote can
+  // carry the same SKU twice. Either way the terms used to be printed again in
+  // full for every one of them, so a client read the same page two or three
+  // times over. Each item's terms are still generated on its own values - a
+  // difference between the options must never be hidden - but the clauses that
+  // vary name every option (see `peers`), which leaves the blocks identical,
+  // and identical blocks are printed once.
+  const sameSku = validItems.length > 1 && validItems.every(i => i.sku_key === validItems[0].sku_key);
+  const seen = new Set();
   validItems.forEach(item => {
-    const skuHtml = getSkuTncHtml(item, entity);
+    const skuHtml = getSkuTncHtml(item, entity, sameSku ? validItems : null);
+    if (!skuHtml || seen.has(skuHtml)) return;
+    seen.add(skuHtml);
     // The refund policy (and, in Rate Card mode, the rate card basis) applies to
     // every SKU on both entities, so it is woven into each SKU's own numbered
     // list rather than appended as a separate block.
-    if (skuHtml) html += withCommonTncClauses(skuHtml, entity);
+    html += withCommonTncClauses(skuHtml, entity);
   });
 
   // Fallback if no specific T&Cs are defined yet
@@ -3897,15 +3958,22 @@ function renderSkuItemManager() {
       </div>`;
   }).join('');
 
-  if (QG.multiSkuMode && QG.skuItems.length < 3 && !QG.bundleCompareMode) {
+  // A tiered comparison adds its next column by picking the tier; a user-based
+  // one has no tiers to pick from, so it says so here instead.
+  const addsColumn = QG.compareMode
+    && USER_COMPARE_SKUS.includes(QG.currentSku)
+    && QG.skuItems.length < COMPARE_MAX_COLUMNS;
+  const addsItem = QG.multiSkuMode && QG.skuItems.length < 3 && !QG.bundleCompareMode && !QG.compareMode;
+
+  if (addsColumn || addsItem) {
     itemsHtml += `
       <div style="display:flex; justify-content:center; margin-top:8px;">
-        <button class="btn btn-secondary" onclick="window.addSkuItem()" style="padding:6px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; width:100%; justify-content:center; border: 1.5px dashed #cbd5e1; background:#f8fafc; color:#475569; transition:all 0.15s;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#94a3b8';" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';">
+        <button class="btn btn-secondary" onclick="${addsColumn ? 'window.addCompareColumn()' : 'window.addSkuItem()'}" style="padding:6px 14px; font-size:0.82rem; display:inline-flex; align-items:center; gap:6px; width:100%; justify-content:center; border: 1.5px dashed #cbd5e1; background:#f8fafc; color:#475569; transition:all 0.15s;" onmouseover="this.style.background='#f1f5f9'; this.style.borderColor='#94a3b8';" onmouseout="this.style.background='#f8fafc'; this.style.borderColor='#cbd5e1';">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
-          Add SKU / Item
+          ${addsColumn ? 'Add another option to compare' : 'Add SKU / Item'}
         </button>
       </div>
     `;
@@ -4524,7 +4592,7 @@ function renderSkuSelector() {
   // the card is there to toggle back out of.
   if (canUseSubSkus()) filtered = filtered.filter(s => !s.isBundleMerge);
 
-  const compareCapable = ['voice_exotel_std', 'voice_exotel_user', 'voice_veeno_std', 'voice_veeno_user', 'sip_veeno'];
+  const compareCapable = TIER_COMPARE_SKUS.concat(USER_COMPARE_SKUS);
   const CMP_ICON = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="17 4 7 4"/><polyline points="7 20 17 20"/><line x1="7" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="17" y2="20"/><polyline points="11 8 7 12 11 16"/><polyline points="13 8 17 12 13 16"/></svg>`;
 
   grid.innerHTML = filtered.map(s => {
@@ -4950,11 +5018,8 @@ window.toggleCompareMode = function (enabled) {
   const manager = document.getElementById('sku-item-manager');
   const ctSelector = document.getElementById('compare-tier-selector');
   // SKUs that support tier-based comparison
-  const tierCompareSkus = ['voice_exotel_std', 'sip_veeno'];
-  const userCompareSkus = ['voice_exotel_user', 'voice_veeno_user', 'voice_veeno_std'];
-
   if (enabled) {
-    if (tierCompareSkus.includes(QG.currentSku)) {
+    if (TIER_COMPARE_SKUS.includes(QG.currentSku)) {
       if (ctSelector) ctSelector.style.display = 'none';
       // Reset all tier checkboxes to checked so all 3 tiers appear on fresh entry
       ['dabbler','believer','influencer'].forEach(t => {
@@ -4966,7 +5031,7 @@ window.toggleCompareMode = function (enabled) {
       if (eliteCb) eliteCb.checked = false;
       window.updateCompareTiers();
       return; // updateCompareTiers handles the rest
-    } else if (userCompareSkus.includes(QG.currentSku)) {
+    } else if (USER_COMPARE_SKUS.includes(QG.currentSku)) {
       // User-based compare: create 2 config columns
       if (ctSelector) ctSelector.style.display = 'none';
       window.updateUserCompare();
@@ -5000,17 +5065,21 @@ window.toggleCompareMode = function (enabled) {
 };
 
 // User-based plan comparison (different configs side by side)
+//
+// Two columns is what a rep reaches for and stays the default, but a deal that
+// needs a third should not have to be quoted twice. Columns already on the
+// quote are kept as they are - the tier comparison's ceiling of three applies
+// here too - and `addCompareColumn` below opens the next one.
 window.updateUserCompare = function () {
   if (!QG.compareMode) return;
   const existingA = QG.skuItems[0] || _makeItem('item_0');
-  const existingB = QG.skuItems[1];
 
   existingA.sku_key = QG.currentSku;
   if (!existingA.values.num_users) existingA.values.num_users = 10;
   if (!existingA.values.num_months) existingA.values.num_months = 6;
   if (!existingA.values.user_charge) existingA.values.user_charge = 2000;
 
-  const newB = existingB || {
+  const newB = QG.skuItems[1] || {
     id: 'item_' + Date.now(),
     sku_key: QG.currentSku,
     tier: QG.currentTier,
@@ -5019,9 +5088,61 @@ window.updateUserCompare = function () {
   };
   if (!newB.sku_key) { newB.sku_key = QG.currentSku; newB.tier = QG.currentTier; }
 
-  QG.skuItems = [existingA, newB];
-  QG.activeItemId = existingA.id;
+  // A third column the rep opened, or one that came back with a saved quote,
+  // survives: only the first two are ever created here.
+  QG.skuItems = [existingA, newB].concat(QG.skuItems.slice(2, COMPARE_MAX_COLUMNS));
+  if (!QG.skuItems.some(i => i.id === QG.activeItemId)) QG.activeItemId = existingA.id;
   QG.lockedEntity = SKUS.find(s => s.key === QG.currentSku)?.entity;
+  syncActiveAliases();
+
+  renderSkuItemManager();
+  renderSkuSelector();
+  const cfgArea = document.getElementById('sku-config-area');
+  if (cfgArea) cfgArea.innerHTML = '';
+  renderSkuForm(QG.currentSku, QG.currentTier);
+  updatePreview();
+};
+
+// ── A third option ──────────────────────────────────────────────────────────
+// The new column starts as a copy of the last one rather than as an empty
+// plan. Partly because that is what a rep is doing - taking the option they
+// just priced and changing one thing about it - and partly because a
+// comparison is one shared table: a column that did not inherit the others'
+// renames and layout would print their moved lines a second time, under the
+// headings they were moved out of.
+function cloneCompareItem(src) {
+  const copy = JSON.parse(JSON.stringify(src));
+  copy.id = 'item_' + Date.now();
+  // A rep's own lines are copied, but each column's carry their own ids: the
+  // layout keys that point at them have to be repointed at the copies.
+  const remap = {};
+  (copy.customLines || []).forEach(line => {
+    const was = 'cl:' + line.id;
+    line.id = 'cl_' + Math.random().toString(36).slice(2, 8);
+    remap[was] = 'cl:' + line.id;
+  });
+  const swap = (k) => (remap[k] || k);
+  if (copy.rowGroup) {
+    copy.rowGroup = Object.fromEntries(Object.entries(copy.rowGroup).map(([k, v]) => [swap(k), v]));
+  }
+  if (copy.rowOrder) {
+    Object.keys(copy.rowOrder).forEach(g => { copy.rowOrder[g] = copy.rowOrder[g].map(swap); });
+  }
+  return copy;
+}
+
+window.addCompareColumn = function () {
+  if (!QG.compareMode) return;
+  if (QG.skuItems.length >= COMPARE_MAX_COLUMNS) {
+    showAlert(`Only ${COMPARE_MAX_COLUMNS} options can be compared side by side. Remove one to add another.`, { type: 'warning', title: 'Limit Exceeded' });
+    return;
+  }
+  const last = QG.skuItems[QG.skuItems.length - 1];
+  if (!last || !last.sku_key) return;
+  const copy = cloneCompareItem(last);
+  QG.skuItems.push(copy);
+  QG.activeItemId = copy.id;
+  QG._dirty = true;
   syncActiveAliases();
 
   renderSkuItemManager();
@@ -7406,21 +7527,50 @@ function naturalGroupOf(itemId, rowKey) {
   return tb ? (tb.getAttribute('data-group') || '') : '';
 }
 
+// ── The same layout acts, on a comparison ───────────────────────────────────
+// A comparison prints one table with a column per option, so its groups and
+// the order of the lines in them belong to the table, not to any one column:
+// a line moved in one column and left alone in the next would print twice,
+// under two different headings, with a dash where each column is missing it.
+// The controls on a comparison therefore carry this id in place of an item's,
+// and every act below is carried out in each column at once.
+const CMP_LAYOUT_ID = '__compare__';
+function _qgLayoutItems(itemId) {
+  if (itemId !== CMP_LAYOUT_ID) { const it = _qgItem(itemId); return it ? [it] : []; }
+  return QG.skuItems.filter(i => i.sku_key);
+}
+// What a given column calls the line the shared table names `key`. A column
+// that never prints that line answers null and is left out of the move. Keys
+// are only shared when the act came from a comparison's own controls: a single
+// SKU's table names its rows itself and must never be read through the map a
+// comparison rendered earlier.
+function _qgLayoutKey(itemId, item, key) {
+  if (itemId !== CMP_LAYOUT_ID) return key;
+  const pairs = (QG._cmpRowKeys || {})[key];
+  if (!pairs) return null;
+  const hit = pairs.find(p => p.itemId === item.id);
+  return hit ? hit.rk : null;
+}
+
 window.setRowGroup = function (itemId, encKey, encGroup) {
-  const item = _qgItem(itemId);
-  if (!item) return;
   const key = decodeURIComponent(encKey);
   const group = encGroup ? decodeURIComponent(encGroup) : '';
-  if (!item.rowGroup) item.rowGroup = {};
-  const line = customLines(item).find(l => 'cl:' + l.id === key);
-  if (line) line.section = group;          // a sub-SKU carries its own group
-  else if (group) item.rowGroup[key] = group;
-  else delete item.rowGroup[key];
-  // The menu names a group and nothing finer, so the row arrives at the end
-  // of it and any place it held in its old group goes with it.
-  forgetRowOrder(item, key);
+  let touched = null;
+  _qgLayoutItems(itemId).forEach(item => {
+    const k = _qgLayoutKey(itemId, item, key);
+    if (k === null) return;
+    if (!item.rowGroup) item.rowGroup = {};
+    const line = customLines(item).find(l => 'cl:' + l.id === k);
+    if (line) line.section = group;          // a sub-SKU carries its own group
+    else if (group) item.rowGroup[k] = group;
+    else delete item.rowGroup[k];
+    // The menu names a group and nothing finer, so the row arrives at the end
+    // of it and any place it held in its old group goes with it.
+    forgetRowOrder(item, k);
+    touched = item;
+  });
   window.closeRowMoveMenu();
-  _qgTouched(item);
+  if (touched) _qgTouched(touched);
 };
 
 // A drop says both things at once: which group, and where in it. The handler
@@ -7428,20 +7578,25 @@ window.setRowGroup = function (itemId, encKey, encGroup) {
 // can see, in the order they can see them, with the dragged one already put
 // where they let go of it.
 window.placeRow = function (itemId, key, group, keys) {
-  const item = _qgItem(itemId);
-  if (!item || !group) return;
-  if (!item.rowGroup) item.rowGroup = {};
-  const line = customLines(item).find(l => 'cl:' + l.id === key);
-  if (line) line.section = group;
-  else item.rowGroup[key] = group;
-  forgetRowOrder(item, key);
-  setRowOrderFor(item, group, keys);
-  _qgTouched(item);
+  if (!group) return;
+  let touched = null;
+  _qgLayoutItems(itemId).forEach(item => {
+    const k = _qgLayoutKey(itemId, item, key);
+    if (k === null) return;
+    if (!item.rowGroup) item.rowGroup = {};
+    const line = customLines(item).find(l => 'cl:' + l.id === k);
+    if (line) line.section = group;
+    else item.rowGroup[k] = group;
+    forgetRowOrder(item, k);
+    // The order is read off the shared table, so it is put back to this
+    // column in its own names, minus the lines this column does not carry.
+    setRowOrderFor(item, group, keys.map(x => _qgLayoutKey(itemId, item, x)).filter(x => x !== null));
+    touched = item;
+  });
+  if (touched) _qgTouched(touched);
 };
 
 window.moveItemGroup = function (itemId, encGroup, delta) {
-  const item = _qgItem(itemId);
-  if (!item) return;
   const group = decodeURIComponent(encGroup);
   // Start from the order actually on screen, so the first nudge moves the group
   // one place from where the rep can see it - not from an empty list.
@@ -7449,35 +7604,43 @@ window.moveItemGroup = function (itemId, encGroup, delta) {
   const onScreen = doc
     ? Array.from(doc.querySelectorAll('tbody[data-group]')).map(tb => tb.getAttribute('data-group'))
     : [];
-  const order = itemGroupOrder(item).length ? itemGroupOrder(item).slice() : onScreen;
-  const i = order.findIndex(g => g.toLowerCase() === group.toLowerCase());
-  const j = i + delta;
-  if (i < 0 || j < 0 || j >= order.length) return;
-  order.splice(j, 0, order.splice(i, 1)[0]);
-  item.groupOrder = order;
-  _qgTouched(item);
+  let touched = null;
+  _qgLayoutItems(itemId).forEach(item => {
+    const order = itemGroupOrder(item).length ? itemGroupOrder(item).slice() : onScreen.slice();
+    const i = order.findIndex(g => g.toLowerCase() === group.toLowerCase());
+    const j = i + delta;
+    if (i < 0 || j < 0 || j >= order.length) return;
+    order.splice(j, 0, order.splice(i, 1)[0]);
+    item.groupOrder = order;
+    touched = item;
+  });
+  if (touched) _qgTouched(touched);
 };
 
 window.removeItemGroup = function (itemId, encGroup) {
-  const item = _qgItem(itemId);
-  if (!item) return;
   const group = decodeURIComponent(encGroup);
-  item.newGroups = itemNewGroups(item).filter(g => g.toLowerCase() !== group.toLowerCase());
-  item.groupOrder = itemGroupOrder(item).filter(g => g.toLowerCase() !== group.toLowerCase());
-  _qgTouched(item);
+  let touched = null;
+  _qgLayoutItems(itemId).forEach(item => {
+    item.newGroups = itemNewGroups(item).filter(g => g.toLowerCase() !== group.toLowerCase());
+    item.groupOrder = itemGroupOrder(item).filter(g => g.toLowerCase() !== group.toLowerCase());
+    touched = item;
+  });
+  if (touched) _qgTouched(touched);
 };
 
 window.addItemGroup = function (itemId, encKey) {
-  const item = _qgItem(itemId);
-  if (!item) return;
+  const items = _qgLayoutItems(itemId);
+  if (!items.length) return;
   window.closeRowMoveMenu();
   showPrompt('Name the new group:', '', { title: 'New group' }).then(name => {
     const trimmed = (name || '').trim();
     if (!trimmed) return;
-    if (!Array.isArray(item.newGroups)) item.newGroups = [];
-    if (!item.newGroups.some(g => g.toLowerCase() === trimmed.toLowerCase())) item.newGroups.push(trimmed);
+    items.forEach(item => {
+      if (!Array.isArray(item.newGroups)) item.newGroups = [];
+      if (!item.newGroups.some(g => g.toLowerCase() === trimmed.toLowerCase())) item.newGroups.push(trimmed);
+    });
     if (encKey) window.setRowGroup(itemId, encKey, rowKeyAttr(trimmed));
-    else _qgTouched(item);
+    else _qgTouched(items[0]);
   });
 };
 
@@ -7495,8 +7658,7 @@ window.openRowMoveMenu = function (ev, itemId, encKey) {
   ev.preventDefault();
   ev.stopPropagation();
   window.closeRowMoveMenu();
-  const item = _qgItem(itemId);
-  if (!item) return;
+  if (!_qgLayoutItems(itemId).length) return;
   const key = decodeURIComponent(encKey);
   const doc = document.getElementById('quote-document');
   const groups = doc
@@ -7703,11 +7865,8 @@ function fmtSubSkuRate(v) {
 }
 const SUBSKU_DIM = (t) => '<span style="color:#94a3b8;font-size:0.8em;">' + sanitize(t) + '</span>';
 
-// What a sub-SKU's value cell reads, wherever it is printed. opts.inline folds
-// the rate into the cell for the comparison tables, which have no sub-row to
-// hang it under.
-function customLineValueHTML(item, line, opts) {
-  const o = opts || {};
+// What a sub-SKU's value cell reads, wherever it is printed.
+function customLineValueHTML(item, line) {
   const zeroed = (v) => (Number(v) || 0) === 0;
   // The layout pass drops this cell in as it stands, while the comparison and
   // bundle tables escape any value that does not look like markup. What comes
@@ -7725,7 +7884,7 @@ function customLineValueHTML(item, line, opts) {
   }
   if (line.shape === 'qty_rate') {
     const qty = (Number(line.qty) || 0) + ' ' + sanitize(line.unit || 'unit');
-    return cell(o.inline ? qty + ' ' + SUBSKU_DIM('at') + ' ' + customLineRateHTML(line) : qty);
+    return cell(qty);
   }
   if (line.shape === 'formula') {
     const fx = customFormula(item, line);
@@ -7795,48 +7954,195 @@ function customLineRowsHTML(item, line, months, opts) {
   return html;
 }
 
-// ────────────────────────────────
-// Sub-SKUs in the tables that build their own rows.
+// ── Comparison tables, transposed from the proposal ─────────────────────────
+// A comparison column is the ordinary single-SKU table stood on its side. It
+// used to be written out a second time, row by row and SKU by SKU, and so
+// every line the proposal learned after that was written simply never reached
+// it: a line a rep retitled kept its old name, one they took off the proposal
+// still printed, a sub-SKU landed under a heading of its own beneath the
+// table, and a rental they priced showed in the column without ever reaching
+// its total.
 //
-// A per-SKU proposal prints a rep's line through the layout pass. The
-// comparison tables never run that pass - they build their own rows - so the
-// same lines are gathered here instead: one row per distinct name, under the
-// group the rep filed it in, in the order the columns first mention it.
+// The columns are therefore built from the very rows the proposal prints and
+// turned on their side here. Whatever a line learns to do on a proposal, it
+// does in a comparison the same day, with nothing to keep in step by hand.
 //
-// A column with no line by that name prints a dash, the same mark the add-on
-// rows use. That is the point of a comparison: a line one option carries and
-// another does not has to read as missing, not go silently absent.
+// Columns line up on each line's *original* name, so a line one option
+// retitled still sits beside its counterpart and prints under the new name. A
+// column carrying no line by that name prints a dash: a line one option has
+// and another does not has to read as missing, not go silently absent.
 function customLineMatchKey(line) {
   return String((line && line.label) || 'Untitled line').trim().toLowerCase();
 }
-function compareCustomLineRows(items, cmpRow) {
-  const order = [];
-  const seen = new Set();
-  items.forEach(item => customLines(item).forEach(l => {
-    const k = customLineMatchKey(l);
-    if (seen.has(k)) return;
-    seen.add(k);
-    order.push({ key: k, label: l.label || 'Untitled line', section: l.section || 'Plan Details' });
-  }));
-  if (!order.length) return '';
-  const DASH = '<span style="color:#94a3b8;">-</span>';
-  const sections = [];
-  order.forEach(o => { if (!sections.includes(o.section)) sections.push(o.section); });
-  let html = '';
-  sections.forEach(sec => {
-    html += cmpRow(sanitize(sec), [], true);
-    order.filter(o => o.section === sec).forEach(o => {
-      html += cmpRow(o.label, items.map(item => {
-        const line = customLines(item).find(l => customLineMatchKey(l) === o.key);
-        return line ? customLineValueHTML(item, line, { inline: true }) : DASH;
-      }));
+
+// A printed line's identity, independent of what the rep chose to call it.
+function compareRowCanon(item, printedLabel) {
+  const labels = (item && item.rowLabels) || {};
+  const original = Object.keys(labels).find(k => labels[k] === printedLabel);
+  return rowLabelMatchKey(original || printedLabel) || 'row';
+}
+
+// One column: the item's own proposal table, read back into rows. Each cell
+// keeps its own take-out control, so a line can be lifted off one option's
+// column without touching the next one's.
+function compareColumnOf(item, opts = {}) {
+  const built = buildItemRows(item, { hideable: !!opts.hideable, movable: false });
+  const groups = [];
+  if (!built || !built.tableHTML || typeof document === 'undefined') return { item, groups };
+  const host = document.createElement('table');
+  host.innerHTML = built.tableHTML;
+  Array.from(host.querySelectorAll('tbody')).forEach(tb => {
+    const head = tb.querySelector('tr.section-header-row td');
+    const name = tb.getAttribute('data-group') || (head ? (head.textContent || '').trim() : '');
+    const rows = [];
+    const seen = {};      // lines in this group, by name
+    const seenSub = {};   // workings, by the line each one explains
+    let ownerKey = null;
+    Array.from(tb.children).forEach(tr => {
+      if (tr.classList.contains('section-header-row') || tr.classList.contains('q-group-hint')) return;
+      const cells = tr.children;
+      if (cells.length < 2) return;
+      const label = (cells[0].textContent || '').trim();
+      const canon = compareRowCanon(item, label);
+      // A working belongs to the line above it, and is matched through that
+      // line: two columns explaining different charges must not have their
+      // "Calculation" rows read as one.
+      const isSub = tr.classList.contains('sub-row');
+      let key;
+      if (isSub) {
+        const owner = ownerKey || '~';
+        seenSub[owner + '|' + canon] = (seenSub[owner + '|' + canon] || 0) + 1;
+        key = owner + '>' + canon + '#' + seenSub[owner + '|' + canon];
+      } else {
+        seen[canon] = (seen[canon] || 0) + 1;
+        key = canon + '#' + seen[canon];
+        ownerKey = key;
+      }
+      rows.push({
+        key,
+        label,
+        html: cells[1].innerHTML,
+        sub: isSub,
+        // What this column's own layout pass calls the row, so a move made on
+        // the shared table can be carried out in each column's own terms.
+        rk: tr.dataset.rk || '',
+        // A name the rep typed wins the shared row title over a stock one.
+        renamed: !!(item.rowLabels && Object.keys(item.rowLabels).some(k => item.rowLabels[k] === label)),
+      });
+    });
+    if (rows.length) groups.push({ name, rows });
+  });
+  return { item, groups };
+}
+
+// Merge several orderings into one that respects each of them: a name every
+// column agrees on keeps its place, and a name only one column has slots in
+// beside whichever line it followed there.
+function compareMergeOrder(lists) {
+  const out = [];
+  lists.forEach(list => {
+    let at = 0;
+    list.forEach(k => {
+      const idx = out.indexOf(k);
+      if (idx !== -1) { at = idx + 1; return; }
+      out.splice(at, 0, k);
+      at += 1;
     });
   });
+  return out;
+}
+
+// The grip that moves a line, aimed at the table rather than at one column.
+function compareRowHandleHTML(rowKey, label) {
+  return '<button type="button" class="q-row-move" draggable="true"'
+    + ' title="Drag to another group, or click to pick one"'
+    + ' aria-label="Move ' + sanitize(String(label)) + '"'
+    + ' data-item="' + CMP_LAYOUT_ID + '" data-rk="' + sanitize(rowKey) + '"'
+    + ' onclick="window.openRowMoveMenu(event,\'' + CMP_LAYOUT_ID + '\',\'' + rowKeyAttr(rowKey) + '\')">'
+    + GROUP_DRAG_ICON + '</button>';
+}
+
+// The comparison table's body: every column's groups and lines, transposed.
+function buildCompareRows(items, opts = {}) {
+  const hideable = !!opts.hideable;
+  const movable = !!opts.movable;
+  const cols = items.map(item => compareColumnOf(item, { hideable }));
+  const span = cols.length + 1;
+  const DASH = '<span style="color:#94a3b8;">-</span>';
+  const keyMap = {};
+
+  const names = compareMergeOrder(cols.map(c => c.groups.map(g => g.name)));
+  // A group the rep opened but has not filled yet still needs to be on screen,
+  // or there is nowhere to drop the first line into.
+  items.forEach(item => itemNewGroups(item).forEach(g => {
+    if (!names.some(n => n.toLowerCase() === g.toLowerCase())) names.push(g);
+  }));
+
+  let html = '';
+  names.forEach(name => {
+    const per = cols.map(c => c.groups.find(g => g.name === name) || { rows: [] });
+    const keys = compareMergeOrder(per.map(g => g.rows.map(r => r.key)));
+    if (!keys.length && !movable) return;
+
+    let body = '';
+    keys.forEach(key => {
+      const cells = per.map(g => g.rows.find(r => r.key === key) || null);
+      const title = cells.find(r => r && r.renamed) || cells.find(Boolean);
+      // A working is indented under the line it explains, as on the proposal.
+      const isSub = cells.every(r => !r || r.sub);
+      keyMap[key] = cells
+        .map((r, i) => (r && r.rk ? { itemId: items[i].id, rk: r.rk } : null))
+        .filter(Boolean);
+      const cls = [
+        isSub ? 'sub-row' : '',
+        hideable ? 'q-hideable' : '',
+        (movable && !isSub) ? 'q-movable' : '',
+      ].filter(Boolean).join(' ');
+      const label = title ? title.label : '';
+      const grip = (movable && !isSub) ? compareRowHandleHTML(key, label) : '';
+      const nameCls = 'sku-row-name' + (grip ? ' q-name-grip' : '');
+      const indent = isSub ? ' style="padding-left:20px;"' : '';
+      const tick = isSub ? '<span style="color:#94a3b8;font-size:0.75em;">&#x2514; </span>' : '';
+      const rowAttr = isSub
+        ? ' data-owner="' + sanitize(key.split('>')[0]) + '"'
+        : ' data-rk="' + sanitize(key) + '"';
+      body += '<tr' + (cls ? ' class="' + cls + '"' : '') + rowAttr + '>'
+        + '<td class="' + nameCls + '"' + indent + '>' + tick + sanitize(label) + grip + '</td>'
+        + cells.map(r => '<td' + (hideable ? ' class="q-val"' : '') + '>' + (r ? r.html : DASH) + '</td>').join('')
+        + '</tr>';
+    });
+
+    const empty = !keys.length;
+    if (empty) {
+      body = '<tr class="q-group-hint"><td colspan="' + span + '">'
+        + 'Empty. Drag a line here, or point one at this group from the config panel.</td></tr>';
+    }
+    const enc = rowKeyAttr(name);
+    const tools = movable
+      ? '<span class="q-group-tools">'
+        + '<button type="button" class="q-group-btn" title="Move this group up" onclick="window.moveItemGroup(\'' + CMP_LAYOUT_ID + '\',\'' + enc + '\',-1)">&#9650;</button>'
+        + '<button type="button" class="q-group-btn" title="Move this group down" onclick="window.moveItemGroup(\'' + CMP_LAYOUT_ID + '\',\'' + enc + '\',1)">&#9660;</button>'
+        + (empty ? '<button type="button" class="q-group-btn discard" title="Discard this empty group" onclick="window.removeItemGroup(\'' + CMP_LAYOUT_ID + '\',\'' + enc + '\')">&times;</button>' : '')
+        + '</span>'
+      : '';
+    html += '<tbody style="page-break-inside: avoid; break-inside: avoid;" data-group="' + sanitize(name) + '"'
+      + (movable ? ' class="q-drop-zone' + (empty ? ' q-group-empty' : '') + '"' : '') + '>'
+      + '<tr class="section-header-row"><td colspan="' + span + '">'
+      + (movable ? '<span class="q-group-name">' + sanitize(name) + '</span>' : sanitize(name))
+      + tools + '</td></tr>'
+      + body
+      + '</tbody>';
+  });
+
+  // Which line of the shared table each column knows by which name, so a move
+  // aimed at the table can be carried out in every column at once.
+  QG._cmpRowKeys = keyMap;
   return html;
 }
-// What each column's sub-SKUs add to its subtotal, in column order.
-function compareCustomLineSubtotals(items) {
-  return items.map(item => customLinesSubtotal(item, customLineMonths(item)));
+
+// What each column comes to, added up exactly as a single-SKU proposal is.
+function compareSubtotals(items) {
+  return items.map(item => itemSubtotal(item, getSkuFields(item.sku_key, item.tier)));
 }
 
 // The grip that opens a line's "move to" menu, and starts a drag.
@@ -8023,6 +8329,9 @@ function applyItemLayout(tableHTML, item, opts = {}) {
 // one, printed on the preview and went missing from a bundle column.
 //
 // opts.hideable   render the per-row take-out control (live preview only)
+// opts.movable    override the drag grips. A comparison reads its columns back
+//                 out of this table and draws its own, on the shared table the
+//                 groups actually belong to, so a column is built without them.
 function buildItemRows(item, opts = {}) {
   const hideable = !!opts.hideable;
   const rowCls = hideable ? ' class="q-hideable"' : '';
@@ -8882,7 +9191,8 @@ function buildItemRows(item, opts = {}) {
     }
     if (itemHasUnitOnly(item)) tableHTML = stripDeadCalcRows(tableHTML);
     if (anyHidden) tableHTML = stripEmptySections(tableHTML);
-    tableHTML = applyItemLayout(tableHTML, item, { movable: hideable && canUseSubSkus() });
+    const movable = opts.movable !== undefined ? !!opts.movable : (hideable && canUseSubSkus());
+    tableHTML = applyItemLayout(tableHTML, item, { movable });
     // Remembered so the config panel can offer this SKU's real groups.
     if (!QG._itemTables) QG._itemTables = {};
     QG._itemTables[item.id] = tableHTML;
@@ -9475,10 +9785,9 @@ function updatePreview() {
   };
 
   // ── Compare Mode: side-by-side tier comparison table ─────────────────────
-  const userBasedCompareSkus = ['voice_exotel_user', 'voice_veeno_user', 'voice_veeno_std'];
   const isUserCompare = QG.compareMode && validItems.length >= 2 &&
     validItems.every(i => i.sku_key === validItems[0].sku_key) &&
-    userBasedCompareSkus.includes(validItems[0].sku_key);
+    USER_COMPARE_SKUS.includes(validItems[0].sku_key);
 
   const isCompareTiers = !isUserCompare && QG.compareMode && validItems.length >= 2 &&
     validItems.every(i => i.sku_key === validItems[0].sku_key) &&
@@ -9486,161 +9795,14 @@ function updatePreview() {
 
   // ── User-based comparison (side-by-side configs) ─────────────────────────
   if (isUserCompare) {
-    const skuDef = SKUS.find(s => s.key === validItems[0].sku_key);
     const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x));
-    const W = WAIVED_HTML;
-
-    const colData = validItems.map(item => {
-      const fields = getSkuFields(item.sku_key, item.tier);
-      const getVal = (id) => readVal(item, fields, id);
-      const getSN = (id) => readNum(item, fields, id);
-      return { item, fields, getVal, getSN };
-    });
-
-    const cmpRow = (label, vals, isSection = false) => {
-      if (isSection) return `<tr class="section-header-row"><td colspan="${validItems.length + 1}">${label}</td></tr>`;
-      return `<tr><td class="sku-row-name">${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /<[a-zA-Z]/.test(v) ? v : sanitize(String(v ?? '-'))}</td>`).join('')}</tr>`;
-    };
-
-    const subtotals = colData.map(({ item, getVal, getSN }) => {
-      const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
-      const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
-      const did = (getSN('did_numbers') || 0) * (getSN('did_cost') || 1500) * m;
-      return getSN('credits') + (u * m * c) + nums + did;
-    });
+    const userSubs = compareSubtotals(validItems);
+    let uRows = buildCompareRows(validItems, { hideable: true, movable: canUseSubSkus() });
+    uRows += `<tbody><tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${userSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
+    uRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${userSubs.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s * 0.18))}</td>`).join('')}</tr>`;
+    uRows += `<tr style="background:#f0f9ff;"><td style="font-weight:800;color:#0284c7;">Total (incl. GST)</td>${userSubs.map(s => `<td style="font-weight:800;color:#0284c7;">${fmtR(Math.round(s * 1.18))}</td>`).join('')}</tr></tbody>`;
 
     const optionLabels = validItems.map((item, i) => item.customName || `Option ${String.fromCharCode(65 + i)}`);
-
-    // Recalculate subtotals without call credits (user SKU has no call credits)
-    const userSubtotals = colData.map(({ getSN }) => {
-      const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
-      const nums = getSN('num_paid_numbers') * getSN('extra_number') * m;
-      const did = (getSN('did_numbers') || 0) * (getSN('did_cost') || 1500) * m;
-      return (u * m * c) + nums + did;
-    });
-
-    const FREE_CMP = `<span style="color:#16a34a;font-weight:600;">${WAIVED_TICK_SVG} Free</span>`;
-    const W_CMP = `<span style="color:#16a34a;font-weight:600;">${WAIVED_TICK_SVG} Waived</span>`;
-    let uRows = '';
-    const allSku0 = validItems[0].sku_key;
-
-    const cmpIndRow = (label, vals) =>
-      `<tr class="sub-row"><td>${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /<[a-zA-Z]/.test(v) ? v : sanitize(String(v ?? ''))}</td>`).join('')}</tr>`;
-
-    // Indented sub-row with └ prefix (same style as tier-compare tables)
-    const perUnitU = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
-    const cmpSubRow = (label, vals) =>
-      `<tr class="sub-row"><td class="sku-row-name" style="padding-left:20px;"><span style="color:#94a3b8;font-size:0.75em;">└ </span>${sanitize(label)}</td>${vals.map(v => `<td>${typeof v === 'string' && /<[a-zA-Z]/.test(v) ? v : sanitize(String(v ?? '-'))}</td>`).join('')}</tr>`;
-
-    if (allSku0 === 'voice_veeno_std') {
-      // ── Veeno STD side-by-side comparison ─────────────────────
-      uRows += cmpRow('Plan Details', [], true);
-      uRows += cmpRow('Validity', colData.map(({ getVal }) => getVal('validity') + ' Months'));
-      uRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W_CMP : fmtR(r) + '/month'; }));
-      uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
-        const r = getSN('rental'), v = parseFloat(getVal('validity')) || 0;
-        return `${fmtR(r)}/month × ${v} months = ${fmtR(r * v)}`;
-      }));
-      uRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W_CMP : fmtR(s); }));
-      uRows += cmpRow('User Plan', [], true);
-      uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
-      uRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + '/user/month'));
-      uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
-        const u = getSN('num_users'), v = parseFloat(getVal('validity')) || 0, c = getSN('user_charge');
-        return `${u} users × ${v} months × ${fmtR(c)} = ${fmtR(u*v*c)}`;
-      }));
-      uRows += cmpRow('Number Plan', [], true);
-      uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
-      uRows += cmpSubRow('Extra Number Cost', colData.map(({ getSN }) => { const c = getSN('extra_number'); return c > 0 ? fmtR(c) + perUnitU('/number/month') : '-'; }));
-      const anyPaidV = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
-      if (anyPaidV) {
-        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
-        uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal }) => {
-          const p = getSN('num_paid_numbers'), v = (parseFloat(getVal('validity')) || 0) + getSN('extra_validity'), c = getSN('extra_number');
-          return p > 0 ? `${p} numbers × ${v} months × ${fmtR(c)} = ${fmtR(p*v*c)}` : '';
-        }));
-      }
-      const anyDID = colData.some(({ getSN }) => getSN('did_numbers') > 0);
-      if (anyDID) {
-        const didLabel = colData.some(({ item }) => item.sku_key === 'whatsapp_exotel') ? 'Mobile DID / Own Number (BYON)' : 'Mobile DID Numbers';
-        uRows += cmpRow(didLabel, colData.map(({ getSN, item }) => {
-          const d = getSN('did_numbers');
-          return d > 0 ? (item.sku_key === 'whatsapp_exotel' ? `${d} Own Number(s)` : `${d} Mobile DID(s)`) : '-';
-        }));
-        uRows += cmpIndRow('Calculation', colData.map(({ getSN, getVal, item }) => {
-          const d = getSN('did_numbers'), v = parseFloat(getVal('validity')) || 0;
-          const label = item.sku_key === 'whatsapp_exotel' ? 'Own Numbers' : 'Mobile DIDs';
-          const cost = getSN('did_cost') || 1500;
-          return d > 0 ? `${d} ${label} × ${v} months × ${fmtR(cost)} = ${fmtR(d*v*cost)}` : '';
-        }));
-      }
-      uRows += cmpRow('Call Credits & Charges', [], true);
-      uRows += cmpRow('Call Credits', colData.map(({ getSN }) => fmtR(getSN('credits'))));
-      uRows += cmpRow('Incoming Call Charges', colData.map(({ getSN }) => { const inc = getSN('incoming'); return inc === 0 ? FREE_CMP : inc + 'p/min'; }));
-      uRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN }) => { const out = getSN('outgoing'); return out >= 100 ? '₹' + (out/100).toFixed(2) + '/min' : out + 'p/min'; }));
-      uRows += compareCustomLineRows(validItems, cmpRow);
-      const subSkuSubs = compareCustomLineSubtotals(validItems);
-      const veenoSubs = colData.map(({ getSN, getVal }, i) => {
-        const u = getSN('num_users'), v = parseFloat(getVal('validity')) || 0, c = getSN('user_charge');
-        const r = getSN('rental') * v;
-        const nums = getSN('num_paid_numbers') * getSN('extra_number') * (v + getSN('extra_validity'));
-        const did = getSN('did_numbers') * (getSN('did_cost') || 1500) * v;
-        return getSN('credits') + r + (u * v * c) + nums + did + subSkuSubs[i];
-      });
-      uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${veenoSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
-      uRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${veenoSubs.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s*0.18))}</td>`).join('')}</tr>`;
-      uRows += `<tr style="background:#f0f9ff;"><td style="font-weight:800;color:#0284c7;">Total (incl. GST)</td>${veenoSubs.map(s => `<td style="font-weight:800;color:#0284c7;">${fmtR(Math.round(s*1.18))}</td>`).join('')}</tr>`;
-
-    } else {
-      // ── Exotel User / Veeno User side-by-side comparison ──────
-      uRows += cmpRow('Plan Details', [], true);
-      uRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W_CMP : fmtR(r); }));
-      uRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W_CMP : fmtR(s); }));
-      uRows += cmpRow('User Plan', [], true);
-      uRows += cmpRow('No. of Users', colData.map(({ getVal }) => getVal('num_users') + ' Users'));
-      uRows += cmpRow('No. of Months', colData.map(({ getVal }) => getVal('num_months') + ' Months'));
-      uRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + '/user/month'));
-      uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
-        const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
-        return `${u} users × ${m} months × ${fmtR(c)} = ${fmtR(u*m*c)}`;
-      }));
-      uRows += cmpRow('Number Plan', [], true);
-      uRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers') + ' (Free)'));
-      uRows += cmpSubRow('Extra Number Cost', colData.map(({ getSN }) => { const c = getSN('extra_number'); return c > 0 ? fmtR(c) + perUnitU('/number/month') : '-'; }));
-      const anyPaidNums = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
-      if (anyPaidNums) {
-        uRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
-        uRows += cmpIndRow('Calculation', colData.map(({ getSN }) => {
-          const p = getSN('num_paid_numbers'), m = getSN('num_months') + getSN('extra_validity'), c = getSN('extra_number');
-          return p > 0 ? `${p} numbers × ${m} months × ${fmtR(c)} = ${fmtR(p*m*c)}` : '';
-        }));
-      }
-      const anyDIDu = colData.some(({ getSN }) => getSN('did_numbers') > 0);
-      if (anyDIDu) {
-        const didLabel = colData.some(({ item }) => item.sku_key === 'whatsapp_exotel') ? 'Mobile DID / Own Number (BYON)' : 'Mobile DID Numbers';
-        uRows += cmpRow(didLabel, colData.map(({ getSN, item }) => {
-          const d = getSN('did_numbers');
-          return d > 0 ? (item.sku_key === 'whatsapp_exotel' ? `${d} Own Number(s)` : `${d} Mobile DID(s)`) : '-';
-        }));
-        uRows += cmpIndRow('Calculation', colData.map(({ getSN, item }) => {
-          const d = getSN('did_numbers'), m = getSN('num_months');
-          const label = item.sku_key === 'whatsapp_exotel' ? 'Own Numbers' : 'Mobile DIDs';
-          const cost = getSN('did_cost') || 1500;
-          return d > 0 ? `${d} ${label} × ${m} months × ${fmtR(cost)} = ${fmtR(d*m*cost)}` : '';
-        }));
-      }
-      uRows += compareCustomLineRows(validItems, cmpRow);
-      const subSkuSubs = compareCustomLineSubtotals(validItems);
-      const userSubs = colData.map(({ getSN }, i) => {
-        const u = getSN('num_users'), m = getSN('num_months'), c = getSN('user_charge');
-        const nums = getSN('num_paid_numbers') * getSN('extra_number') * (m + getSN('extra_validity'));
-        const did = getSN('did_numbers') * (getSN('did_cost') || 1500) * m;
-        return (u * m * c) + nums + did + subSkuSubs[i];
-      });
-      uRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;">Subtotal (excl. GST)</td>${userSubs.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
-      uRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${userSubs.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s*0.18))}</td>`).join('')}</tr>`;
-      uRows += `<tr style="background:#f0f9ff;"><td style="font-weight:800;color:#0284c7;">Total (incl. GST)</td>${userSubs.map(s => `<td style="font-weight:800;color:#0284c7;">${fmtR(Math.round(s*1.18))}</td>`).join('')}</tr>`;
-    }
 
     // Now build the shared doc.innerHTML (used by both paths)
     doc.innerHTML = `<table class="print-master-table"><thead><tr><td><div class="print-master-header"></div></td></tr></thead><tbody><tr><td>
@@ -9665,9 +9827,9 @@ function updatePreview() {
       <table class="quote-sku-table" style="table-layout:auto;">
         <thead><tr>
           <th style="width:32%;background:#0f172a;color:#fff;">Component</th>
-          ${optionLabels.map((l,i) => `<th style="background:${i===0?'#0284c7':'#0369a1'};color:#fff;text-align:center;">${l}</th>`).join('')}
+          ${optionLabels.map((l,i) => `<th style="background:${i === 0 ? '#0284c7' : i === 1 ? '#0369a1' : '#38bdf8'};color:#fff;text-align:center;">${sanitize(l)}</th>`).join('')}
         </tr></thead>
-        <tbody>${uRows}</tbody>
+        ${uRows}
       </table></div>
     </div>
     <div class="quote-doc-section" style="margin-top:30px;">
@@ -9675,6 +9837,7 @@ function updatePreview() {
       <div class="quote-tnc" style="font-size:0.85rem;color:#475569;line-height:1.5;">${generateTncHtml(validItems, firstSku.entity)}</div>
     </div>
     </td></tr></tbody><tfoot><tr><td><div class="print-master-footer"></div></td></tr></tfoot></table>`;
+    bindPreviewDragAndDrop();
     return;
   }
   // ── End User Compare Mode ──────────────────────────────────────────────────
@@ -9690,246 +9853,14 @@ function updatePreview() {
     const tierLabels = isNonTierSku
       ? Object.fromEntries(validItems.map((item, idx) => [String(idx), item.customName || `Option ${String.fromCharCode(65 + idx)}`]))
       : Object.fromEntries(tiers.map(t => [t, (QG.skuItems.find(i=>i.tier===t)?.customName) || TIER_DISPLAY_NAMES[t] || (t.charAt(0).toUpperCase()+t.slice(1))]));
-    void 0; // (tierLabels defined above)
     const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x));
-    const fmtP = (v, pulse = 60) => {
-      if (v === null || v === undefined) return '-';
-      const n = parseFloat(v); if (isNaN(n)) return String(v);
-      if (n >= 100) return '₹' + (n / 100).toFixed(2) + '/' + (pulse === 60 ? 'min' : pulse + 'secs');
-      return pulse === 60 ? n + 'p/min' : n + `p/${pulse}secs`;
-    };
-    const fmtMsg = (v) => {
-      if (v === null || v === undefined) return '-';
-      const n = parseFloat(v); if (isNaN(n)) return String(v);
-      return n >= 100 ? '₹' + (n / 100).toFixed(2) + '/msg' : n + 'p/msg';
-    };
-    const TICK = WAIVED_TICK_SVG;
-    const W = `<span class="waived-text">${TICK} Waived</span>`;
-    const FREE = `<span class="waived-text">${TICK} Free</span>`;
-    const perUnit = (text) => `<span style="color:#94a3b8;font-size:0.8em;">${text}</span>`;
-
-    // Build row data per item
-    const colData = validItems.map(item => {
-      const fields = getSkuFields(item.sku_key, item.tier);
-      const getVal = (id) => readVal(item, fields, id);
-      const getSN = (id) => readNum(item, fields, id);
-      return { item, fields, getVal, getSN };
-    });
-
-    // Calc subtotals per tier
-    const subtotals = colData.map(({ item, fields, getVal, getSN }) => {
-      const months = parseFloat(getVal('num_months') ?? getVal('validity') ?? 1);
-      const credits = getSN('credits');
-      let rental = getSN('rental');
-      const rentalF = fields.find(x => x.id === 'rental');
-      if (rentalF && rentalF.label.toLowerCase().includes('/month')) rental = rental * months;
-      const brand = getSN('brand_fee');
-      const procure = getSN('procurement');
-      const setup = getSN('setup');
-      const chCost = getSN('channel_cost') * parseFloat(item.values['num_channels'] ?? 0) * months;
-      const numUsers = unitQty(item, 'num_users', parseFloat(item.values['num_users'] ?? 0));
-      const userCharge = getSN('user_charge');
-      const numNumbers = unitQty(item, 'num_numbers', parseFloat(item.values['num_numbers'] ?? 1));
-      const numberCost = getSN('number_cost') * numNumbers * months;
-      let sub = credits + rental + brand + procure + setup + chCost + numberCost;
-      if (numUsers && userCharge) sub += numUsers * userCharge * months;
-      const numPaidNums = unitQty(item, 'num_paid_numbers', parseFloat(item.values['num_paid_numbers'] ?? 0));
-      const extraNumCost = getSN('extra_number');
-      const extraVal = parseFloat(item.values['extra_validity'] ?? 0);
-      if (numPaidNums && extraNumCost) sub += numPaidNums * extraNumCost * (months + extraVal);
-      const didNums = unitQty(item, 'did_numbers', parseFloat(item.values['did_numbers'] ?? 0));
-      if (didNums > 0) sub += didNums * (effVal(item, 'did_cost', parseFloat(item.values['did_cost']) || 1500)) * months;
-      return sub + customLinesSubtotal(item, months);
-    });
-    const grandSub = subtotals.reduce((a, b) => a + b, 0);
-
-    // Helper to build a comparison row
-    const cmpRow = (label, vals, isSection = false, isSub = false) => {
-      if (isSection) return `<tr class="section-header-row"><td colspan="${validItems.length + 1}">${label}</td></tr>`;
-      const prefixSub = isSub ? '<span style="color:#94a3b8;font-size:0.75em;">└ </span>' : '';
-      return `<tr ${isSub ? 'class="sub-row"' : ''}><td class="sku-row-name" ${isSub ? 'style="padding-left:20px;"' : ''}>${prefixSub}${sanitize(label)}</td>${vals.map(v => `<td>${hasHTML(v) ? v : sanitize(String(v ?? '-'))}</td>`).join('')}</tr>`;
-    };
-    const hasHTML = (s) => typeof s === 'string' && /<[a-zA-Z]/.test(s);
-
-    let tableRows = '';
-
-    if (skuKey0 === 'voice_exotel_std') {
-      tableRows += cmpRow('Plan Details', [], true);
-      tableRows += cmpRow('Validity', colData.map(({ getVal, item }) => {
-        const base = parseFloat(getVal('validity') ?? 0);
-        const extra = parseFloat(item.values['extra_validity'] ?? 0);
-        return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
-      }));
-      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
-      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
-      tableRows += cmpRow('Plan', [], true);
-      tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
-      tableRows += cmpRow('Extra User Cost', colData.map(({ getSN }) => fmtR(getSN('extra_user_cost')) + perUnit('/user/month')), false, true);
-      tableRows += cmpRow('Numbers', [], true);
-      tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
-      tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
-      tableRows += cmpRow('Call Credits & Charges', [], true);
-      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
-        const base = getSN('credits');
-        const extra = parseFloat(item.values['extra_credits'] ?? 0);
-        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
-      }));
-      tableRows += cmpRow('Incoming Call Charges', colData.map(({ getSN, getVal }) => fmtP(getSN('incoming'), parseFloat(getVal('pulse')) || 60)));
-      tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
-
-      // Messaging Services (Add-ons) - only shown if explicitly opted in by the user
-      const hasSms = colData.some(({ item }) => item.smsAddon === true);
-      const hasWa  = colData.some(({ item }) => item.waAddon  === true);
-      if (hasSms || hasWa) {
-        tableRows += cmpRow('Messaging Services', [], true);
-        if (hasSms) {
-          tableRows += cmpRow('SMS Cost', colData.map(({ item }) =>
-            item.smsAddon ? fmtMsg(item.values['sms_cost']) : '<span style="color:#94a3b8;">-</span>'
-          ));
-        }
-        if (hasWa) {
-          tableRows += cmpRow('WhatsApp Utility Messages', colData.map(({ item }) =>
-            item.waAddon ? fmtMsg(item.values['wa_utility']) : '<span style="color:#94a3b8;">-</span>'
-          ));
-          tableRows += cmpRow('WhatsApp Marketing Messages', colData.map(({ item }) =>
-            item.waAddon ? fmtMsg(item.values['wa_promo']) : '<span style="color:#94a3b8;">-</span>'
-          ));
-          tableRows += cmpRow('WhatsApp Authentication Messages (OTP)', colData.map(({ item, getVal }) =>
-            item.waAddon ? fmtMsg(getVal('wa_auth')) : '<span style="color:#94a3b8;">-</span>'
-          ));
-          tableRows += cmpRow('WhatsApp API Charge', colData.map(({ item }) =>
-            item.waAddon ? fmtMsg(item.values['wa_api']) : '<span style="color:#94a3b8;">-</span>'
-          ));
-        }
-      }
-    } else if (skuKey0 === 'voice_veeno_std') {
-      tableRows += cmpRow('Plan Details', [], true);
-      tableRows += cmpRow('Validity', colData.map(({ getVal, item }) => {
-        const base = parseFloat(getVal('validity') ?? 0);
-        const extra = parseFloat(item.values['extra_validity'] ?? 0);
-        return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
-      }));
-      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
-      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
-      tableRows += cmpRow('User Plan', [], true);
-      tableRows += cmpRow('No. of Users', colData.map(({ getVal, item }) => { const nu = parseInt(getVal('num_users')) || 0; const eu = parseInt(item.values['extra_users'] ?? 0); return eu > 0 ? `${eu} Free, ${nu} Charged` : nu; }));
-      tableRows += cmpRow('User Charge', colData.map(({ getSN }) => fmtR(getSN('user_charge')) + perUnit('/user/month')));
-      tableRows += cmpRow('Numbers', [], true);
-      tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
-      tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
-      tableRows += cmpRow('Call Credits & Charges', [], true);
-      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
-        const base = getSN('credits');
-        const extra = parseFloat(item.values['extra_credits'] ?? 0);
-        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
-      }));
-      tableRows += cmpRow('Incoming Call Charges', colData.map(() => FREE));
-      tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
-    } else if (skuKey0 === 'sip_veeno') {
-      tableRows += cmpRow('Plan Details', [], true);
-      tableRows += cmpRow('Validity', colData.map(({ getVal, item }) => {
-        const base = parseFloat(getVal('validity') ?? 0);
-        const extra = parseFloat(item.values['extra_validity'] ?? 0);
-        return extra > 0 ? `${base} + ${extra} Months` : `${base} Months`;
-      }));
-      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => { const r = getSN('rental'); return r === 0 ? W : fmtR(r); }));
-      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
-      tableRows += cmpRow('User Plan', [], true);
-      tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => { const fu = getVal('free_users'); const fuEx = parseFloat(item.values['extra_users'] ?? 0); return (fu === null || fu === 'Unlimited') ? 'Unlimited' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)'); }));
-      tableRows += cmpRow('Extra User Cost', colData.map(() => fmtR(199) + perUnit('/user/month')), false, true);
-      tableRows += cmpRow('Numbers', [], true);
-      tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => getVal('free_numbers')));
-      tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number') || 499) + perUnit('/number/month')), false, true);
-      tableRows += cmpRow('Call Credits & Charges', [], true);
-      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
-        const base = getSN('credits');
-        const extra = parseFloat(item.values['extra_credits'] ?? 0);
-        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
-      }));
-      tableRows += cmpRow('Incoming Call Charges', colData.map(({ getSN, getVal }) => fmtP(getSN('incoming'), parseFloat(getVal('pulse')) || 60)));
-      tableRows += cmpRow('Outgoing Call Charges', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
-      tableRows += cmpRow('Attempt Charges', colData.map(({ getSN }) => {
-        const a = getSN('attempt');
-        return a === 0 ? FREE : (a >= 100 ? '₹' + (a/100).toFixed(2) + '/failed call' : a + 'p / failed call');
-      }));
-    } else if (skuKey0 === 'voice_exotel_stream' || skuKey0 === 'voice_exotel_voicebot') {
-      const isVBotCmp = skuKey0 === 'voice_exotel_voicebot';
-      tableRows += cmpRow('Plan Details', [], true);
-      tableRows += cmpRow('No. of Months', colData.map(({ getSN }) => getSN('num_months') + ' Months'));
-      tableRows += cmpRow('Account Rental', colData.map(({ getSN }) => {
-        const r = getSN('rental');
-        return r === 0 ? W : fmtR(r) + perUnit('/month');
-      }));
-      tableRows += cmpRow('Setup Charges', colData.map(({ getSN }) => { const s = getSN('setup'); return s === 0 ? W : fmtR(s); }));
-
-      tableRows += cmpRow(isVBotCmp ? 'Voicebot Channels' : 'Streaming Channels', [], true);
-      if (isVBotCmp) {
-        tableRows += cmpRow('Free Channels', colData.map(({ getSN }) => `${getSN('num_channels') || 5} Channels (Included Free)`));
-        tableRows += cmpRow('Paid Channels', colData.map(({ getSN, item }) => {
-          const paid = Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0)));
-          return paid > 0 ? `${paid} Channel(s)` : '-';
-        }));
-      } else {
-        tableRows += cmpRow('No. of Channels', colData.map(({ getSN }) => getSN('num_channels')));
-      }
-      tableRows += cmpRow('Channel Cost', colData.map(({ getSN }) => fmtR(getSN('channel_cost')) + perUnit('/channel/month')));
-      tableRows += cmpRow('Channel Calculation', colData.map(({ getSN, item }) => {
-        const mos = getSN('num_months');
-        const cost = getSN('channel_cost');
-        const paid = isVBotCmp ? Math.max(0, unitQty(item, 'num_paid_channels', parseFloat(item.values['num_paid_channels'] ?? 0))) : getSN('num_channels');
-        return `${paid} ch × ${mos} mo × ${fmtR(cost)} = ${fmtR(paid * mos * cost)}`;
-      }), false, true);
-
-      tableRows += cmpRow('User Plan', [], true);
-      tableRows += cmpRow('Free Users', colData.map(({ getVal, item }) => {
-        const fu = getVal('free_users');
-        const fuEx = parseFloat(item.values['extra_users'] ?? 0);
-        return (fu === null || fu === 'Unlimited') ? 'Unlimited (Included)' : (fuEx > 0 ? `${fu} + ${fuEx} Users (Free)` : fu + ' Users (Free)');
-      }));
-      tableRows += cmpRow('Extra User Cost', colData.map(({ getSN }) => fmtR(getSN('extra_user_cost')) + perUnit('/user/month')), false, true);
-
-      tableRows += cmpRow('Number Plan', [], true);
-      tableRows += cmpRow('Free Numbers', colData.map(({ getVal }) => (getVal('free_numbers') ?? '-') + ' Number(s) (Free)'));
-      tableRows += cmpRow('Extra Number Cost', colData.map(({ getSN }) => fmtR(getSN('extra_number')) + perUnit('/number/month')), false, true);
-      const anyPaidStreamNums = colData.some(({ getSN }) => getSN('num_paid_numbers') > 0);
-      if (anyPaidStreamNums) {
-        tableRows += cmpRow('Extra Numbers', colData.map(({ getSN }) => { const p = getSN('num_paid_numbers'); return p > 0 ? `${p} Number(s)` : '-'; }));
-        tableRows += cmpRow('Num. Calculation', colData.map(({ getSN }) => {
-          const p = getSN('num_paid_numbers'), m = getSN('num_months') + (getSN('extra_validity') || 0), c = getSN('extra_number');
-          return p > 0 ? `${p} × ${m} mo × ${fmtR(c)} = ${fmtR(p * m * c)}` : '';
-        }), false, true);
-      }
-
-      tableRows += cmpRow('Call Credits & Charges', [], true);
-      tableRows += cmpRow('Call Credits', colData.map(({ getSN, item }) => {
-        const base = getSN('credits');
-        const extra = parseFloat(item.values['extra_credits'] ?? 0);
-        return extra > 0 ? `${fmtR(base)} + ${fmtR(extra)}` : fmtR(base);
-      }));
-      if (isVBotCmp) {
-        tableRows += cmpRow('Voicebot Charge', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
-        tableRows += cmpRow('Incoming Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('pstn_incoming'), parseFloat(getVal('pulse')) || 60)));
-        tableRows += cmpRow('Outgoing Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('pstn_outgoing'), parseFloat(getVal('pulse')) || 60)));
-      } else {
-        tableRows += cmpRow('Incoming Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('incoming'), parseFloat(getVal('pulse')) || 60)));
-        tableRows += cmpRow('Outgoing Calls', colData.map(({ getSN, getVal }) => fmtP(getSN('outgoing'), parseFloat(getVal('pulse')) || 60)));
-      }
-      const hasAttempt = colData.some(({ getSN }) => getSN('attempt') > 0);
-      if (hasAttempt) {
-        tableRows += cmpRow('Attempt Charges', colData.map(({ getSN }) => {
-          const a = getSN('attempt');
-          return a === 0 ? FREE : (a >= 100 ? '₹' + (a/100).toFixed(2) + '/failed call' : a + 'p/failed call');
-        }));
-      }
-    }
-
-
-    tableRows += compareCustomLineRows(validItems, cmpRow);
+    const subtotals = compareSubtotals(validItems);
+    let tableRows = buildCompareRows(validItems, { hideable: true, movable: canUseSubSkus() });
 
     // Totals row
-    tableRows += `<tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;color:#0f172a;">Subtotal (excl. GST)</td>${subtotals.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
+    tableRows += `<tbody><tr style="border-top:2px solid #0284c7;"><td style="font-weight:700;color:#0f172a;">Subtotal (excl. GST)</td>${subtotals.map(s => `<td style="font-weight:700;color:#0284c7;">${fmtR(s)}</td>`).join('')}</tr>`;
     tableRows += `<tr><td style="color:#64748b;">GST @ 18%</td>${subtotals.map(s => `<td style="color:#64748b;">${fmtR(Math.round(s * 0.18))}</td>`).join('')}</tr>`;
-    tableRows += `<tr style="background:#f0f9ff;"><td style="font-weight:800;color:#0284c7;">Total (incl. GST)</td>${subtotals.map(s => `<td style="font-weight:800;color:#0284c7;">${fmtR(Math.round(s * 1.18))}</td>`).join('')}</tr>`;
+    tableRows += `<tr style="background:#f0f9ff;"><td style="font-weight:800;color:#0284c7;">Total (incl. GST)</td>${subtotals.map(s => `<td style="font-weight:800;color:#0284c7;">${fmtR(Math.round(s * 1.18))}</td>`).join('')}</tr></tbody>`;
 
     doc.innerHTML = `
     <table class="print-master-table">
@@ -9967,12 +9898,10 @@ function updatePreview() {
           <thead>
             <tr>
               <th style="width:32%;background:#0f172a;color:#fff;">Component</th>
-              ${tiers.map((t, tidx) => `<th style="background:${skuKey0 === 'voice_exotel_stream' || skuKey0 === 'voice_exotel_voicebot' ? (tidx === 0 ? '#0284c7' : tidx === 1 ? '#0369a1' : '#38bdf8') : (t === 'believer' ? '#0284c7' : t === 'influencer' ? '#0369a1' : '#38bdf8')};color:#fff;text-align:center;">${tierLabels[t] || t}</th>`).join('')}
+              ${tiers.map((t, tidx) => `<th style="background:${skuKey0 === 'voice_exotel_stream' || skuKey0 === 'voice_exotel_voicebot' ? (tidx === 0 ? '#0284c7' : tidx === 1 ? '#0369a1' : '#38bdf8') : (t === 'believer' ? '#0284c7' : t === 'influencer' ? '#0369a1' : '#38bdf8')};color:#fff;text-align:center;">${sanitize(tierLabels[t] || t)}</th>`).join('')}
             </tr>
           </thead>
-          <tbody>
-            ${tableRows}
-          </tbody>
+          ${tableRows}
         </table>
         </div>
       </div>
@@ -9990,6 +9919,7 @@ function updatePreview() {
       <tfoot><tr><td><div class="print-master-footer"></div></td></tr></tfoot>
     </table>
     `;
+    bindPreviewDragAndDrop();
     return;
   }
   // ── End Compare Mode ──────────────────────────────────────────────────────
@@ -10329,6 +10259,7 @@ window.printQuote = async function () {
      .q-group-hint { display: none !important; }
      tbody.q-group-empty { display: none !important; }
      .quote-sku-table td.q-val { padding-right: 8px !important; }
+     .quote-sku-table td.q-name-grip { padding-right: 8px !important; }
 
      /* ── Totals ────────────────────────────────────────────────── */
      .quote-totals { margin-top: 8px !important; padding-top: 8px !important; }

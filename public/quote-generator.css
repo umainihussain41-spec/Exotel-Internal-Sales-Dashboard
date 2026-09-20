@@ -1658,6 +1658,12 @@
 
 @media (hover: none) { .q-row-move { opacity: 0.45; } }
 
+/* A comparison prints one table with a column per option, so the layout of it
+   belongs to the table rather than to any one column: the grip that moves a
+   line sits beside the line's name, not in an option's cell. */
+.quote-sku-table td.q-name-grip { position: relative; padding-right: 26px; }
+.quote-sku-table td.q-name-grip .q-row-move { right: 4px; }
+
 .quote-sku-table tr.q-dragging { opacity: 0.4; }
 
 /* Where the row will land. Drawn on the cells rather than the row, because a
