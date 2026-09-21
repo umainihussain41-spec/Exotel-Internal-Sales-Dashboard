@@ -1354,6 +1354,23 @@ const INTL_US_VOIP_RATE = 0.02; // $0.02/min
 // Standard display names for tiers (can be overridden per-item via item.customName)
 const TIER_DISPLAY_NAMES = { dabbler: 'Dabbler', believer: 'Believer', influencer: 'Influencer', elite: 'Unnamed' };
 
+// The one name an item is known by. A custom name REPLACES the SKU title
+// rather than qualifying it, so an item renamed "3 Months Plan" reads as
+// "3 Months Plan" and never as "Voice User - 3 Months Plan". Without one, a
+// tiered SKU falls back to its label plus the tier; a SKU with no tiers has
+// no tier to name, so its label stands alone.
+function itemDisplayTitle(item, sku, sep) {
+  const custom = ((item && item.customName) || '').trim();
+  if (custom) return custom;
+  const s = sku || SKUS.find(x => x.key === (item && item.sku_key));
+  if (!s) return (item && item.sku_key) || '';
+  const tier = item && item.tier;
+  const tierName = (s.hasTiers && tier)
+    ? (TIER_DISPLAY_NAMES[tier] || tier.charAt(0).toUpperCase() + tier.slice(1))
+    : '';
+  return tierName ? s.label + (sep || ' - ') + tierName : s.label;
+}
+
 // ── Terms & Conditions (Full SKU Definitions) ──────────────────────────────
 const STARTUP_PARENT_MAP = {
   startup_voice: 'voice_exotel_std',
@@ -3905,12 +3922,10 @@ function renderSkuItemManager() {
   let itemsHtml = QG.skuItems.map((item, idx) => {
     const sku = SKUS.find(s => s.key === item.sku_key);
     const isActive = item.id === QG.activeItemId;
-    const tierDisplayName = TIER_DISPLAY_NAMES[item.tier] || (item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : '');
     const skuLabel = sku ? sku.label : '';
-    const hasTiers = !!(item.sku_key && SKUS.find(s => s.key === item.sku_key)?.hasTiers);
-    // Always show custom name when set; otherwise fall back to tier name (for tiered SKUs only)
-    const suffix = item.customName ? ' · ' + item.customName : (hasTiers && tierDisplayName ? ' · ' + tierDisplayName : '');
-    const fullLabel = sku ? `${skuLabel}${suffix}` : 'Not configured';
+    // A renamed row goes by its new name alone; the SKU it was built from
+    // drops to the meta line below so the row still says what it is.
+    const fullLabel = sku ? itemDisplayTitle(item, sku, ' · ') : 'Not configured';
     const entityColor = sku?.entity === 'Veeno' ? '#be185d' : '#0369a1';
     const entityBg = sku?.entity === 'Veeno' ? '#fce7f3' : '#e0f2fe';
     
@@ -3920,8 +3935,9 @@ function renderSkuItemManager() {
     const hasCustomName = !!(item.customName);
     const isRenaming = QG._renamingItemId === item.id;
 
-    // Placeholder for the rename input = default tier name (not custom)
-    const defaultName = TIER_DISPLAY_NAMES[item.tier] || (item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : skuLabel);
+    // Placeholder for the rename input = the name this row would carry with
+    // the custom one cleared, so clearing the field is a visible no-op.
+    const defaultName = sku ? itemDisplayTitle({ ...item, customName: '' }, sku, ' · ') : skuLabel;
 
     // Label area: input when renaming, text when not
     const labelArea = isRenaming
@@ -3949,7 +3965,7 @@ function renderSkuItemManager() {
           <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex-shrink:0;"></div>
           <div style="flex:1;min-width:0;">
             ${labelArea}
-            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1} · ${sku.entity}${hasCustomName && !isRenaming ? ' · <span style="color:#0284c7;">renamed</span>' : ''}${bundleNote}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
+            ${sku ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:1px;">Item ${idx + 1}${hasCustomName && !isRenaming ? ` · <span style="color:#0284c7;">${sanitize(skuLabel)}</span>` : ''} · ${sku.entity}${bundleNote}</div>` : `<div style="font-size:0.72rem;color:#94a3b8;">Item ${idx + 1} - select a SKU below</div>`}
           </div>
           ${sku ? `<span style="padding:2px 7px;border-radius:20px;font-size:0.68rem;font-weight:700;background:${entityBg};color:${entityColor};">${sku.entity}</span>` : ''}
         </div>
@@ -4547,9 +4563,7 @@ function renderBundleTabSwitcher() {
     if (configured.length === 1) {
       const item = configured[0];
       const sku = SKUS.find(s => s.key === item.sku_key);
-      const skuName = item.customName || sku?.label || item.sku_key;
-      const tier = item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : '';
-      return tier ? `${skuName} · ${tier}` : skuName;
+      return itemDisplayTitle(item, sku, ' · ');
     }
     return `${fallback} (${configured.length} SKUs)`;
   };
@@ -7075,10 +7089,7 @@ function _renderBundleItemsHTML(bundleItems) {
     // billed on top of the prepaid balance.
     grandSubtotal += (isStartup || built.usdCard) ? 0 : subtotal;
 
-    const tierLabel = sku.hasTiers && item.tier
-      ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)) || '')
-      : '';
-    const sectionTitle = (!sku.hasTiers && item.customName) ? item.customName : `${sku.label}${tierLabel}`;
+    const sectionTitle = itemDisplayTitle(item, sku);
 
     allSectionsHTML += `
       <div class="quote-doc-section sku-card" style="margin-top:24px;">
@@ -9292,9 +9303,7 @@ function _computeBundleRows(items) {
 
     const resolvedKey = item.sku_key === 'startup' ? ('startup_' + (item.tier || 'voice')) : item.sku_key;
     const fields = getSkuFields(resolvedKey, item.tier || 'dabbler');
-    const skuLabel = item.customName || (sku.hasTiers && item.tier
-      ? (sku.label + ' · ' + (TIER_DISPLAY_NAMES[item.tier] || item.tier))
-      : sku.label);
+    const skuLabel = itemDisplayTitle(item, sku, ' · ');
 
     const fmtR = (v) => discWrap(v, (x) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(x || 0));
 
@@ -9940,9 +9949,7 @@ function updatePreview() {
       if (configured.length === 1) {
         const item = configured[0];
         const sku = SKUS.find(s => s.key === item.sku_key);
-        const skuName = item.customName || sku?.label || item.sku_key;
-        const tier = item.tier ? item.tier.charAt(0).toUpperCase() + item.tier.slice(1) : '';
-        return tier ? `${skuName} · ${tier}` : skuName;
+        return itemDisplayTitle(item, sku, ' · ');
       }
       return `${fallback} (${configured.length} SKUs)`;
     };
@@ -10059,10 +10066,7 @@ function updatePreview() {
     // billed on top of the prepaid balance.
     grandSubtotal += (isStartup || built.usdCard) ? 0 : subtotal;
 
-    const tierLabel = sku.hasTiers && item.tier
-      ? ' - ' + (item.customName || TIER_DISPLAY_NAMES[item.tier] || (item.tier.charAt(0).toUpperCase() + item.tier.slice(1)))
-      : '';
-    const sectionTitle = (!sku.hasTiers && item.customName) ? item.customName : `${sku.label}${tierLabel}`;
+    const sectionTitle = itemDisplayTitle(item, sku);
 
     allSectionsHTML += `
     <div class="quote-doc-section sku-card" style="margin-top:24px;">
@@ -11517,8 +11521,7 @@ window.confirmGenerateProforma = async function () {
         });
 
         const lines = [];
-        const tierName = sku.hasTiers && item.tier ? (item.customName || TIER_DISPLAY_NAMES[item.tier] || item.tier) : '';
-        lines.push(`Plan: ${sku.label}${tierName ? ' - ' + tierName : ''}`);
+        lines.push(`Plan: ${itemDisplayTitle(item, sku)}`);
         // Lines the rep wrote themselves are part of what is being invoiced.
         const subSkuLines = () => customLines(item).map(line => {
           const name = line.label || 'Untitled line';
