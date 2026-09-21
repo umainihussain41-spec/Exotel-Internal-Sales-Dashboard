@@ -3470,6 +3470,12 @@ function getSkuFieldsBase(skuKey, tier) {
         { id: 'incoming', label: 'Incoming (Single Leg) (p/min)', value: 60, locked: false },
         { id: 'outgoing', label: 'Outgoing (Double Leg) (p/min)', value: 120, locked: false },
         { id: 'pulse', label: 'Billing Pulse', value: 60, type: 'pulse', locked: false },
+        // The bundle quotes off the same rate card as paid Voice STD, so it
+        // carries the same three add-ons: SMS and WhatsApp as per-message
+        // rates, Call Transfer as its own monthly line. All three stay off
+        // until the rep ticks them.
+        sms_field, ...wa_fields,
+        { id: 'call_transfer', label: 'Call Transfer (\u20b9/month)', value: 499, locked: false, note: 'CT Add-on' },
       ];
     case 'startup_sip':
       return [
